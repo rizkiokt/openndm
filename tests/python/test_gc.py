@@ -565,3 +565,107 @@ def test_multiplicity_correction_raises_k_infinity():
     assert 1.0e5 * (corrected.k_eff - ignored.k_eff) == pytest.approx(
         1.0e5 * predicted, rel=0.05
     )
+
+
+# ---------------------------------------------- discontinuity factor tallies
+class FakeTally:
+    def __init__(self, mean, std=None):
+        self.mean = np.asarray(mean, dtype=float)
+        self.std_dev = (
+            np.zeros_like(self.mean) if std is None else np.asarray(std, float)
+        )
+
+
+class FakeStatePoint:
+    """Stand-in exposing only ``get_tally(name=...)``, like OpenMC's."""
+
+    def __init__(self, tallies):
+        self._tallies = tallies
+
+    def get_tally(self, name=None, **kwargs):
+        try:
+            return self._tallies[name]
+        except KeyError:
+            raise LookupError(name) from None
+
+
+#: Volume and slab flux integrals in EnergyFilter order, which ascends in
+#: energy: index 0 is thermal, index 1 is fast. The slab is a tenth of the
+#: assembly, so the thermal flux density is 1.5x the average and the fast
+#: 0.9x, which is the sense a real pin lattice gives.
+_SLAB_FRACTION = 0.1
+_ADF_TALLIES = {
+    "openndm_adf_volume": FakeTally([10.0, 20.0]),
+    "openndm_adf_x_min": FakeTally([1.5, 1.8]),
+    "openndm_adf_x_max": FakeTally([1.5, 1.8]),
+}
+
+
+@requires_openmc
+def test_compute_adf_returns_groups_in_decreasing_energy_order():
+    """An EnergyFilter ascends in energy; OpenMC group 1 is the highest.
+
+    Getting this backwards applies every discontinuity factor to the wrong
+    group. It is silent: the values stay plausible and only their sense
+    inverts, which is why C-2 uses a pin lattice, where the surface sits in
+    water and the thermal factor must exceed one while the fast falls below.
+    """
+    from openndm.gc import compute_adf
+
+    result = compute_adf(
+        FakeStatePoint(_ADF_TALLIES),
+        slab_fraction=_SLAB_FRACTION,
+        warn_sigma=1.0,
+    )
+    # Face 0 is x_min. Group 0 must be the fast group.
+    assert result.values[0, 0] == pytest.approx(0.9)
+    assert result.values[0, 1] == pytest.approx(1.5)
+
+
+@requires_openmc
+def test_compute_adf_can_be_told_the_tally_is_already_ordered():
+    from openndm.gc import compute_adf
+
+    result = compute_adf(
+        FakeStatePoint(_ADF_TALLIES),
+        slab_fraction=_SLAB_FRACTION,
+        reverse_groups=False,
+        warn_sigma=1.0,
+    )
+    assert result.values[0, 0] == pytest.approx(1.5)
+    assert result.values[0, 1] == pytest.approx(0.9)
+
+
+@requires_openmc
+def test_compute_adf_defaults_uninstrumented_faces_to_one():
+    from openndm.gc import compute_adf
+
+    result = compute_adf(
+        FakeStatePoint(_ADF_TALLIES),
+        slab_fraction=_SLAB_FRACTION,
+        warn_sigma=1.0,
+    )
+    # Only x_min and x_max were tallied; the other four faces stay at 1.0.
+    assert np.allclose(result.values[2:], 1.0)
+
+
+@requires_openmc
+def test_compute_adf_requires_the_volume_tally():
+    from openndm.gc import compute_adf
+
+    with pytest.raises(openndm.InputError, match="_volume"):
+        compute_adf(FakeStatePoint({}), slab_fraction=_SLAB_FRACTION)
+
+
+@requires_openmc
+def test_adf_result_applies_to_a_library():
+    from openndm.gc import compute_adf
+
+    result = compute_adf(
+        FakeStatePoint(_ADF_TALLIES),
+        slab_fraction=_SLAB_FRACTION,
+        warn_sigma=1.0,
+    )
+    lib = from_mgxs_library(FakeLibrary(_base_data()))
+    result.apply_to(lib, 0)
+    assert np.allclose(lib.adf(0), result.values)

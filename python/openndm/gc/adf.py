@@ -73,6 +73,7 @@ def add_adf_tallies(
     slab_fraction: float = DEFAULT_SLAB_FRACTION,
     axes: str = "xy",
     prefix: str = "openndm_adf",
+    z_bounds: tuple[float, float] = (-0.5, 0.5),
 ):
     """Instrument an ``openmc.Model`` with the tallies an ADF needs.
 
@@ -96,6 +97,11 @@ def add_adf_tallies(
         default, matching how ADFs are normally used.
     prefix : str
         Tally name prefix, used again by :func:`compute_adf`.
+    z_bounds : (float, float)
+        Axial extent of the tally meshes for a two-dimensional lattice, whose
+        own extent is infinite in z. A discontinuity factor is a ratio of flux
+        densities, so any consistent finite extent gives the same answer; the
+        default is a unit height about the origin.
 
     Returns
     -------
@@ -125,8 +131,10 @@ def add_adf_tallies(
     extent = pitch * shape
     upper_right = lower_left + extent
     if lower_left.size == 2:
-        lower_left = np.append(lower_left, -np.inf)
-        upper_right = np.append(upper_right, np.inf)
+        # A 2D lattice is infinite in z, but a mesh needs finite bounds.
+        lower_left = np.append(lower_left, z_bounds[0])
+        upper_right = np.append(upper_right, z_bounds[1])
+        extent = np.append(extent, z_bounds[1] - z_bounds[0])
 
     energy_filter = openmc.EnergyFilter(energy_groups.group_edges)
     added = []
@@ -172,7 +180,7 @@ def compute_adf(
     prefix: str = "openndm_adf",
     slab_fraction: float = DEFAULT_SLAB_FRACTION,
     n_axes: int = 3,
-    reverse_groups: bool = False,
+    reverse_groups: bool = True,
     warn_sigma: float = ADF_SIGMA_WARNING,
 ) -> AdfResult:
     """Form the surface-to-volume flux ratios from a statepoint (FR-OMC-7).
@@ -185,6 +193,19 @@ def compute_adf(
         The same prefix that was passed to :func:`add_adf_tallies`.
     n_axes : int
         Number of axes in the target geometry; faces not instrumented get 1.0.
+    reverse_groups : bool
+        An ``openmc.EnergyFilter`` orders its bins by *increasing* energy,
+        while OpenMC's multi-group numbering and OpenNDM both put group 1 at
+        the *highest* energy. The tally is therefore reversed by default, so
+        that the result lines up with the library built by
+        :func:`openndm.gc.from_mgxs_library`. Set this to False only for a
+        filter already given in decreasing-energy order.
+
+        Getting this backwards applies every discontinuity factor to the wrong
+        group. It is silent: the values stay plausible, and only their sense
+        inverts. A pin lattice is the giveaway, because its surface sits in
+        water, where the thermal flux peaks and the fast flux does not, so the
+        thermal factor must exceed one and the fast factor must fall below it.
     warn_sigma : float
         Warn when any ADF's relative standard deviation exceeds this. Noisy
         ADFs can leave the nodal solution worse than no ADFs at all, so this

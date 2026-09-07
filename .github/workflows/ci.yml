@@ -197,9 +197,11 @@ jobs:
       - name: C-1 homogeneous consistency (FR-OMC-1)
         run: pytest tests/python/test_openmc_integration.py -v
 
-      - name: The full C-1 case
+      - name: The full C-1 and C-2 cases
         working-directory: tests/validation
-        run: python c1_homogeneous.py --particles 50000 --batches 120
+        run: |
+          python c1_homogeneous.py --particles 50000 --batches 120
+          python c2_assembly_adf.py --particles 20000 --batches 80
 
   wheels:
     name: build wheels

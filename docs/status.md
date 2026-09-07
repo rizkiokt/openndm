@@ -30,7 +30,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | FR-XS-1 | done | Any `G ≥ 1`, full `G×G` scattering including upscattering. |
 | FR-XS-2 | done | D or transport, absorption, νΣf, κΣf, χ, scattering matrix, 1/v. |
 | FR-XS-3 | done | Up to 8 precursor groups with β, λ and delayed χ. Stored and round-tripped; nothing consumes them yet, because FR-KIN is not implemented. |
-| FR-XS-4 | done | Per node face per group, defaulting to 1.0. |
+| FR-XS-4 | done | Per node face per group, defaulting to 1.0. Verified against the equivalence theorem: with flux-volume homogenised cross sections and the factors implied by a reference solution, the coarse solve reproduces the reference eigenvalue and node-average fluxes exactly, for any homogenised diffusion coefficient. On the test problem the factors are worth 3000 pcm. |
 | FR-XS-5 | partial | Arbitrary branch axes with arbitrary names, so fuel temperature, moderator density and temperature, boron and rod state all work. Burnup as a *history* axis, distinct from an instantaneous axis, is not modelled. |
 | FR-XS-6 | done | Multilinear interpolation; `clamp`, `linear` and `error` extrapolation. |
 | FR-XS-7 | not started | Analytic √T Doppler feedback model. |
@@ -47,7 +47,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | FR-OMC-4 | done | `from_statepoint`. |
 | FR-OMC-5 | done | Both D sources accepted, preference configurable, warning above a configurable disagreement tolerance. C-1 confirms D does not affect an infinite medium, as it must not. |
 | FR-OMC-6 | done | Standard deviations propagated where OpenMC provides them. |
-| FR-OMC-7 | partial | `add_adf_tallies` and `compute_adf` are implemented, using a thin track-length slab rather than a surface tally. Not exercised against a real OpenMC run. |
+| FR-OMC-7 | done | `add_adf_tallies` and `compute_adf`, using a thin track-length slab rather than a surface tally, validated against a real OpenMC run (C-2). A homogeneous assembly returns factors of 1.0 to 1.2 sigma; a pin lattice returns 1.045 thermal and 0.993 fast, the right sense and a typical magnitude. |
 | FR-OMC-8 | partial | B1 and P1 buckling search, verified in all three criticality regimes. It reports the buckling and the corrected D; it does **not** re-condense the group constants, which needs the fine-group data inside the lattice calculation. |
 | FR-OMC-9 | partial | IFP results are read when present, with the k-ratio fallback. Untested against a real statepoint. |
 | FR-OMC-10 | partial | `compute_form_functions` extracts and normalises. Nothing consumes them, because FR-OUT-4 is not implemented. |
@@ -165,7 +165,14 @@ after fixing the two defects it found: `MGXS.get_xs` takes integer domain ids
 rather than domain objects, and OpenMC's absorption score excludes (n,2n).
 The second was worth 230 pcm and had no symptom but the eigenvalue.
 
-C-2 through C-6 are not written.
+C-2 runs a single reflected assembly and checks the discontinuity factor
+tallies two ways: a homogeneous assembly must give factors of exactly 1.0,
+and a pin lattice must give a thermal factor above 1.0 and a fast factor
+below it, because the assembly surface sits in water. It found the group
+ordering reversed, which had applied every factor to the wrong group without
+changing anything else about the numbers.
+
+C-3 through C-6 are not written.
 
 ## What the benchmarks establish
 

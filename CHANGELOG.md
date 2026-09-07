@@ -13,10 +13,24 @@ All notable changes to OpenNDM are recorded here. The format follows
   in OpenMC with continuous-energy physics and the multi-group cross sections
   from that same run are solved by OpenNDM, isolating the translation path
   from every other source of error. It agrees to 12 pcm, 1.2 sigma.
-- Opt-in OpenMC integration tests (`tests/python/test_openmc_integration.py`),
-  skipped unless OpenMC, its executable and a nuclear data library are all
-  available.
+- Opt-in OpenMC integration tests (`tests/python/test_openmc_integration.py`)
+  covering C-1 and C-2, skipped unless OpenMC, its executable and a nuclear
+  data library are all available.
 - `scattering_multiplicity` option on `from_mgxs_library`.
+- **C-2 assembly discontinuity factor validation**
+  (`tests/validation/c2_assembly_adf.py`). A single reflected assembly is an
+  infinite lattice, so a homogeneous one must return factors of exactly 1.0
+  and a pin lattice must return a thermal factor above 1.0, its surface being
+  water. Measured 1.0 to 1.2 sigma and 1.045 thermal against 0.993 fast.
+- **Discontinuity factor verification against the equivalence theorem**
+  (`tests/python/test_discontinuity_factors.py`). With flux-volume
+  homogenised cross sections and the factors implied by a reference solution,
+  the coarse solve reproduces the reference eigenvalue and node-average fluxes
+  to 0.00000 pcm, for any homogenised diffusion coefficient. Dropping the
+  factors costs 3000 pcm on the same problem, which is the control. Until now
+  this path was tested only for defaulting to 1.0 and surviving a round trip,
+  neither of which says anything about whether the coupling coefficient built
+  from a factor is right.
 - **Analytic verification suite** (`tests/python/test_analytic.py`), the
   standard set a nodal diffusion code is verified against: a reflected slab
   closed by a transcendental criticality condition, an albedo boundary against
@@ -36,6 +50,14 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Fixed
 
+- **`compute_adf` returned its groups in increasing-energy order**, while
+  `from_mgxs_library` and the solver both put group 1 at the highest energy,
+  so every discontinuity factor was applied to the wrong group. An
+  `openmc.EnergyFilter` orders its bins by increasing energy and
+  `MGXS.get_xs` by decreasing: two OpenMC APIs, two conventions, and only a
+  physical argument distinguishes them. Found by C-2, and silent by nature —
+  the values stayed plausible, symmetric across opposite faces and sensibly
+  converged, with only their sense inverted.
 - **The external source was missing from the two-node problem**, so a
   fixed-source solve with a nodal kernel reconstructed the within-node shape
   from the scattering and fission sources alone. Found by the manufactured

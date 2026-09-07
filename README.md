@@ -133,14 +133,20 @@ print(result.f_q, result.f_dh)   # peaking factors
 
 ### OpenMC coupling
 
-`tests/validation/c1_homogeneous.py` runs the specification's C-1 case: a
+`tests/validation/` runs the specification's coupling validation cases.
+
+**C-1** is a
 uniform infinite medium in OpenMC with continuous-energy physics, whose
 multi-group cross sections are then solved by OpenNDM. It isolates the
 translation path from every other source of error, and reproduces OpenMC's
 `k_inf` to **12 pcm, 1.2σ** over 90M histories.
 
-Writing it found two defects that stand-in test doubles could not have caught,
-including one worth 230 pcm that fails silently — see
+**C-2** is a single reflected assembly, which must give discontinuity factors
+of exactly 1.0 when homogeneous and a thermal factor above 1.0 when it is a
+pin lattice. Measured: **1.0 to 1.2σ**, and **1.045 thermal / 0.993 fast**.
+
+Between them these found three defects that stand-in test doubles could not
+have caught, two of which fail silently — see
 [`tests/validation/README.md`](tests/validation/README.md).
 
 ### Benchmarks

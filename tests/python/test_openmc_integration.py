@@ -125,3 +125,49 @@ def test_c1_carries_uncertainties_and_a_sane_spectrum(c1):
     assert comp.chi[0] == pytest.approx(1.0, abs=1.0e-6)
     flux = np.asarray(result.flux).ravel()
     assert flux[0] > flux[1] > 0.0
+
+
+# ------------------------------------------------------------------ C-2
+@pytest.fixture(scope="module")
+def c2(tmp_path_factory):
+    """A small heterogeneous pin lattice, run once for the tests below."""
+    import openmc
+    import openmc.mgxs
+
+    sys.path.insert(0, str(VALIDATION))
+    from c2_assembly_adf import GROUP_EDGES, build_model
+
+    from openndm.gc import add_adf_tallies, compute_adf
+
+    slab_fraction = 0.05
+    model, lattice = build_model(True, particles=4000, batches=40)
+    groups = openmc.mgxs.EnergyGroups(GROUP_EDGES)
+    add_adf_tallies(model, lattice, groups, slab_fraction=slab_fraction)
+    workdir = tmp_path_factory.mktemp("c2")
+    statepoint = model.run(cwd=str(workdir), output=False)
+    with openmc.StatePoint(statepoint) as sp:
+        return compute_adf(sp, slab_fraction=slab_fraction, warn_sigma=1.0)
+
+
+def test_c2_pin_lattice_thermal_factor_exceeds_one(c2):
+    """The assembly surface is water, where the thermal flux peaks.
+
+    Together with the fast test below this pins the group ordering, which is
+    otherwise silent: reversing it leaves plausible values whose sense is
+    simply inverted.
+    """
+    thermal = c2.values[:4, 1]
+    assert thermal.min() > 1.0, thermal
+
+
+def test_c2_pin_lattice_fast_factor_falls_below_one(c2):
+    """Fast neutrons are born in the fuel, not at the assembly surface."""
+    fast = c2.values[:4, 0]
+    assert fast.max() < 1.0, fast
+
+
+def test_c2_factors_are_symmetric_across_opposite_faces(c2):
+    """A reflected square lattice has no preferred direction."""
+    for group in range(2):
+        values = c2.values[:4, group]
+        assert values.max() - values.min() < 0.02, values

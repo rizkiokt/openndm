@@ -13,7 +13,7 @@ python c1_homogeneous.py --particles 100000 --batches 200
 | Case | What it isolates | State |
 |---|---|---|
 | C-1 `c1_homogeneous.py` | The cross section translation path, and nothing else | **Passing** |
-| C-2 single assembly, reflective | The ADF machinery, which must return ≈ 1.0 | not written |
+| C-2 `c2_assembly_adf.py` | The ADF tallies and their ratio arithmetic | **Passing** |
 | C-3 colorset | Homogenisation error with and without ADFs | not written |
 | C-4 small full core | Node-wise mesh-domain MGXS, FR-OMC-12 | not written |
 | C-5 branch round trip | Interpolation against a directly computed state point | not written |
@@ -70,6 +70,50 @@ computed spectrum matches OpenMC's to 0.02%, and the solver reproduces its own
 input data to 0.00 pcm. Only the eigenvalue moves, by an amount that is easy
 to attribute to statistics if the run is small enough. It is exactly the
 category of error the specification's C-1 exists to catch.
+
+## C-2, and what it found
+
+A single assembly with reflective boundaries is an infinite lattice, so the
+homogeneous solution of the homogenised assembly is flat and equal to its
+volume average. That makes two things checkable with no reference calculation
+at all:
+
+```
+homogeneous assembly: every factor must be 1.0
+  face                  fast            thermal
+  x_min    0.99922 +/-0.00062  1.00102 +/-0.00179
+  x_max    1.00041 +/-0.00065  0.99989 +/-0.00178
+  y_min    0.99976 +/-0.00064  0.99857 +/-0.00207
+  y_max    1.00022 +/-0.00069  0.99757 +/-0.00202
+  worst deviation from 1.0 = 0.00243 (1.18 sigma)
+
+heterogeneous pin lattice: thermal factors must exceed 1.0
+  x_min    0.99415 +/-0.00066  1.04603 +/-0.00194
+  x_max    0.99345 +/-0.00068  1.04151 +/-0.00191
+  y_min    0.99265 +/-0.00065  1.04689 +/-0.00190
+  y_max    0.99389 +/-0.00065  1.04290 +/-0.00176
+```
+
+The homogeneous case verifies the slab geometry, the width normalisation and
+the group ordering: a flat flux must give factors of exactly one, and it does,
+to 1.2σ.
+
+The heterogeneous case is the one that found a defect. **`compute_adf` was
+returning its groups in increasing-energy order**, while
+`from_mgxs_library` and the solver both put group 1 at the highest energy.
+Every discontinuity factor was therefore being applied to the wrong group.
+
+Nothing about the numbers looked wrong. They were plausible, symmetric across
+opposite faces, and had sensible uncertainties. Only their *sense* was
+inverted, and seeing that requires knowing what the answer should be: the
+surface of a pin lattice sits in water, where the thermal flux peaks and the
+fast flux does not, so the thermal factor must exceed one and the fast must
+fall below it. The measured 1.045 thermal is a typical PWR assembly value.
+
+The cause is that an `openmc.EnergyFilter` orders its bins by increasing
+energy, while `MGXS.get_xs` returns decreasing. Two OpenMC APIs, two
+conventions, and only a physical argument distinguishes them. The deck now
+asserts the sense directly, and unit tests cover both orderings.
 
 ## The residual is statistical
 
