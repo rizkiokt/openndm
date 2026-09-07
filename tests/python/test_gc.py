@@ -258,18 +258,42 @@ def test_unknown_scheduler_is_rejected(tmp_path):
 
 # ------------------------------------------------- MGXS ingestion, stand-ins
 class FakeMGXS:
-    """Minimal stand-in for an ``openmc.mgxs.MGXS`` object."""
+    """Minimal stand-in for an ``openmc.mgxs.MGXS`` object.
+
+    Mirrors the real contract that ``get_xs`` takes integer subdomain *ids*,
+    not domain objects: passing an object raises, exactly as OpenMC does.
+    """
 
     def __init__(self, mean, std=None):
         self._mean = np.asarray(mean, dtype=float)
         self._std = None if std is None else np.asarray(std, dtype=float)
+        self.subdomains_seen = []
 
-    def get_xs(self, value="mean", **kwargs):
+    def get_xs(self, value="mean", subdomains="all", **kwargs):
+        if subdomains != "all":
+            for item in subdomains:
+                if not isinstance(item, int):
+                    raise TypeError(
+                        f'Error setting subdomains: Items must be of type '
+                        f'"Integral", but item is of type {type(item).__name__}'
+                    )
+            self.subdomains_seen.append(list(subdomains))
         if value == "std_dev":
             if self._std is None:
                 raise ValueError("no std_dev")
             return self._std
         return self._mean
+
+
+class FakeDomain:
+    """A domain object with an id, like ``openmc.Material``."""
+
+    def __init__(self, name, id_):
+        self.name = name
+        self.id = id_
+
+    def __repr__(self):
+        return f"<FakeDomain {self.name}>"
 
 
 class FakeGroups:
@@ -280,9 +304,9 @@ class FakeGroups:
 class FakeLibrary:
     """Stand-in with the same surface as ``openmc.mgxs.Library``."""
 
-    def __init__(self, data, domains=("fuel",), n_groups=2):
+    def __init__(self, data, domains=None, n_groups=2):
         self._data = data
-        self.domains = list(domains)
+        self.domains = list(domains) if domains is not None else [FUEL]
         self.energy_groups = FakeGroups(n_groups)
         self.mgxs_types = sorted({t for _, t in data})
 
@@ -293,13 +317,23 @@ class FakeLibrary:
             raise ValueError(mgxs_type) from None
 
 
-def _base_data(domain="fuel", **overrides):
+FUEL = FakeDomain("fuel", 1)
+REFLECTOR = FakeDomain("reflector", 2)
+
+
+def _base_data(domain=FUEL, **overrides):
+    """Minimal MGXS set for one domain, keyed the way FakeLibrary expects."""
     data = {
         (domain, "absorption"): FakeMGXS([0.01, 0.08], [1.0e-4, 8.0e-4]),
         (domain, "nu-fission"): FakeMGXS([0.0, 0.135], [0.0, 1.0e-3]),
         (domain, "kappa-fission"): FakeMGXS([0.0, 0.135]),
         (domain, "chi"): FakeMGXS([1.0, 0.0]),
+        # Both scattering matrices, identical here so there is no (n,xn)
+        # multiplicity to account for. A real library that tallies only one of
+        # them draws a warning, which test_scattering_multiplicity_warns_...
+        # covers.
         (domain, "scatter matrix"): FakeMGXS([0.17, 0.02, 0.0, 0.82]),
+        (domain, "nu-scatter matrix"): FakeMGXS([0.17, 0.02, 0.0, 0.82]),
         (domain, "transport"): FakeMGXS([0.2222222222, 0.8333333333]),
     }
     data.update({(domain, k): v for k, v in overrides.items()})
@@ -336,14 +370,14 @@ def test_mgxs_ingestion_carries_uncertainties():
 def test_mgxs_prefers_the_diffusion_coefficient_score():
     data = _base_data()
     # Within the 5% agreement tolerance, so no warning is expected here.
-    data[("fuel", "diffusion-coefficient")] = FakeMGXS([1.53, 0.41])
+    data[(FUEL, "diffusion-coefficient")] = FakeMGXS([1.53, 0.41])
     lib = from_mgxs_library(FakeLibrary(data))
     assert lib.composition(0).D == pytest.approx([1.53, 0.41])
 
 
 def test_mgxs_can_be_told_to_prefer_transport():
     data = _base_data()
-    data[("fuel", "diffusion-coefficient")] = FakeMGXS([1.53, 0.41])
+    data[(FUEL, "diffusion-coefficient")] = FakeMGXS([1.53, 0.41])
     lib = from_mgxs_library(FakeLibrary(data), prefer="transport")
     assert lib.composition(0).D[0] == pytest.approx(1.5, rel=1.0e-6)
 
@@ -351,7 +385,7 @@ def test_mgxs_can_be_told_to_prefer_transport():
 def test_mgxs_warns_when_the_two_d_sources_disagree():
     """FR-OMC-5: the two estimators differ most in heterogeneous nodes."""
     data = _base_data()
-    data[("fuel", "diffusion-coefficient")] = FakeMGXS([2.5, 0.42])
+    data[(FUEL, "diffusion-coefficient")] = FakeMGXS([2.5, 0.42])
     with pytest.warns(UserWarning, match="disagree by"):
         from_mgxs_library(FakeLibrary(data))
 
@@ -360,7 +394,7 @@ def test_mgxs_does_not_warn_when_the_sources_agree():
     import warnings
 
     data = _base_data()
-    data[("fuel", "diffusion-coefficient")] = FakeMGXS([1.5, 0.4])
+    data[(FUEL, "diffusion-coefficient")] = FakeMGXS([1.5, 0.4])
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         from_mgxs_library(FakeLibrary(data))
@@ -368,30 +402,33 @@ def test_mgxs_does_not_warn_when_the_sources_agree():
 
 def test_mgxs_without_a_d_source_is_rejected():
     data = _base_data()
-    del data[("fuel", "transport")]
+    del data[(FUEL, "transport")]
     with pytest.raises(openndm.InputError, match="neither a 'diffusion"):
         from_mgxs_library(FakeLibrary(data))
 
 
 def test_mgxs_without_a_scatter_matrix_is_rejected():
     data = _base_data()
-    del data[("fuel", "scatter matrix")]
+    del data[(FUEL, "scatter matrix")]
+    del data[(FUEL, "nu-scatter matrix")]
     with pytest.raises(openndm.InputError, match="no scattering matrix"):
         from_mgxs_library(FakeLibrary(data))
 
 
 def test_mgxs_handles_multiple_domains_in_order():
     data = {}
-    data.update(_base_data("fuel"))
-    data.update(_base_data("reflector"))
-    lib = from_mgxs_library(FakeLibrary(data, domains=("reflector", "fuel")))
+    data.update(_base_data(FUEL))
+    data.update(_base_data(REFLECTOR))
+    lib = from_mgxs_library(FakeLibrary(data, domains=(REFLECTOR, FUEL)))
     assert lib.n_compositions == 2
 
 
 def test_mgxs_negative_scattering_survives_as_a_warning():
     """Monte Carlo noise must not be silently zeroed (FR-XS-8)."""
     data = _base_data()
-    data[("fuel", "scatter matrix")] = FakeMGXS([0.17, 0.02, -1.0e-6, 0.82])
+    noisy = [0.17, 0.02, -1.0e-6, 0.82]
+    data[(FUEL, "scatter matrix")] = FakeMGXS(noisy)
+    data[(FUEL, "nu-scatter matrix")] = FakeMGXS(noisy)
     with pytest.warns(UserWarning, match="negative scattering transfer"):
         lib = from_mgxs_library(FakeLibrary(data))
     scatter = np.asarray(lib.composition(0).scatter).reshape(2, 2)
@@ -420,3 +457,111 @@ def test_require_openmc_returns_the_module():
     from openndm.gc import require_openmc
 
     assert require_openmc().__name__ == "openmc"
+
+
+# ------------------------------------------------- OpenMC contract regressions
+def test_mgxs_selects_subdomains_by_integer_id():
+    """``MGXS.get_xs`` takes domain ids, not domain objects.
+
+    ``Library.get_mgxs`` takes the object, which makes it easy to pass the
+    object through to ``get_xs`` as well; real OpenMC then raises a TypeError
+    from deep inside its argument checking.
+    """
+    domain = FakeDomain("fuel", 7)
+    data = _base_data(domain)
+    from_mgxs_library(FakeLibrary(data, domains=(domain,)))
+    seen = data[(domain, "absorption")].subdomains_seen
+    # Queried once for the mean and once for the standard deviation.
+    assert seen and all(selector == [7] for selector in seen), seen
+
+
+def _scatter_pair_data(domain=FUEL, excess=1.0e-4):
+    """Base data plus both scattering matrices, differing by a multiplicity."""
+    plain = np.array([[0.17, 0.02], [0.0, 0.82]])
+    nu = plain.copy()
+    nu[0, 0] += excess  # (n,2n) neutrons, which stay in the fast group
+    data = _base_data(domain)
+    data[(domain, "consistent nu-scatter matrix")] = FakeMGXS(nu.ravel())
+    data[(domain, "consistent scatter matrix")] = FakeMGXS(plain.ravel())
+    del data[(domain, "scatter matrix")]
+    return data, plain, nu
+
+
+def test_scattering_multiplicity_is_subtracted_from_absorption():
+    """FR-OMC-1: (n,xn) production must survive the translation.
+
+    OpenMC's absorption score excludes (n,2n); the extra neutrons live only in
+    the row sums of the nu-scatter matrix. A diffusion operator built from a
+    single matrix cannot see them, because in-scatter and out-scatter are the
+    same double sum and cancel. Subtracting the excess from absorption puts
+    them back, exactly.
+    """
+    excess = 1.0e-4
+    data, _, _ = _scatter_pair_data(excess=excess)
+    lib = from_mgxs_library(FakeLibrary(data))
+    absorption = np.asarray(lib.composition(0).absorption)
+    assert absorption[0] == pytest.approx(0.01 - excess)
+    assert absorption[1] == pytest.approx(0.08)
+
+
+def test_scattering_multiplicity_correction_can_be_disabled():
+    data, _, _ = _scatter_pair_data()
+    lib = from_mgxs_library(
+        FakeLibrary(data), scattering_multiplicity="ignore"
+    )
+    assert np.asarray(lib.composition(0).absorption)[0] == pytest.approx(0.01)
+
+
+def test_scattering_multiplicity_warns_when_it_cannot_correct():
+    """Silence here would be a 230 pcm bias with no other symptom."""
+    data, _, _ = _scatter_pair_data()
+    del data[(FUEL, "consistent scatter matrix")]
+    del data[(FUEL, "nu-scatter matrix")]
+    with pytest.warns(UserWarning, match="scattering multiplicity"):
+        from_mgxs_library(FakeLibrary(data))
+
+
+def test_unknown_multiplicity_policy_is_rejected():
+    data, _, _ = _scatter_pair_data()
+    with pytest.raises(openndm.InputError, match="scattering_multiplicity"):
+        from_mgxs_library(FakeLibrary(data), scattering_multiplicity="maybe")
+
+
+def test_multiplicity_correction_raises_k_infinity():
+    """The correction must move k the right way, and by the right amount.
+
+    In an infinite medium the extra neutrons show up as a reduced effective
+    absorption, so k rises by very nearly the (n,xn) production per absorption.
+    """
+    excess = 5.0e-4
+    data, _, _ = _scatter_pair_data(excess=excess)
+    geometry = openndm.Geometry.from_lattice(
+        np.zeros((1, 1, 1), dtype=int),
+        pitch=20.0,
+        boundaries=dict.fromkeys(
+            ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"], "reflective"
+        ),
+    )
+    settings = openndm.Settings(verbosity=0, k_tolerance=1.0e-12)
+
+    def solve(policy):
+        lib = from_mgxs_library(
+            FakeLibrary(data), scattering_multiplicity=policy
+        )
+        return openndm.Model(geometry, lib, settings).solve()
+
+    corrected = solve("correct")
+    ignored = solve("ignore")
+    assert corrected.k_eff > ignored.k_eff
+
+    # Predicted rise: excess production per unit absorption, on the fast flux.
+    flux = np.asarray(ignored.flux).ravel()
+    absorption = np.asarray(
+        from_mgxs_library(
+            FakeLibrary(data), scattering_multiplicity="ignore"
+        ).composition(0).absorption
+    )
+    predicted = ignored.k_eff * excess * flux[0] / float(absorption @ flux)
+    assert 1.0e5 * (corrected.k_eff - ignored.k_eff) == pytest.approx(
+        1.0e5 * predicted, rel=0.05
+    )

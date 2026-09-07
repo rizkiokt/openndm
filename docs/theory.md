@@ -394,6 +394,47 @@ of this implementation, and it is what `Settings.dhat_limit` exists to bound.
 
 ---
 
+## 6a. Scattering multiplicity
+
+OpenMC's `absorption` score counts fission and capture. It does **not** count
+(n,2n) or (n,3n): those destroy one neutron and create several, and the extra
+neutrons appear only in the row sums of the `nu-scatter matrix`, as an excess
+over the plain `scatter matrix`.
+
+The operator in §2 cannot see that production. Summing the group balance over
+`g`, the in-scatter and out-scatter terms are the same double sum with the
+indices relabelled, so they cancel identically:
+
+```
+sum_g sum_{g'!=g} Sigma_s,g->g' phi_g  ==  sum_g sum_{g'!=g} Sigma_s,g'->g phi_g'
+```
+
+leaving `k = sum(nuSf phi) / sum(Sigma_a phi)` with the (n,xn) neutrons
+nowhere in it, whichever scattering matrix was supplied.
+
+The fix is exact rather than a correction factor. The true balance with
+multiplicity is
+
+```
+Sigma_a,g phi_g + Sigma_s^tot,g phi_g
+    = sum_{g'} nuSigma_s,g'->g phi_g' + chi_g/k F
+```
+
+and moving the self-scatter term across gives a removal cross section
+`Sigma_a + Sigma_s^tot - nuSigma_{s,g->g}`. Supplying the nu-weighted matrix
+to §2 instead forms `Sigma_a + nuSigma_s^tot - nuSigma_{s,g->g}`. The two
+differ by exactly the multiplicity excess `nuSigma_s^tot - Sigma_s^tot`, so
+subtracting that excess from the absorption cross section reproduces the
+correct operator **group by group**, not merely in the global balance.
+
+`openndm.gc.from_mgxs_library` does this by default when the library carries
+both matrices, and warns when it cannot. On a homogenised UO2 and water
+mixture the effect is 230 pcm, and the eigenvalue is the only symptom: the
+scattering orientation, the computed spectrum and the solver's internal
+consistency all look perfect without it. See `tests/validation/README.md`.
+
+---
+
 ## 7. Critical spectrum and buckling search
 
 For a homogeneous medium with buckling `B²`:

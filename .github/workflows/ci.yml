@@ -160,6 +160,47 @@ jobs:
           assert "openmc" not in sys.modules
           PY
 
+  openmc-coupling:
+    name: OpenMC coupling validation (C-1)
+    runs-on: ubuntu-latest
+    # The nuclear data download is large, so this runs on pushes and on
+    # demand rather than on every pull request.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: openmc-env
+          channels: conda-forge
+
+      - name: Install OpenMC
+        run: conda install -y openmc pytest
+
+      - name: Install OpenNDM
+        run: pip install .
+
+      - name: Fetch a small nuclear data library
+        run: |
+          python -m openmc.data.download --help >/dev/null 2>&1 || true
+          # ENDF/B-VIII.0 in the OpenMC HDF5 distribution.
+          curl -sL -o nndc.tar.xz \
+            https://anl.box.com/shared/static/uhbxlrx7hvxqw27psymfbhi7bx7s6u6a.xz
+          tar -xf nndc.tar.xz
+          echo "OPENMC_CROSS_SECTIONS=$PWD/endfb-viii.0-hdf5/cross_sections.xml" \
+            >> "$GITHUB_ENV"
+
+      - name: C-1 homogeneous consistency (FR-OMC-1)
+        run: pytest tests/python/test_openmc_integration.py -v
+
+      - name: The full C-1 case
+        working-directory: tests/validation
+        run: python c1_homogeneous.py --particles 50000 --batches 120
+
   wheels:
     name: build wheels
     runs-on: ${{ matrix.os }}

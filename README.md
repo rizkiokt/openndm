@@ -42,7 +42,8 @@ Implemented and tested:
 - Power iteration with Wielandt shift, ILU0-preconditioned BiCGSTAB inners,
   forward / adjoint / fixed-source modes, critical boron search
 - `openndm.gc` ingestion of `openmc.mgxs.Library`, `mgxs.h5` files and
-  statepoints, with OpenMC as an optional dependency
+  statepoints, with OpenMC as an optional dependency, validated end to end
+  against a real OpenMC run (C-1)
 - HDF5 statepoint output and an `openndm.StatePoint` reader
 
 ## Installation
@@ -115,6 +116,18 @@ print(result.f_q, result.f_dh)   # peaking factors
 - **V-4, adjoint reciprocity.** Forward and adjoint eigenvalues agree to under
   1 pcm while the flux shapes differ.
 - **Determinism.** Bit-identical results on 1, 2, 4 and 8 threads.
+
+### OpenMC coupling
+
+`tests/validation/c1_homogeneous.py` runs the specification's C-1 case: a
+uniform infinite medium in OpenMC with continuous-energy physics, whose
+multi-group cross sections are then solved by OpenNDM. It isolates the
+translation path from every other source of error, and reproduces OpenMC's
+`k_inf` to **35 pcm, 1.5σ**.
+
+Writing it found two defects that stand-in test doubles could not have caught,
+including one worth 230 pcm that fails silently — see
+[`tests/validation/README.md`](tests/validation/README.md).
 
 ### Benchmarks
 

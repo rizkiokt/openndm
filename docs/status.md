@@ -41,18 +41,18 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 
 | ID | State | Notes |
 |---|---|---|
-| FR-OMC-1 | done | `from_mgxs_library`. Tested against stand-ins with the same duck type; an end-to-end test against a real OpenMC run is not in CI because OpenMC is not installed there. |
+| FR-OMC-1 | done | `from_mgxs_library`, validated end to end against a real OpenMC run (C-1, `tests/validation/`). Reproduces OpenMC's k_inf to 35 pcm, 1.5 sigma. Handles (n,xn) scattering multiplicity, which is worth 230 pcm and which the stand-in tests could not have caught. |
 | FR-OMC-2 | partial | Any domain type is accepted and each domain becomes a composition. Mapping mesh elements onto nodes is left to the caller ordering the domains to match the core map. |
 | FR-OMC-3 | partial | `from_mgxs_file` reads `mgxs.h5`. Untested against a real file. |
 | FR-OMC-4 | done | `from_statepoint`. |
-| FR-OMC-5 | done | Both D sources accepted, preference configurable, warning above a configurable disagreement tolerance. |
+| FR-OMC-5 | done | Both D sources accepted, preference configurable, warning above a configurable disagreement tolerance. C-1 confirms D does not affect an infinite medium, as it must not. |
 | FR-OMC-6 | done | Standard deviations propagated where OpenMC provides them. |
 | FR-OMC-7 | partial | `add_adf_tallies` and `compute_adf` are implemented, using a thin track-length slab rather than a surface tally. Not exercised against a real OpenMC run. |
 | FR-OMC-8 | partial | B1 and P1 buckling search, verified in all three criticality regimes. It reports the buckling and the corrected D; it does **not** re-condense the group constants, which needs the fine-group data inside the lattice calculation. |
 | FR-OMC-9 | partial | IFP results are read when present, with the k-ratio fallback. Untested against a real statepoint. |
 | FR-OMC-10 | partial | `compute_form_functions` extracts and normalises. Nothing consumes them, because FR-OUT-4 is not implemented. |
 | FR-OMC-11 | done | `BranchDriver` with serial and multiprocessing execution, checkpointing, resume, and Slurm/PBS job arrays. The assembly path is tested; the execution path needs OpenMC. |
-| FR-OMC-12 | not started | The self-consistency regression test. |
+| FR-OMC-12 | not started | The small full-core self-consistency test (C-4). C-1 is passing; C-2, C-3, C-5 and C-6 are not written. See `tests/validation/README.md`. |
 | FR-OMC-13 | not started | Exposing the CMFD kernel to `openmc.lib`. |
 | FR-OMC-14 | done | Enforced by a dedicated CI job that installs without OpenMC and solves. |
 
@@ -149,6 +149,19 @@ temperature or density, and cross sections reach the solver only through
 | NFR-EXT-5 | not started | The public `extern "C"` API. |
 
 ---
+
+## What the OpenMC coupling establishes
+
+C-1 from the specification's §6.3 runs a uniform infinite medium in OpenMC
+with continuous-energy physics, hands the multi-group cross sections tallied
+from that same run to OpenNDM, and compares eigenvalues. There is no spatial
+discretisation, no leakage and no homogenisation error, so the case isolates
+the translation and nothing else. It currently agrees to 35 pcm, 1.5 sigma,
+after fixing the two defects it found: `MGXS.get_xs` takes integer domain ids
+rather than domain objects, and OpenMC's absorption score excludes (n,2n).
+The second was worth 230 pcm and had no symptom but the eigenvalue.
+
+C-2 through C-6 are not written.
 
 ## What the benchmarks establish
 

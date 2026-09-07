@@ -6,7 +6,34 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **C-1 OpenMC coupling validation** (`tests/validation/c1_homogeneous.py`),
+  the first of the specification's §6.3 cases. A uniform infinite medium runs
+  in OpenMC with continuous-energy physics and the multi-group cross sections
+  from that same run are solved by OpenNDM, isolating the translation path
+  from every other source of error. It agrees to 35 pcm, 1.5 sigma.
+- Opt-in OpenMC integration tests (`tests/python/test_openmc_integration.py`),
+  skipped unless OpenMC, its executable and a nuclear data library are all
+  available.
+- `scattering_multiplicity` option on `from_mgxs_library`.
+
 ### Fixed
+
+- **(n,2n) and (n,3n) production was lost in translation**, worth 230 pcm on a
+  UO2 and water mixture. OpenMC's `absorption` score excludes those reactions;
+  the extra neutrons appear only as an excess in the `nu-scatter matrix` row
+  sums. A diffusion operator built from a single scattering matrix cannot see
+  them, because in-scatter and out-scatter are the same double sum and cancel
+  identically. `from_mgxs_library` now subtracts the multiplicity excess from
+  absorption, which is algebraically exact group by group, and warns when the
+  library carries only one of the two matrices. Found by C-1; it fails
+  silently, with the scattering orientation, the computed spectrum and the
+  solver's internal consistency all looking correct.
+- **`MGXS.get_xs` takes integer domain ids, not domain objects.**
+  `Library.get_mgxs` takes the object, so passing it straight through is the
+  natural mistake; real OpenMC raises a `TypeError` from inside its argument
+  checking. The stand-in test doubles now enforce the same contract.
 
 - **IAEA-2D core map.** The transcribed quarter-core map was asymmetric about
   the diagonal at one position pair, and was missing one cell of the
