@@ -22,13 +22,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Both linters are pinned. An unpinned formatter turns every upstream
+      # release into a red build on an unrelated commit, and clang-format in
+      # particular reformats differently between major versions: the first CI
+      # run failed here purely because the runner had 18 and the tree had been
+      # formatted with 23.
       - name: Install linters
-        run: pip install ruff
+        run: pip install "ruff==0.14.14" "clang-format==18.1.8"
       - name: ruff (NFR-QA-4)
         run: ruff check python tests benchmarks
       - name: clang-format (NFR-QA-4)
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y clang-format
           for f in $(find include src tests/cpp -name '*.h' -o -name '*.cpp'); do
             clang-format --dry-run --Werror "$f" || exit 1
           done
@@ -109,10 +113,13 @@ jobs:
 
       - name: Collect coverage
         run: |
+          # geninfo walks the fetched Catch2 sources, which are not all on
+          # disk, so "source" has to be ignored during capture; the _deps
+          # tree is removed from the report immediately afterwards anyway.
           lcov --capture --directory build --output-file coverage.info \
-               --ignore-errors mismatch,gcov
+               --ignore-errors mismatch,gcov,source,empty
           lcov --remove coverage.info '/usr/*' '*/_deps/*' '*/tests/*' \
-               --output-file coverage.info
+               --ignore-errors unused --output-file coverage.info
           lcov --list coverage.info
 
       - uses: actions/upload-artifact@v4
@@ -145,8 +152,11 @@ jobs:
           lib.set_composition(0, D=[1.0], absorption=[0.08], nu_fission=[0.1],
                               kappa_fission=[0.1], chi=[1.0], scatter=[[0.0]])
           lib.finalize()
+          # 16 nodes per side, where the SANM discretisation error on this
+          # problem is about 3.5 pcm. Eight nodes leaves 28 pcm, which is
+          # correct physics but too coarse to assert anything tight against.
           geom = openndm.Geometry.from_lattice(
-              np.zeros((8, 8, 8), int), pitch=12.5,
+              np.zeros((16, 16, 16), int), pitch=6.25,
               boundaries=dict.fromkeys(
                   ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"],
                   "zero_flux"))
@@ -154,7 +164,7 @@ jobs:
           reference = 0.1 / (0.08 + 3 * (np.pi / 100) ** 2)
           error = 1e5 * (k - reference)
           print(f"k_eff = {k:.8f}, {error:+.2f} pcm from analytic")
-          assert abs(error) < 25.0, error
+          assert abs(error) < 10.0, error
 
           # Importing openndm must not have dragged OpenMC in.
           assert "openmc" not in sys.modules
@@ -217,7 +227,9 @@ jobs:
         uses: pypa/cibuildwheel@v2.21
         env:
           CIBW_BUILD: cp310-* cp311-* cp312-* cp313-*
-          CIBW_SKIP: "*-musllinux_i686 *_i686"
+          # h5py, a runtime dependency, publishes no musllinux wheels, so the
+          # test step would build it from source in a container with no HDF5.
+          CIBW_SKIP: "*_i686 *-musllinux*"
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >
             pytest {project}/tests/python -q

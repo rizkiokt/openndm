@@ -133,7 +133,7 @@ void GroupMatrix::multiply(
   for (std::ptrdiff_t r = 0; r < n; ++r) {
     double s = 0.0;
     for (int p = rp[static_cast<std::size_t>(r)];
-        p < rp[static_cast<std::size_t>(r) + 1]; ++p) {
+         p < rp[static_cast<std::size_t>(r) + 1]; ++p) {
       s += values_[static_cast<std::size_t>(p)] *
            x[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])];
     }
@@ -157,18 +157,18 @@ void Ilu0::factor(const GroupMatrix& A)
   std::vector<int> position(static_cast<std::size_t>(n), -1);
   for (int i = 0; i < n; ++i) {
     for (int p = rp[static_cast<std::size_t>(i)];
-        p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
+         p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
       position[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])] = p;
     }
     for (int p = rp[static_cast<std::size_t>(i)];
-        p < dp[static_cast<std::size_t>(i)]; ++p) {
+         p < dp[static_cast<std::size_t>(i)]; ++p) {
       const int k = ci[static_cast<std::size_t>(p)];
       const double pivot = lu_[static_cast<std::size_t>(p)] *
                            diag_inv_[static_cast<std::size_t>(k)];
       lu_[static_cast<std::size_t>(p)] = pivot;
       if (pivot == 0.0) continue;
       for (int q = dp[static_cast<std::size_t>(k)] + 1;
-          q < rp[static_cast<std::size_t>(k) + 1]; ++q) {
+           q < rp[static_cast<std::size_t>(k) + 1]; ++q) {
         const int j = ci[static_cast<std::size_t>(q)];
         const int target = position[static_cast<std::size_t>(j)];
         if (target >= 0) {
@@ -189,7 +189,7 @@ void Ilu0::factor(const GroupMatrix& A)
       diag_inv_[static_cast<std::size_t>(i)] = 1.0 / d;
     }
     for (int p = rp[static_cast<std::size_t>(i)];
-        p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
+         p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
       position[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])] = -1;
     }
   }
@@ -207,7 +207,7 @@ void Ilu0::apply(const std::vector<double>& b, std::vector<double>& x) const
   for (int i = 0; i < n; ++i) {
     double s = b[static_cast<std::size_t>(i)];
     for (int p = rp[static_cast<std::size_t>(i)];
-        p < dp[static_cast<std::size_t>(i)]; ++p) {
+         p < dp[static_cast<std::size_t>(i)]; ++p) {
       s -= lu_[static_cast<std::size_t>(p)] *
            x[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])];
     }
@@ -217,7 +217,7 @@ void Ilu0::apply(const std::vector<double>& b, std::vector<double>& x) const
   for (int i = n - 1; i >= 0; --i) {
     double s = x[static_cast<std::size_t>(i)];
     for (int p = dp[static_cast<std::size_t>(i)] + 1;
-        p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
+         p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
       s -= lu_[static_cast<std::size_t>(p)] *
            x[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])];
     }
