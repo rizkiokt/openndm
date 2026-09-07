@@ -76,6 +76,6 @@ struct IterationRecord {
   int inner_iterations = 0;
 };
 
-} // namespace openndm
+}  // namespace openndm
 
-#endif // OPENNDM_SETTINGS_H
+#endif  // OPENNDM_SETTINGS_H

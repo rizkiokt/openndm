@@ -26,7 +26,7 @@ struct Surface {
   double h_hi = 0.0;  //!< width of \c hi normal to this surface [cm]
   int axis = 0;       //!< transverse-integration axis this surface belongs to
   BoundaryType bc = BoundaryType::interior;
-  int albedo_id = -1; //!< row of Geometry::albedos() when \c bc is \c albedo
+  int albedo_id = -1;  //!< row of Geometry::albedos() when \c bc is \c albedo
 
   bool is_boundary() const { return bc != BoundaryType::interior; }
 
@@ -40,29 +40,29 @@ struct Surface {
 
 //! One computational node (homogenised region) of the core.
 struct Node {
-  double volume = 0.0;      //!< [cm^3]
-  int composition = 0;      //!< row of the cross section library
-  std::array<double, 3> width {0.0, 0.0, 0.0}; //!< extent along each axis [cm]
+  double volume = 0.0;  //!< [cm^3]
+  int composition = 0;  //!< row of the cross section library
+  std::array<double, 3> width{0.0, 0.0, 0.0};  //!< extent along each axis [cm]
   //! Surface index per (axis, side); side 0 is the low face, 1 the high face.
   //! Sized \c 2*n_axes by the builder.
-  std::array<int, 6> face {{-1, -1, -1, -1, -1, -1}};
+  std::array<int, 6> face{{-1, -1, -1, -1, -1, -1}};
   //! Original lattice position, retained for reporting and for the loading
   //! pattern API (FR-OPT-7). Meaningless for non-Cartesian builders.
-  std::array<int, 3> ijk {{0, 0, 0}};
+  std::array<int, 3> ijk{{0, 0, 0}};
 };
 
 //! Structured description used by the Cartesian builder (FR-GEO-1..5).
 struct CartesianSpec {
-  std::vector<double> dx; //!< node widths along x [cm]
-  std::vector<double> dy; //!< node widths along y [cm]
-  std::vector<double> dz; //!< node widths along z [cm]
+  std::vector<double> dx;  //!< node widths along x [cm]
+  std::vector<double> dy;  //!< node widths along y [cm]
+  std::vector<double> dz;  //!< node widths along z [cm]
   //! Composition index per (k, j, i), C order, with COMP_INACTIVE marking a
   //! position outside the core (FR-GEO-2).
   std::vector<int> composition;
   //! Boundary condition per face in the order -x, +x, -y, +y, -z, +z.
-  std::array<BoundaryType, 6> bc {{BoundaryType::vacuum, BoundaryType::vacuum,
-    BoundaryType::vacuum, BoundaryType::vacuum, BoundaryType::vacuum,
-    BoundaryType::vacuum}};
+  std::array<BoundaryType, 6> bc{
+      {BoundaryType::vacuum, BoundaryType::vacuum, BoundaryType::vacuum,
+          BoundaryType::vacuum, BoundaryType::vacuum, BoundaryType::vacuum}};
   //! Per-face albedo \f$\beta_g = J^-/J^+\f$; only read where \c bc is
   //! \c albedo. Each entry is either empty or has one value per group.
   std::array<std::vector<double>, 6> albedo;
@@ -97,7 +97,8 @@ public:
   const std::vector<Node>& nodes() const { return nodes_; }
   const std::vector<Surface>& surfaces() const { return surfaces_; }
 
-  //! Albedo table, one row per distinct boundary spec, each of length \c n_groups.
+  //! Albedo table, one row per distinct boundary spec, each of length \c
+  //! n_groups.
   const std::vector<std::vector<double>>& albedos() const { return albedos_; }
 
   double total_volume() const;
@@ -124,10 +125,10 @@ private:
   std::vector<Surface> surfaces_;
   std::vector<std::vector<double>> albedos_;
   std::vector<int> lattice_to_node_;
-  std::array<int, 3> shape_ {{0, 0, 0}};
+  std::array<int, 3> shape_{{0, 0, 0}};
   int n_axes_ = 3;
 };
 
-} // namespace openndm
+}  // namespace openndm
 
-#endif // OPENNDM_GEOMETRY_H
+#endif  // OPENNDM_GEOMETRY_H

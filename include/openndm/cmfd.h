@@ -43,21 +43,21 @@ public:
   //! Run the nonlinear two-node update, refreshing Dhat (FR-SOL-4).
   //! \return the largest relative change in Dhat, as a convergence indicator.
   double nodal_update(const Kernel& kernel, const std::vector<double>& flux,
-    double k_eff, const Settings& s);
+      double k_eff, const Settings& s);
 
   //! Fission source per node, \f$\sum_g \nu\Sigma_{f,g}\phi_g V\f$.
-  void fission_source(const std::vector<double>& flux,
-    std::vector<double>& source) const;
+  void fission_source(
+      const std::vector<double>& flux, std::vector<double>& source) const;
 
   //! One Gauss-Seidel pass over energy groups, solving each within-group
   //! system with preconditioned BiCGSTAB.
   int solve_groups(const std::vector<double>& fission_src, double k_eff,
-    double inv_k_shift, std::vector<double>& flux, const Settings& s);
+      double inv_k_shift, std::vector<double>& flux, const Settings& s);
 
   //! Solve with a user supplied external source instead of fission
   //! (FR-MODE-3).
   int solve_fixed_source(const std::vector<double>& external,
-    std::vector<double>& flux, const Settings& s);
+      std::vector<double>& flux, const Settings& s);
 
   //! Largest reciprocal Wielandt shift that leaves every shifted diagonal
   //! entry safely positive.
@@ -76,8 +76,8 @@ public:
 
   //! Net current per surface per group from the current flux, evaluated with
   //! the present coupling coefficients.
-  void compute_currents(const std::vector<double>& flux,
-    std::vector<double>& current) const;
+  void compute_currents(
+      const std::vector<double>& flux, std::vector<double>& current) const;
 
   const std::vector<double>& dtilde() const { return dtilde_; }
   const std::vector<double>& dhat() const { return dhat_; }
@@ -89,8 +89,8 @@ public:
 private:
   void build_pattern();
   //! Boundary coupling coefficient for one exterior surface and group.
-  double boundary_coupling(const Surface& surf, int group, double D,
-    double adf) const;
+  double boundary_coupling(
+      const Surface& surf, int group, double D, double adf) const;
 
   const Geometry& geom_;
   const XSLibrary& xs_;
@@ -101,8 +101,8 @@ private:
   double max_inv_shift_ = 0.0;
 
   //! Cached per node/group data, flattened as node*G + g.
-  std::vector<double> removal_;    //!< \f$\Sigma_r V\f$
-  std::vector<double> nu_fission_; //!< \f$\nu\Sigma_f V\f$
+  std::vector<double> removal_;     //!< \f$\Sigma_r V\f$
+  std::vector<double> nu_fission_;  //!< \f$\nu\Sigma_f V\f$
   std::vector<double> chi_;
   std::vector<double> diffusion_;
   //! Scattering, node*G*G + from*G + to, already multiplied by volume.
@@ -125,6 +125,6 @@ private:
   mutable std::vector<double> prev_flux_;
 };
 
-} // namespace openndm
+}  // namespace openndm
 
-#endif // OPENNDM_CMFD_H
+#endif  // OPENNDM_CMFD_H

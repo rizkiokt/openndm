@@ -35,7 +35,9 @@ requirement ID to its state.
 - Branch-parameterised libraries over arbitrary state variables with
   multilinear interpolation and a configurable extrapolation policy.
 - Load-time validation that fails on unphysical data but only warns on
-  negative scattering transfers, which Monte Carlo noise produces routinely.
+  negative scattering transfers, which Monte Carlo noise produces routinely,
+  and on a fissile composition with no kappa-fission, whose only symptom would
+  otherwise be a silently zero power distribution.
 - Versioned `xslib.h5` round-tripping.
 
 **Solver (FR-SOL-1..8, FR-MODE-1..4, FR-MODE-8)**

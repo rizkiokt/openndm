@@ -102,6 +102,7 @@ def test_leakage_correction_applies_to_a_library():
         D=[1.0, 1.0],
         absorption=[0.01, 0.08],
         nu_fission=[0.0, 0.135],
+        kappa_fission=[0.0, 0.135],
         chi=[1.0, 0.0],
         scatter=SCATTER,
     )

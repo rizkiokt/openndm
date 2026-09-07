@@ -20,11 +20,11 @@ constexpr int NO_NODE = -1;
 
 //! Boundary condition kinds available on an exterior surface (FR-GEO-5).
 enum class BoundaryType {
-  interior,  //!< not a boundary; both sides carry a node
-  zero_flux, //!< \f$\phi_s = 0\f$
-  vacuum,    //!< zero incoming partial current (Marshak)
-  reflective,//!< zero net current
-  albedo     //!< user supplied \f$\beta = J^-/J^+\f$, per group
+  interior,    //!< not a boundary; both sides carry a node
+  zero_flux,   //!< \f$\phi_s = 0\f$
+  vacuum,      //!< zero incoming partial current (Marshak)
+  reflective,  //!< zero net current
+  albedo       //!< user supplied \f$\beta = J^-/J^+\f$, per group
 };
 
 //! Nodal kernel selected at run time, never at compile time (FR-SOL-8).
@@ -36,11 +36,11 @@ enum class KernelType {
 
 //! What the solver is being asked to compute (FR-MODE).
 enum class SolveMode {
-  forward,     //!< forward static eigenvalue (FR-MODE-1)
-  adjoint,     //!< adjoint static eigenvalue (FR-MODE-2)
-  fixed_source //!< fixed external source (FR-MODE-3)
+  forward,      //!< forward static eigenvalue (FR-MODE-1)
+  adjoint,      //!< adjoint static eigenvalue (FR-MODE-2)
+  fixed_source  //!< fixed external source (FR-MODE-3)
 };
 
-} // namespace openndm
+}  // namespace openndm
 
-#endif // OPENNDM_CONSTANTS_H
+#endif  // OPENNDM_CONSTANTS_H

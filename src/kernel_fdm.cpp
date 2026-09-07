@@ -15,8 +15,8 @@ public:
   const char* name() const override { return "fdm"; }
   bool is_finite_difference() const override { return true; }
 
-  void solve(const TwoNodeProblem& p, const XSLibrary&,
-    const std::vector<int>&, int n_groups, int, double* current) const override
+  void solve(const TwoNodeProblem& p, const XSLibrary&, const std::vector<int>&,
+      int n_groups, int, double* current) const override
   {
     // Never reached: CmfdSystem skips the update for a finite difference
     // kernel. Filling the currents keeps the contract honest for a caller that
@@ -31,4 +31,4 @@ std::unique_ptr<Kernel> make_fdm_kernel()
   return std::make_unique<FdmKernel>();
 }
 
-} // namespace openndm
+}  // namespace openndm

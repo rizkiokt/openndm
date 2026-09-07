@@ -15,12 +15,11 @@ CartesianSpec uniform(int nx, int ny, int nz, double h)
   spec.dx.assign(nx, h);
   spec.dy.assign(ny, h);
   spec.dz.assign(nz, h);
-  spec.composition.assign(
-    static_cast<std::size_t>(nx) * ny * nz, 0);
+  spec.composition.assign(static_cast<std::size_t>(nx) * ny * nz, 0);
   return spec;
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("every node face is wired to exactly one surface", "[geometry]")
 {
@@ -59,7 +58,7 @@ TEST_CASE("surface areas sum to the transverse cross section", "[geometry]")
   for (const auto& surf : g.surfaces()) {
     // Count only the low boundary faces normal to x.
     if (surf.axis == 0 && surf.bc != BoundaryType::interior &&
-      surf.boundary_is_lo_side()) {
+        surf.boundary_is_lo_side()) {
       area_x += surf.area;
     }
   }
@@ -82,7 +81,7 @@ TEST_CASE("non-uniform widths give the right volumes", "[geometry]")
 TEST_CASE("an out-of-core neighbour uses the inactive condition", "[geometry]")
 {
   CartesianSpec spec = uniform(2, 2, 1, 10.0);
-  spec.composition[3] = COMP_INACTIVE; // the (1,1) position
+  spec.composition[3] = COMP_INACTIVE;  // the (1,1) position
   spec.bc.fill(BoundaryType::reflective);
   spec.inactive_bc = BoundaryType::vacuum;
   const auto g = Geometry::from_cartesian(spec);
@@ -92,7 +91,7 @@ TEST_CASE("an out-of-core neighbour uses the inactive condition", "[geometry]")
     if (surf.bc == BoundaryType::vacuum) ++vacuum;
   }
   REQUIRE(g.n_nodes() == 3);
-  REQUIRE(vacuum == 2); // the two faces looking at the dropped position
+  REQUIRE(vacuum == 2);  // the two faces looking at the dropped position
 }
 
 TEST_CASE("bad geometry input is rejected", "[geometry]")

@@ -1,6 +1,5 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
-
 #include <cmath>
 
 #include "kernel_common.h"
@@ -13,7 +12,7 @@ namespace {
 //! Average of the quadratic leakage fit over the neighbour node, which is what
 //! the fit is constructed to reproduce.
 double neighbour_average(
-  double l_self, double l1, double l2, double lo, double hi)
+    double l_self, double l1, double l2, double lo, double hi)
 {
   // integral of (l_self + l1*P1 + l2*P2) over [lo, hi], divided by the width
   const auto antiderivative = [&](double x) {
@@ -22,17 +21,17 @@ double neighbour_average(
   return (antiderivative(hi) - antiderivative(lo)) / (hi - lo);
 }
 
-} // namespace
+}  // namespace
 
-TEST_CASE("the transverse leakage fit reproduces all three averages",
-  "[kernel]")
+TEST_CASE(
+    "the transverse leakage fit reproduces all three averages", "[kernel]")
 {
   SECTION("uniform mesh")
   {
     const double prev = 3.0, self = 5.0, next = 4.0;
     const auto fit = leakage_fit(prev, self, next, 20.0, 20.0, 20.0);
-    REQUIRE(neighbour_average(self, fit[0], fit[1], -1.5, -0.5) ==
-      Approx(prev));
+    REQUIRE(
+        neighbour_average(self, fit[0], fit[1], -1.5, -0.5) == Approx(prev));
     REQUIRE(neighbour_average(self, fit[0], fit[1], 0.5, 1.5) == Approx(next));
     REQUIRE(neighbour_average(self, fit[0], fit[1], -0.5, 0.5) == Approx(self));
   }
@@ -44,9 +43,9 @@ TEST_CASE("the transverse leakage fit reproduces all three averages",
     const double a = h_prev / h_self;
     const double b = h_next / h_self;
     REQUIRE(neighbour_average(self, fit[0], fit[1], -0.5 - a, -0.5) ==
-      Approx(prev));
+            Approx(prev));
     REQUIRE(
-      neighbour_average(self, fit[0], fit[1], 0.5, 0.5 + b) == Approx(next));
+        neighbour_average(self, fit[0], fit[1], 0.5, 0.5 + b) == Approx(next));
   }
 }
 
@@ -78,9 +77,10 @@ TEST_CASE("the analytic basis agrees with direct quadrature", "[kernel]")
     const double k = std::sqrt(k2);
     REQUIRE(basis.hyperbolic);
     REQUIRE(basis.even_avg ==
-      Approx(quadrature([k](double x) { return std::cosh(k * x); })));
-    REQUIRE(basis.odd_m1 == Approx(quadrature(
-      [k](double x) { return std::sinh(k * x) * 2.0 * x; })));
+            Approx(quadrature([k](double x) { return std::cosh(k * x); })));
+    REQUIRE(basis.odd_m1 == Approx(quadrature([k](double x) {
+      return std::sinh(k * x) * 2.0 * x;
+    })));
     REQUIRE(basis.even_m2 == Approx(quadrature([k](double x) {
       return std::cosh(k * x) * (6.0 * x * x - 0.5);
     })));
@@ -95,9 +95,10 @@ TEST_CASE("the analytic basis agrees with direct quadrature", "[kernel]")
     const double w = std::sqrt(-k2);
     REQUIRE_FALSE(basis.hyperbolic);
     REQUIRE(basis.even_avg ==
-      Approx(quadrature([w](double x) { return std::cos(w * x); })));
-    REQUIRE(basis.odd_m1 == Approx(quadrature(
-      [w](double x) { return std::sin(w * x) * 2.0 * x; })));
+            Approx(quadrature([w](double x) { return std::cos(w * x); })));
+    REQUIRE(basis.odd_m1 == Approx(quadrature([w](double x) {
+      return std::sin(w * x) * 2.0 * x;
+    })));
     REQUIRE(basis.even_m2 == Approx(quadrature([w](double x) {
       return std::cos(w * x) * (6.0 * x * x - 0.5);
     })));
@@ -115,8 +116,8 @@ TEST_CASE("the analytic basis stays finite as kappa vanishes", "[kernel]")
   REQUIRE(basis.even_avg == Approx(1.0).epsilon(1e-6));
 }
 
-TEST_CASE("the dense solver handles pivoting and reports singularity",
-  "[kernel]")
+TEST_CASE(
+    "the dense solver handles pivoting and reports singularity", "[kernel]")
 {
   SECTION("a system needing a row swap")
   {

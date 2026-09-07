@@ -43,8 +43,8 @@ public:
   Result solve(const Settings& settings);
 
   //! Fixed external source, node*G + g (FR-MODE-3).
-  Result solve_fixed_source(const std::vector<double>& source,
-    const Settings& settings);
+  Result solve_fixed_source(
+      const std::vector<double>& source, const Settings& settings);
 
   //! Discard the retained flux and coupling coefficients so the next solve
   //! starts cold.
@@ -69,6 +69,6 @@ private:
   bool has_solution_ = false;
 };
 
-} // namespace openndm
+}  // namespace openndm
 
-#endif // OPENNDM_SOLVER_H
+#endif  // OPENNDM_SOLVER_H

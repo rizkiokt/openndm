@@ -62,15 +62,21 @@ import openndm
 # A 2-group, 3D quarter-core model.
 lib = openndm.XSLibrary(n_groups=2, n_compositions=2)
 lib.set_composition(
-    0, D=[1.5, 0.4], absorption=[0.010, 0.085], nu_fission=[0.0, 0.135],
+    0,                                                 # fuel
+    D=[1.5, 0.4], absorption=[0.010, 0.085],
+    nu_fission=[0.0, 0.135], kappa_fission=[0.0, 0.135],
     chi=[1.0, 0.0], scatter=[[0.0, 0.020], [0.0, 0.0]],
 )
 lib.set_composition(
-    1, D=[2.0, 0.3], absorption=[0.0, 0.010], scatter=[[0.0, 0.040], [0.0, 0.0]],
+    1,                                                 # reflector
+    D=[2.0, 0.3], absorption=[0.0, 0.010],
+    scatter=[[0.0, 0.040], [0.0, 0.0]],
 )
+lib.finalize()                                         # validates, returns warnings
 
 core = np.zeros((10, 9, 9), dtype=int)
-core[:, 8, :] = core[:, :, 8] = 1                      # radial reflector
+core[:, 8, :] = 1                                      # radial reflector
+core[:, :, 8] = 1
 
 geom = openndm.Geometry.from_lattice(
     core, pitch=(20.0, 20.0, 20.0),
@@ -79,25 +85,35 @@ geom = openndm.Geometry.from_lattice(
                 "z_min": "vacuum", "z_max": "vacuum"},
 )
 
-model = openndm.Model(geom, lib, openndm.Settings(kernel="sanm"))
+model = openndm.Model(geom, lib, openndm.Settings(kernel="sanm", verbosity=0))
 result = model.solve()
 
-print(result.k_eff)
-print(result.radial_power())     # assembly-wise relative power
+print(result.k_eff)              # 1.036880
+print(result.radial_power())     # assembly-wise relative power, (9, 9)
 print(result.f_q, result.f_dh)   # peaking factors
 ```
 
 ## Verification
 
-`pytest tests/` runs the verification suite. The two checks that pin down
-correctness:
+`pytest tests/python` runs the verification suite, and
+`ctest --test-dir build` the C++ one. The checks that pin down correctness:
 
 - **V-1, analytic buckling.** A bare homogeneous cuboid against
   `k = νΣf / (Σa + D B²)`. Every kernel converges second order; at 64 nodes per
   side the error is 0.1 pcm.
+- **V-2, convergence order.** The observed spatial order of each kernel,
+  measured over three mesh refinements.
 - **V-3, kernel consistency.** Coarse-mesh SANM and NEM against a refined FDM
   solution of the same problem. On the IAEA-2D core map, SANM at one node per
-  assembly lands 18 pcm from the fine-mesh converged eigenvalue.
+  assembly lands 18 pcm from the fine-mesh converged eigenvalue, and all three
+  kernels agree to within 25 pcm under refinement. This is the check that
+  catches a wrong transverse leakage, a wrong discontinuity factor convention
+  or a broken two-node closure; mesh refinement alone would not, because a
+  kernel with any of those defects still converges smoothly, just to the wrong
+  answer.
+- **V-4, adjoint reciprocity.** Forward and adjoint eigenvalues agree to under
+  1 pcm while the flux shapes differ.
+- **Determinism.** Bit-identical results on 1, 2, 4 and 8 threads.
 
 `benchmarks/` holds runnable decks; see `benchmarks/README.md` for what each
 one currently reproduces, including where a deck does *not* yet match its

@@ -13,7 +13,9 @@
 namespace openndm {
 
 CmfdSystem::CmfdSystem(const Geometry& geom, const XSLibrary& xs)
-  : geom_(geom), xs_(xs), n_groups_(xs.n_groups())
+    : geom_(geom),
+      xs_(xs),
+      n_groups_(xs.n_groups())
 {
   if (!xs.finalized()) {
     throw InputError("cross section library must be finalized before use");
@@ -79,13 +81,13 @@ void CmfdSystem::refresh_cross_sections()
       }
       const double production = chi_[idx] * nu_fission_[idx];
       if (production > 0.0) {
-        limit = std::min(limit, (1.0 - SHIFT_MARGIN) * removal_[idx] / production);
+        limit =
+            std::min(limit, (1.0 - SHIFT_MARGIN) * removal_[idx] / production);
       }
       for (int gp = 0; gp < G; ++gp) {
         // scatter_[i][from][to]; transposed for the adjoint.
-        const std::size_t src = adjoint_
-          ? static_cast<std::size_t>(gp) * G + g
-          : static_cast<std::size_t>(g) * G + gp;
+        const std::size_t src = adjoint_ ? static_cast<std::size_t>(gp) * G + g
+                                         : static_cast<std::size_t>(g) * G + gp;
         const double value = c.scatter[src] * V;
         scatter_[(static_cast<std::size_t>(i) * G + g) * G + gp] = value;
         // scatter_[i][g][gp] transfers g -> gp, so gp < g is upscattering.
@@ -108,31 +110,30 @@ void CmfdSystem::set_adjoint(bool adjoint)
 }
 
 double CmfdSystem::boundary_coupling(
-  const Surface& surf, int group, double D, double adf) const
+    const Surface& surf, int group, double D, double adf) const
 {
   const double h = surf.boundary_is_lo_side() ? surf.h_hi : surf.h_lo;
   switch (surf.bc) {
-  case BoundaryType::reflective:
-    return 0.0;
-  case BoundaryType::zero_flux:
-    // phi_s = 0 makes the discontinuity factor irrelevant.
-    return 2.0 * D / h;
-  case BoundaryType::vacuum: {
-    // Marshak: J = phi_s / 4 outgoing with no incoming partial current.
-    const double gamma = 0.5 * adf;
-    return 2.0 * D * gamma / (2.0 * D + gamma * h);
-  }
-  case BoundaryType::albedo: {
-    const double beta =
-      geom_.albedos()[static_cast<std::size_t>(surf.albedo_id)]
-                     [static_cast<std::size_t>(group)];
-    if (beta >= 1.0) return 0.0;
-    if (beta <= -1.0) return 2.0 * D / h;
-    const double gamma = adf * (1.0 - beta) / (2.0 * (1.0 + beta));
-    return 2.0 * D * gamma / (2.0 * D + gamma * h);
-  }
-  default:
-    return 0.0;
+    case BoundaryType::reflective:
+      return 0.0;
+    case BoundaryType::zero_flux:
+      // phi_s = 0 makes the discontinuity factor irrelevant.
+      return 2.0 * D / h;
+    case BoundaryType::vacuum: {
+      // Marshak: J = phi_s / 4 outgoing with no incoming partial current.
+      const double gamma = 0.5 * adf;
+      return 2.0 * D * gamma / (2.0 * D + gamma * h);
+    }
+    case BoundaryType::albedo: {
+      const double beta = geom_.albedos()[static_cast<std::size_t>(
+          surf.albedo_id)][static_cast<std::size_t>(group)];
+      if (beta >= 1.0) return 0.0;
+      if (beta <= -1.0) return 2.0 * D / h;
+      const double gamma = adf * (1.0 - beta) / (2.0 * (1.0 + beta));
+      return 2.0 * D * gamma / (2.0 * D + gamma * h);
+    }
+    default:
+      return 0.0;
   }
 }
 
@@ -172,7 +173,7 @@ void CmfdSystem::build_coupling()
         const double D = diffusion_[static_cast<std::size_t>(N) * G + g];
         const double f = xs_.adf_value(comp, face, g);
         dtilde_[static_cast<std::size_t>(s) * G + g] =
-          boundary_coupling(surf, g, D, f);
+            boundary_coupling(surf, g, D, f);
         dhat_[static_cast<std::size_t>(s) * G + g] = 0.0;
       }
     }
@@ -218,7 +219,7 @@ void CmfdSystem::assemble(double inv_k_shift)
 }
 
 void CmfdSystem::fission_source(
-  const std::vector<double>& flux, std::vector<double>& source) const
+    const std::vector<double>& flux, std::vector<double>& source) const
 {
   const int G = n_groups_;
   const int n = geom_.n_nodes();
@@ -237,8 +238,8 @@ void CmfdSystem::fission_source(
 }
 
 int CmfdSystem::solve_groups(const std::vector<double>& fission_src,
-  double k_eff, double inv_k_shift, std::vector<double>& flux,
-  const Settings& s)
+    double k_eff, double inv_k_shift, std::vector<double>& flux,
+    const Settings& s)
 {
   const int G = n_groups_;
   const int n = geom_.n_nodes();
@@ -254,7 +255,7 @@ int CmfdSystem::solve_groups(const std::vector<double>& fission_src,
   // group formed from the fluxes of the others.
   const bool needs_repeats = (inv_k_shift > 0.0) || has_upscatter_;
   const int max_sweeps =
-    needs_repeats ? std::max(2, s.group_sweeps) : std::max(1, s.group_sweeps);
+      needs_repeats ? std::max(2, s.group_sweeps) : std::max(1, s.group_sweeps);
 
   for (int sweep = 0; sweep < max_sweeps; ++sweep) {
     if (needs_repeats) prev_flux_.assign(flux.begin(), flux.end());
@@ -273,18 +274,17 @@ int CmfdSystem::solve_groups(const std::vector<double>& fission_src,
         }
         const double chi = chi_[base + g];
         b += chi * (inv_k_shift * fission_other +
-                     lambda * fission_src[static_cast<std::size_t>(i)]);
+                       lambda * fission_src[static_cast<std::size_t>(i)]);
         rhs_[static_cast<std::size_t>(i)] = b;
         group_flux_[static_cast<std::size_t>(i)] = flux[base + g];
       }
-      const LinearResult r =
-        bicgstab(matrices_[static_cast<std::size_t>(g)], rhs_, group_flux_,
-          precond_[static_cast<std::size_t>(g)], s.inner_tolerance,
-          s.max_inner);
+      const LinearResult r = bicgstab(matrices_[static_cast<std::size_t>(g)],
+          rhs_, group_flux_, precond_[static_cast<std::size_t>(g)],
+          s.inner_tolerance, s.max_inner);
       total_inner += r.iterations;
       for (int i = 0; i < n; ++i) {
         flux[static_cast<std::size_t>(i) * G + g] =
-          group_flux_[static_cast<std::size_t>(i)];
+            group_flux_[static_cast<std::size_t>(i)];
       }
     }
 
@@ -301,7 +301,7 @@ int CmfdSystem::solve_groups(const std::vector<double>& fission_src,
 }
 
 int CmfdSystem::solve_fixed_source(const std::vector<double>& external,
-  std::vector<double>& flux, const Settings& s)
+    std::vector<double>& flux, const Settings& s)
 {
   const int G = n_groups_;
   const int n = geom_.n_nodes();
@@ -311,8 +311,8 @@ int CmfdSystem::solve_fixed_source(const std::vector<double>& external,
 
   // The in-group fission term sits on the matrix diagonal here, so a single
   // sweep is exact unless the library upscatters.
-  const int max_sweeps =
-    has_upscatter_ ? std::max(2, s.group_sweeps) : std::max(1, s.group_sweeps);
+  const int max_sweeps = has_upscatter_ ? std::max(2, s.group_sweeps)
+                                        : std::max(1, s.group_sweeps);
 
   for (int sweep = 0; sweep < max_sweeps; ++sweep) {
     if (has_upscatter_) prev_flux_.assign(flux.begin(), flux.end());
@@ -323,7 +323,7 @@ int CmfdSystem::solve_fixed_source(const std::vector<double>& external,
       for (std::ptrdiff_t i = 0; i < n; ++i) {
         const std::size_t base = static_cast<std::size_t>(i) * G;
         double b = external[base + g] *
-          geom_.nodes()[static_cast<std::size_t>(i)].volume;
+                   geom_.nodes()[static_cast<std::size_t>(i)].volume;
         double fission = 0.0;
         for (int gp = 0; gp < G; ++gp) {
           if (gp != g) b += scatter_[(base + gp) * G + g] * flux[base + gp];
@@ -336,14 +336,13 @@ int CmfdSystem::solve_fixed_source(const std::vector<double>& external,
         rhs_[static_cast<std::size_t>(i)] = b;
         group_flux_[static_cast<std::size_t>(i)] = flux[base + g];
       }
-      const LinearResult r =
-        bicgstab(matrices_[static_cast<std::size_t>(g)], rhs_, group_flux_,
-          precond_[static_cast<std::size_t>(g)], s.inner_tolerance,
-          s.max_inner);
+      const LinearResult r = bicgstab(matrices_[static_cast<std::size_t>(g)],
+          rhs_, group_flux_, precond_[static_cast<std::size_t>(g)],
+          s.inner_tolerance, s.max_inner);
       total_inner += r.iterations;
       for (int i = 0; i < n; ++i) {
         flux[static_cast<std::size_t>(i) * G + g] =
-          group_flux_[static_cast<std::size_t>(i)];
+            group_flux_[static_cast<std::size_t>(i)];
       }
     }
     if (!has_upscatter_ || sweep + 1 >= max_sweeps) break;
@@ -359,7 +358,7 @@ int CmfdSystem::solve_fixed_source(const std::vector<double>& external,
 }
 
 void CmfdSystem::compute_currents(
-  const std::vector<double>& flux, std::vector<double>& current) const
+    const std::vector<double>& flux, std::vector<double>& current) const
 {
   const int G = n_groups_;
   const int ns = geom_.n_surfaces();
@@ -378,7 +377,7 @@ void CmfdSystem::compute_currents(
         current[si] = -dtilde_[si] * (ph - pl) - dhat_[si] * (ph + pl);
       } else {
         const double p =
-          flux[static_cast<std::size_t>(surf.boundary_node()) * G + g];
+            flux[static_cast<std::size_t>(surf.boundary_node()) * G + g];
         // The outward normal of a low-side boundary points along -axis, so the
         // current expressed along +axis changes sign.
         const double sign = surf.boundary_is_lo_side() ? -1.0 : 1.0;
@@ -389,7 +388,7 @@ void CmfdSystem::compute_currents(
 }
 
 double CmfdSystem::nodal_update(const Kernel& kernel,
-  const std::vector<double>& flux, double k_eff, const Settings& s)
+    const std::vector<double>& flux, double k_eff, const Settings& s)
 {
   if (kernel.is_finite_difference()) return 0.0;
   compute_currents(flux, current_);
@@ -400,8 +399,7 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
   const auto& nodes = geom_.nodes();
 
   // Node-average transverse leakage per axis, from the coarse-mesh currents.
-  leakage_.assign(
-    static_cast<std::size_t>(geom_.n_nodes()) * n_axes * G, 0.0);
+  leakage_.assign(static_cast<std::size_t>(geom_.n_nodes()) * n_axes * G, 0.0);
   const int nn = geom_.n_nodes();
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
@@ -415,10 +413,8 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
           if (b == a) continue;
           const int s_lo = node.face[2 * b + 0];
           const int s_hi = node.face[2 * b + 1];
-          const double j_lo =
-            current_[static_cast<std::size_t>(s_lo) * G + g];
-          const double j_hi =
-            current_[static_cast<std::size_t>(s_hi) * G + g];
+          const double j_lo = current_[static_cast<std::size_t>(s_lo) * G + g];
+          const double j_hi = current_[static_cast<std::size_t>(s_hi) * G + g];
           leak += (j_hi - j_lo) / node.width[static_cast<std::size_t>(b)];
         }
         leakage_[(static_cast<std::size_t>(i) * n_axes + a) * G + g] = leak;
@@ -429,7 +425,7 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
   std::vector<int> composition(static_cast<std::size_t>(geom_.n_nodes()));
   for (int i = 0; i < geom_.n_nodes(); ++i) {
     composition[static_cast<std::size_t>(i)] =
-      nodes[static_cast<std::size_t>(i)].composition;
+        nodes[static_cast<std::size_t>(i)].composition;
   }
 
   const int ns = geom_.n_surfaces();
@@ -461,30 +457,30 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
       // missing neighbour is replaced by a copy of the node itself, which is
       // the usual flat extrapolation at a core boundary.
       const Surface& s_prev =
-        surfaces[static_cast<std::size_t>(nl.face[2 * a + 0])];
+          surfaces[static_cast<std::size_t>(nl.face[2 * a + 0])];
       const Surface& s_next =
-        surfaces[static_cast<std::size_t>(nr.face[2 * a + 1])];
+          surfaces[static_cast<std::size_t>(nr.face[2 * a + 1])];
       const int prev = (s_prev.bc == BoundaryType::interior) ? s_prev.lo : L;
       const int next = (s_next.bc == BoundaryType::interior) ? s_next.hi : R;
 
       for (int g = 0; g < G; ++g) {
         const std::size_t la = static_cast<std::size_t>(a);
         tl_lo[static_cast<std::size_t>(0) * G + g] =
-          leakage_[(static_cast<std::size_t>(prev) * n_axes + la) * G + g];
+            leakage_[(static_cast<std::size_t>(prev) * n_axes + la) * G + g];
         tl_lo[static_cast<std::size_t>(1) * G + g] =
-          leakage_[(static_cast<std::size_t>(L) * n_axes + la) * G + g];
+            leakage_[(static_cast<std::size_t>(L) * n_axes + la) * G + g];
         tl_lo[static_cast<std::size_t>(2) * G + g] =
-          leakage_[(static_cast<std::size_t>(R) * n_axes + la) * G + g];
+            leakage_[(static_cast<std::size_t>(R) * n_axes + la) * G + g];
         tl_hi[static_cast<std::size_t>(0) * G + g] =
-          leakage_[(static_cast<std::size_t>(L) * n_axes + la) * G + g];
+            leakage_[(static_cast<std::size_t>(L) * n_axes + la) * G + g];
         tl_hi[static_cast<std::size_t>(1) * G + g] =
-          leakage_[(static_cast<std::size_t>(R) * n_axes + la) * G + g];
+            leakage_[(static_cast<std::size_t>(R) * n_axes + la) * G + g];
         tl_hi[static_cast<std::size_t>(2) * G + g] =
-          leakage_[(static_cast<std::size_t>(next) * n_axes + la) * G + g];
+            leakage_[(static_cast<std::size_t>(next) * n_axes + la) * G + g];
         adf_lo[static_cast<std::size_t>(g)] =
-          xs_.adf_value(nl.composition, 2 * a + 1, g);
+            xs_.adf_value(nl.composition, 2 * a + 1, g);
         adf_hi[static_cast<std::size_t>(g)] =
-          xs_.adf_value(nr.composition, 2 * a + 0, g);
+            xs_.adf_value(nr.composition, 2 * a + 0, g);
       }
 
       TwoNodeProblem p;
@@ -501,13 +497,13 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
       p.tl_lo = tl_lo.data();
       p.tl_hi = tl_hi.data();
       p.h_lo_prev = nodes[static_cast<std::size_t>(prev)]
-                      .width[static_cast<std::size_t>(a)];
+                        .width[static_cast<std::size_t>(a)];
       p.h_hi_next = nodes[static_cast<std::size_t>(next)]
-                      .width[static_cast<std::size_t>(a)];
+                        .width[static_cast<std::size_t>(a)];
       p.cmfd_current_lo =
-        &current_[static_cast<std::size_t>(nl.face[2 * a + 0]) * G];
+          &current_[static_cast<std::size_t>(nl.face[2 * a + 0]) * G];
       p.cmfd_current_hi =
-        &current_[static_cast<std::size_t>(nr.face[2 * a + 1]) * G];
+          &current_[static_cast<std::size_t>(nr.face[2 * a + 1]) * G];
       p.k_eff = k_eff;
 
       kernel.solve(p, xs_, composition, G, s.two_node_sweeps, current.data());
@@ -519,14 +515,15 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
         const double ph = flux[static_cast<std::size_t>(R) * G + g];
         const double sum = pl + ph;
         if (std::abs(sum) < 1.0e-30) continue;
-        double dh = -(current[static_cast<std::size_t>(g)] +
-                       dtilde_[idx] * (ph - pl)) / sum;
+        double dh =
+            -(current[static_cast<std::size_t>(g)] + dtilde_[idx] * (ph - pl)) /
+            sum;
         // An unbounded correction makes the coarse-mesh matrix lose diagonal
         // dominance; both PARCS and KOMODO clamp for the same reason.
         const double limit = s.dhat_limit * dtilde_[idx];
         dh = std::max(-limit, std::min(limit, dh));
         local_change =
-          std::max(local_change, std::abs(dh - dhat_[idx]) / (dtilde_[idx]));
+            std::max(local_change, std::abs(dh - dhat_[idx]) / (dtilde_[idx]));
         dhat_[idx] = dh;
       }
       change[static_cast<std::size_t>(si)] = local_change;
@@ -538,4 +535,4 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
   return max_change;
 }
 
-} // namespace openndm
+}  // namespace openndm

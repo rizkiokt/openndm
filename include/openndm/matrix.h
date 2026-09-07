@@ -22,8 +22,8 @@ namespace openndm {
 constexpr std::size_t REDUCTION_CHUNK = 512;
 
 //! Thread-count-independent inner product (FR-OPT-4).
-double deterministic_dot(const std::vector<double>& x,
-  const std::vector<double>& y);
+double deterministic_dot(
+    const std::vector<double>& x, const std::vector<double>& y);
 
 //! Thread-count-independent 2-norm.
 double deterministic_norm(const std::vector<double>& x);
@@ -111,8 +111,8 @@ struct LinearResult {
 //!
 //! \param x is used as the initial guess and holds the solution on return.
 LinearResult bicgstab(const GroupMatrix& A, const std::vector<double>& b,
-  std::vector<double>& x, const Ilu0& precond, double tol, int max_iter);
+    std::vector<double>& x, const Ilu0& precond, double tol, int max_iter);
 
-} // namespace openndm
+}  // namespace openndm
 
-#endif // OPENNDM_MATRIX_H
+#endif  // OPENNDM_MATRIX_H

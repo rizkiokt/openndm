@@ -37,15 +37,15 @@ struct TwoNodeProblem {
   const double* adf_hi = nullptr;
   //! Transverse leakage expansion, per group: three node-average values used
   //! for the quadratic fit, for each of the two nodes.
-  const double* tl_lo = nullptr; //!< 3*G: neighbour-, self, neighbour+
+  const double* tl_lo = nullptr;  //!< 3*G: neighbour-, self, neighbour+
   const double* tl_hi = nullptr;
   //! Widths of the neighbouring nodes along the axis, for the leakage fit.
   double h_lo_prev = 0.0;
   double h_hi_next = 0.0;
   //! Net current across the interface from the coarse-mesh solution, per
   //! group; used by kernels that need outer-face partial currents.
-  const double* cmfd_current_lo = nullptr; //!< at the outer face of node_lo
-  const double* cmfd_current_hi = nullptr; //!< at the outer face of node_hi
+  const double* cmfd_current_lo = nullptr;  //!< at the outer face of node_lo
+  const double* cmfd_current_hi = nullptr;  //!< at the outer face of node_hi
   const double* cmfd_surface_flux_lo = nullptr;
   const double* cmfd_surface_flux_hi = nullptr;
   double k_eff = 1.0;
@@ -64,8 +64,8 @@ public:
   //! \param[out] current net current across the interface, per group, positive
   //!             along the surface normal (from \c node_lo to \c node_hi).
   virtual void solve(const TwoNodeProblem& p, const XSLibrary& xs,
-    const std::vector<int>& composition, int n_groups, int sweeps,
-    double* current) const = 0;
+      const std::vector<int>& composition, int n_groups, int sweeps,
+      double* current) const = 0;
 
   //! True when the kernel leaves Dhat at its finite difference value, in which
   //! case the nonlinear iteration is skipped entirely.
@@ -74,6 +74,6 @@ public:
   static std::unique_ptr<Kernel> create(KernelType type);
 };
 
-} // namespace openndm
+}  // namespace openndm
 
-#endif // OPENNDM_KERNEL_H
+#endif  // OPENNDM_KERNEL_H

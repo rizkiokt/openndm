@@ -51,13 +51,13 @@ public:
   const char* name() const override { return "nem"; }
 
   void solve(const TwoNodeProblem& p, const XSLibrary& xs,
-    const std::vector<int>& composition, int G, int sweeps,
-    double* current) const override
+      const std::vector<int>& composition, int G, int sweeps,
+      double* current) const override
   {
     const Composition& cl =
-      xs.composition(composition[static_cast<std::size_t>(p.node_lo)]);
+        xs.composition(composition[static_cast<std::size_t>(p.node_lo)]);
     const Composition& cr =
-      xs.composition(composition[static_cast<std::size_t>(p.node_hi)]);
+        xs.composition(composition[static_cast<std::size_t>(p.node_hi)]);
     const double inv_k = 1.0 / p.k_eff;
 
     std::vector<NodeExpansion> ex(static_cast<std::size_t>(2 * G));
@@ -85,9 +85,9 @@ public:
         const double dh2 = c.D[gg] / (h * h);
         ex[e].beta1 = 3.0 * dh2 / sr + 1.0 / 20.0;
         ex[e].beta2 = 2.0 * dh2 / sr + 1.0 / 70.0;
-        const auto fit = detail::leakage_fit(tl[gg],
-          tl[static_cast<std::size_t>(G) + gg],
-          tl[static_cast<std::size_t>(2 * G) + gg], h_prev, h, h_next);
+        const auto fit =
+            detail::leakage_fit(tl[gg], tl[static_cast<std::size_t>(G) + gg],
+                tl[static_cast<std::size_t>(2 * G) + gg], h_prev, h, h_next);
         l0[e] = tl[static_cast<std::size_t>(G) + gg];
         l1[e] = fit[0];
         l2[e] = fit[1];
@@ -108,8 +108,8 @@ public:
             if (gp == g) continue;
             const std::size_t ep = static_cast<std::size_t>(side) * G + gp;
             const double coeff =
-              c.scatter[static_cast<std::size_t>(gp) * G + g] +
-              c.chi[gg] * c.nu_fission[static_cast<std::size_t>(gp)] * inv_k;
+                c.scatter[static_cast<std::size_t>(gp) * G + g] +
+                c.chi[gg] * c.nu_fission[static_cast<std::size_t>(gp)] * inv_k;
             q1 += coeff * ex[ep].moment1();
             q2 += coeff * ex[ep].moment2();
           }
@@ -134,24 +134,24 @@ public:
         a[2] = fR * R.beta1;
         a[3] = -fR * R.beta2;
         rhs[0] = -fL * (L.phibar + L.alpha1 + L.alpha2) +
-          fR * (R.phibar - R.alpha1 + R.alpha2);
+                 fR * (R.phibar - R.alpha1 + R.alpha2);
         // Row 1: current continuity at the shared interface.
         a[4] = -L.D_over_h * cL3;
         a[5] = -L.D_over_h * cL4;
         a[6] = R.D_over_h * cR3;
         a[7] = -R.D_over_h * cR4;
         rhs[1] = L.D_over_h * (2.0 * L.alpha1 + 6.0 * L.alpha2) -
-          R.D_over_h * (2.0 * R.alpha1 - 6.0 * R.alpha2);
+                 R.D_over_h * (2.0 * R.alpha1 - 6.0 * R.alpha2);
         // Row 2: the coarse-mesh net current at the outer face of node lo.
         a[8] = -L.D_over_h * cL3;
         a[9] = L.D_over_h * cL4;
         rhs[2] = p.cmfd_current_lo[static_cast<std::size_t>(g)] +
-          L.D_over_h * (2.0 * L.alpha1 - 6.0 * L.alpha2);
+                 L.D_over_h * (2.0 * L.alpha1 - 6.0 * L.alpha2);
         // Row 3: the coarse-mesh net current at the outer face of node hi.
         a[14] = -R.D_over_h * cR3;
         a[15] = -R.D_over_h * cR4;
         rhs[3] = p.cmfd_current_hi[static_cast<std::size_t>(g)] +
-          R.D_over_h * (2.0 * R.alpha1 + 6.0 * R.alpha2);
+                 R.D_over_h * (2.0 * R.alpha1 + 6.0 * R.alpha2);
 
         if (detail::solve_dense(a, rhs, 4)) {
           L.a3 = rhs[0];
@@ -173,11 +173,11 @@ public:
   }
 };
 
-} // namespace
+}  // namespace
 
 std::unique_ptr<Kernel> make_nem_kernel()
 {
   return std::make_unique<NemKernel>();
 }
 
-} // namespace openndm
+}  // namespace openndm

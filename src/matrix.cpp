@@ -33,10 +33,10 @@ double chunked_sum(const double* a, const double* b, std::size_t n)
   return total;
 }
 
-} // namespace
+}  // namespace
 
 double deterministic_dot(
-  const std::vector<double>& x, const std::vector<double>& y)
+    const std::vector<double>& x, const std::vector<double>& y)
 {
   if (x.size() != y.size()) throw InputError("dot product size mismatch");
   if (x.empty()) return 0.0;
@@ -50,8 +50,8 @@ double deterministic_norm(const std::vector<double>& x)
 }
 
 SparsePattern::SparsePattern(
-  int n_rows, const std::vector<std::vector<int>>& neighbours)
-  : n_rows_(n_rows)
+    int n_rows, const std::vector<std::vector<int>>& neighbours)
+    : n_rows_(n_rows)
 {
   rowptr_.assign(static_cast<std::size_t>(n_rows) + 1, 0);
   diag_pos_.assign(static_cast<std::size_t>(n_rows), -1);
@@ -69,20 +69,25 @@ SparsePattern::SparsePattern(
     std::sort(row.begin(), row.end());
     row.erase(std::unique(row.begin(), row.end()), row.end());
     for (int c : row) {
-      if (c == r) diag_pos_[static_cast<std::size_t>(r)] =
-        static_cast<int>(colind_.size());
+      if (c == r)
+        diag_pos_[static_cast<std::size_t>(r)] =
+            static_cast<int>(colind_.size());
       colind_.push_back(c);
     }
   }
   rowptr_[static_cast<std::size_t>(n_rows)] = static_cast<int>(colind_.size());
 }
 
-GroupMatrix::GroupMatrix(const SparsePattern* pattern) : pattern_(pattern)
+GroupMatrix::GroupMatrix(const SparsePattern* pattern)
+    : pattern_(pattern)
 {
   values_.assign(static_cast<std::size_t>(pattern->nnz()), 0.0);
 }
 
-void GroupMatrix::zero() { std::fill(values_.begin(), values_.end(), 0.0); }
+void GroupMatrix::zero()
+{
+  std::fill(values_.begin(), values_.end(), 0.0);
+}
 
 int GroupMatrix::find(int row, int col) const
 {
@@ -90,11 +95,10 @@ int GroupMatrix::find(int row, int col) const
   const auto& ci = pattern_->colind();
   const int begin = rp[static_cast<std::size_t>(row)];
   const int end = rp[static_cast<std::size_t>(row) + 1];
-  const auto it = std::lower_bound(
-    ci.begin() + begin, ci.begin() + end, col);
+  const auto it = std::lower_bound(ci.begin() + begin, ci.begin() + end, col);
   if (it == ci.begin() + end || *it != col) {
     throw InputError("matrix entry (" + std::to_string(row) + ", " +
-      std::to_string(col) + ") is not in the sparsity pattern");
+                     std::to_string(col) + ") is not in the sparsity pattern");
   }
   return static_cast<int>(it - ci.begin());
 }
@@ -107,17 +111,17 @@ void GroupMatrix::add(int row, int col, double v)
 void GroupMatrix::add_diagonal(int row, double v)
 {
   values_[static_cast<std::size_t>(
-    pattern_->diag_pos()[static_cast<std::size_t>(row)])] += v;
+      pattern_->diag_pos()[static_cast<std::size_t>(row)])] += v;
 }
 
 double GroupMatrix::diagonal(int row) const
 {
   return values_[static_cast<std::size_t>(
-    pattern_->diag_pos()[static_cast<std::size_t>(row)])];
+      pattern_->diag_pos()[static_cast<std::size_t>(row)])];
 }
 
 void GroupMatrix::multiply(
-  const std::vector<double>& x, std::vector<double>& y) const
+    const std::vector<double>& x, std::vector<double>& y) const
 {
   const auto& rp = pattern_->rowptr();
   const auto& ci = pattern_->colind();
@@ -129,9 +133,9 @@ void GroupMatrix::multiply(
   for (std::ptrdiff_t r = 0; r < n; ++r) {
     double s = 0.0;
     for (int p = rp[static_cast<std::size_t>(r)];
-         p < rp[static_cast<std::size_t>(r) + 1]; ++p) {
+        p < rp[static_cast<std::size_t>(r) + 1]; ++p) {
       s += values_[static_cast<std::size_t>(p)] *
-        x[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])];
+           x[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])];
     }
     y[static_cast<std::size_t>(r)] = s;
   }
@@ -153,28 +157,28 @@ void Ilu0::factor(const GroupMatrix& A)
   std::vector<int> position(static_cast<std::size_t>(n), -1);
   for (int i = 0; i < n; ++i) {
     for (int p = rp[static_cast<std::size_t>(i)];
-         p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
+        p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
       position[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])] = p;
     }
     for (int p = rp[static_cast<std::size_t>(i)];
-         p < dp[static_cast<std::size_t>(i)]; ++p) {
+        p < dp[static_cast<std::size_t>(i)]; ++p) {
       const int k = ci[static_cast<std::size_t>(p)];
       const double pivot = lu_[static_cast<std::size_t>(p)] *
-        diag_inv_[static_cast<std::size_t>(k)];
+                           diag_inv_[static_cast<std::size_t>(k)];
       lu_[static_cast<std::size_t>(p)] = pivot;
       if (pivot == 0.0) continue;
       for (int q = dp[static_cast<std::size_t>(k)] + 1;
-           q < rp[static_cast<std::size_t>(k) + 1]; ++q) {
+          q < rp[static_cast<std::size_t>(k) + 1]; ++q) {
         const int j = ci[static_cast<std::size_t>(q)];
         const int target = position[static_cast<std::size_t>(j)];
         if (target >= 0) {
           lu_[static_cast<std::size_t>(target)] -=
-            pivot * lu_[static_cast<std::size_t>(q)];
+              pivot * lu_[static_cast<std::size_t>(q)];
         }
       }
     }
-    const double d = lu_[static_cast<std::size_t>(dp[
-      static_cast<std::size_t>(i)])];
+    const double d =
+        lu_[static_cast<std::size_t>(dp[static_cast<std::size_t>(i)])];
     if (std::abs(d) < 1.0e-300) {
       // Rather than fail, degrade to Jacobi on this row. A zero pivot here
       // means a decoupled node, which is a modelling problem the solver
@@ -185,7 +189,7 @@ void Ilu0::factor(const GroupMatrix& A)
       diag_inv_[static_cast<std::size_t>(i)] = 1.0 / d;
     }
     for (int p = rp[static_cast<std::size_t>(i)];
-         p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
+        p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
       position[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])] = -1;
     }
   }
@@ -203,9 +207,9 @@ void Ilu0::apply(const std::vector<double>& b, std::vector<double>& x) const
   for (int i = 0; i < n; ++i) {
     double s = b[static_cast<std::size_t>(i)];
     for (int p = rp[static_cast<std::size_t>(i)];
-         p < dp[static_cast<std::size_t>(i)]; ++p) {
+        p < dp[static_cast<std::size_t>(i)]; ++p) {
       s -= lu_[static_cast<std::size_t>(p)] *
-        x[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])];
+           x[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])];
     }
     x[static_cast<std::size_t>(i)] = s;
   }
@@ -213,16 +217,16 @@ void Ilu0::apply(const std::vector<double>& b, std::vector<double>& x) const
   for (int i = n - 1; i >= 0; --i) {
     double s = x[static_cast<std::size_t>(i)];
     for (int p = dp[static_cast<std::size_t>(i)] + 1;
-         p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
+        p < rp[static_cast<std::size_t>(i) + 1]; ++p) {
       s -= lu_[static_cast<std::size_t>(p)] *
-        x[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])];
+           x[static_cast<std::size_t>(ci[static_cast<std::size_t>(p)])];
     }
     x[static_cast<std::size_t>(i)] = s * diag_inv_[static_cast<std::size_t>(i)];
   }
 }
 
 LinearResult bicgstab(const GroupMatrix& A, const std::vector<double>& b,
-  std::vector<double>& x, const Ilu0& precond, double tol, int max_iter)
+    std::vector<double>& x, const Ilu0& precond, double tol, int max_iter)
 {
   const std::size_t n = b.size();
   LinearResult result;
@@ -247,7 +251,7 @@ LinearResult bicgstab(const GroupMatrix& A, const std::vector<double>& b,
 
   for (int it = 1; it <= max_iter; ++it) {
     const double rho_new = deterministic_dot(r0, r);
-    if (std::abs(rho_new) < 1.0e-300) break; // breakdown; take what we have
+    if (std::abs(rho_new) < 1.0e-300) break;  // breakdown; take what we have
     const double beta = (rho_new / rho) * (alpha / omega);
     for (std::size_t i = 0; i < n; ++i) {
       p[i] = r[i] + beta * (p[i] - omega * v[i]);
@@ -289,4 +293,4 @@ LinearResult bicgstab(const GroupMatrix& A, const std::vector<double>& b,
   return result;
 }
 
-} // namespace openndm
+}  // namespace openndm

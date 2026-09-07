@@ -20,8 +20,7 @@ namespace {
 //! The shift is held back for the first few outers because a tight shift
 //! applied to a poor flux guess makes the inner systems nearly singular
 //! without buying any outer convergence.
-double reciprocal_shift(
-  double k, const Settings& s, int outer, double ceiling)
+double reciprocal_shift(double k, const Settings& s, int outer, double ceiling)
 {
   if (s.wielandt_shift <= 0.0 || outer < s.wielandt_start) return 0.0;
   return std::min(1.0 / (k + s.wielandt_shift), ceiling);
@@ -34,11 +33,14 @@ double sum(const std::vector<double>& v)
   return t;
 }
 
-} // namespace
+}  // namespace
 
 Solver::Solver(const Geometry& geom, const XSLibrary& xs)
-  : geom_(geom), xs_(xs), cmfd_(geom, xs)
-{}
+    : geom_(geom),
+      xs_(xs),
+      cmfd_(geom, xs)
+{
+}
 
 Solver::~Solver() = default;
 
@@ -96,7 +98,7 @@ Result Solver::solve(const Settings& settings)
   const double s0 = sum(source_old);
   if (!(s0 > 0.0)) {
     throw InputError(
-      "the model has no fission source; use solve_fixed_source instead");
+        "the model has no fission source; use solve_fixed_source instead");
   }
 
   Result result;
@@ -111,20 +113,20 @@ Result Solver::solve(const Settings& settings)
   // running them against an adjoint flux would produce meaningless coupling
   // corrections. The adjoint instead keeps the Dhat converged by the forward
   // solve, which is exactly the transpose of the corrected forward operator.
-  const bool update_nodal =
-    !kernel->is_finite_difference() && !cmfd_.adjoint();
+  const bool update_nodal = !kernel->is_finite_difference() && !cmfd_.adjoint();
 
   for (int outer = 1; outer <= settings.max_outer; ++outer) {
     if (update_nodal && outer >= settings.nodal_start &&
-      ((outer - settings.nodal_start) % settings.nodal_update_interval == 0)) {
+        ((outer - settings.nodal_start) % settings.nodal_update_interval ==
+            0)) {
       cmfd_.nodal_update(*kernel, flux_, k, settings);
     }
 
     const double inv_shift =
-      reciprocal_shift(k, settings, outer, cmfd_.max_reciprocal_shift());
+        reciprocal_shift(k, settings, outer, cmfd_.max_reciprocal_shift());
     cmfd_.assemble(inv_shift);
     total_inner +=
-      cmfd_.solve_groups(source_old, k, inv_shift, flux_, settings);
+        cmfd_.solve_groups(source_old, k, inv_shift, flux_, settings);
 
     cmfd_.fission_source(flux_, source_new);
     const double s_new = sum(source_new);
@@ -134,7 +136,8 @@ Result Solver::solve(const Settings& settings)
     }
 
     const double k_prev = k;
-    const double inv_k_new = inv_shift + (1.0 / k - inv_shift) * (s_old / s_new);
+    const double inv_k_new =
+        inv_shift + (1.0 / k - inv_shift) * (s_old / s_new);
     k = 1.0 / inv_k_new;
 
     // Node-wise fission source change, on a source normalised to unit mean so
@@ -160,15 +163,15 @@ Result Solver::solve(const Settings& settings)
 
     if (settings.verbosity >= 2) {
       std::printf("  outer %4d   k = %.8f   dk = %+.2e   dS = %.2e\n", outer, k,
-        rec.k_change, src_change);
+          rec.k_change, src_change);
       std::fflush(stdout);
     }
 
     source_old.swap(source_new);
 
     if (outer >= settings.min_outer &&
-      std::abs(rec.k_change) < settings.k_tolerance &&
-      src_change < settings.fission_source_tolerance) {
+        std::abs(rec.k_change) < settings.k_tolerance &&
+        src_change < settings.fission_source_tolerance) {
       result.converged = true;
       result.outer_iterations = outer;
       break;
@@ -181,12 +184,12 @@ Result Solver::solve(const Settings& settings)
   has_solution_ = true;
 
   if (!result.converged) {
-    const double last = result.history.empty()
-      ? 1.0
-      : result.history.back().source_change;
+    const double last =
+        result.history.empty() ? 1.0 : result.history.back().source_change;
     throw ConvergenceError("outer iteration did not converge after " +
-        std::to_string(result.outer_iterations) + " iterations",
-      result.outer_iterations, last);
+                               std::to_string(result.outer_iterations) +
+                               " iterations",
+        result.outer_iterations, last);
   }
 
   // Normalise the flux so that the volume-averaged total flux is one, which
@@ -195,7 +198,7 @@ Result Solver::solve(const Settings& settings)
   for (int i = 0; i < n; ++i) {
     for (int g = 0; g < G; ++g) {
       integral += flux_[static_cast<std::size_t>(i) * G + g] *
-        geom_.nodes()[static_cast<std::size_t>(i)].volume;
+                  geom_.nodes()[static_cast<std::size_t>(i)].volume;
     }
   }
   const double norm = (integral > 0.0) ? geom_.total_volume() / integral : 1.0;
@@ -205,20 +208,20 @@ Result Solver::solve(const Settings& settings)
   result.flux = flux_;
   compute_power(result.power);
   result.runtime_seconds =
-    std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
-      .count();
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
+          .count();
 
   if (settings.verbosity >= 1) {
     std::printf("openndm: %s  k_eff = %.6f  outers = %d  time = %.3f s\n",
-      result.kernel.c_str(), result.k_eff, result.outer_iterations,
-      result.runtime_seconds);
+        result.kernel.c_str(), result.k_eff, result.outer_iterations,
+        result.runtime_seconds);
     std::fflush(stdout);
   }
   return result;
 }
 
 Result Solver::solve_fixed_source(
-  const std::vector<double>& source, const Settings& settings)
+    const std::vector<double>& source, const Settings& settings)
 {
   const auto t0 = std::chrono::steady_clock::now();
   const int n = geom_.n_nodes();
@@ -240,7 +243,8 @@ Result Solver::solve_fixed_source(
   double previous = 0.0;
   for (int outer = 1; outer <= settings.max_outer; ++outer) {
     if (!kernel->is_finite_difference() && outer >= settings.nodal_start &&
-      ((outer - settings.nodal_start) % settings.nodal_update_interval == 0)) {
+        ((outer - settings.nodal_start) % settings.nodal_update_interval ==
+            0)) {
       cmfd_.nodal_update(*kernel, flux_, 1.0, settings);
       cmfd_.assemble(1.0);
     }
@@ -249,7 +253,7 @@ Result Solver::solve_fixed_source(
     double total = 0.0;
     for (double f : flux_) total += f;
     const double change =
-      (previous > 0.0) ? std::abs(total - previous) / previous : 1.0;
+        (previous > 0.0) ? std::abs(total - previous) / previous : 1.0;
     IterationRecord rec;
     rec.outer = outer;
     rec.k_eff = 0.0;
@@ -258,22 +262,22 @@ Result Solver::solve_fixed_source(
     previous = total;
     result.outer_iterations = outer;
     if (outer >= settings.min_outer &&
-      change < settings.fission_source_tolerance) {
+        change < settings.fission_source_tolerance) {
       result.converged = true;
       break;
     }
   }
   if (!result.converged) {
     throw ConvergenceError("fixed source iteration did not converge",
-      result.outer_iterations, previous);
+        result.outer_iterations, previous);
   }
   has_solution_ = true;
   result.k_eff = 0.0;
   result.flux = flux_;
   compute_power(result.power);
   result.runtime_seconds =
-    std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
-      .count();
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
+          .count();
   return result;
 }
 
@@ -290,7 +294,7 @@ void Solver::compute_power(std::vector<double>& power) const
     double p = 0.0;
     for (int g = 0; g < G; ++g) {
       p += c.kappa_fission[static_cast<std::size_t>(g)] *
-        flux_[static_cast<std::size_t>(i) * G + g];
+           flux_[static_cast<std::size_t>(i) * G + g];
     }
     p *= node.volume;
     power[static_cast<std::size_t>(i)] = p;
@@ -307,4 +311,4 @@ void Solver::compute_power(std::vector<double>& power) const
   }
 }
 
-} // namespace openndm
+}  // namespace openndm

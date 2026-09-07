@@ -117,6 +117,7 @@ def branch_library():
             D=[1.0],
             absorption=[absorption],
             nu_fission=[0.1],
+            kappa_fission=[0.1],
             chi=[1.0],
             scatter=[[0.0]],
         )
@@ -227,3 +228,32 @@ def test_hdf5_rejects_an_unknown_format_version(tmp_path):
         f.attrs["format_version"] = 999
     with pytest.raises(openndm.InputError, match="format version 999"):
         openndm.XSLibrary.from_hdf5(path)
+
+
+def test_fissile_composition_without_kappa_fission_warns():
+    """Otherwise the power distribution comes back silently zero."""
+    lib = openndm.XSLibrary(2, 1)
+    lib.set_composition(
+        0,
+        D=[1.5, 0.4],
+        absorption=[0.01, 0.085],
+        nu_fission=[0.0, 0.135],
+        chi=[1.0, 0.0],
+        scatter=[[0.0, 0.02], [0.0, 0.0]],
+    )
+    with pytest.warns(UserWarning, match="no kappa-fission"):
+        lib.finalize()
+
+
+def test_a_complete_composition_finalizes_without_warnings():
+    lib = openndm.XSLibrary(2, 1)
+    lib.set_composition(
+        0,
+        D=[1.5, 0.4],
+        absorption=[0.01, 0.085],
+        nu_fission=[0.0, 0.135],
+        kappa_fission=[0.0, 0.135],
+        chi=[1.0, 0.0],
+        scatter=[[0.0, 0.02], [0.0, 0.0]],
+    )
+    assert lib.finalize() == []

@@ -16,13 +16,13 @@ namespace openndm {
 //! Layout is group-major and flat so that a whole composition is contiguous;
 //! the scattering matrix is stored row-major with \c scatter[from*G + to].
 struct Composition {
-  std::vector<double> D;      //!< diffusion coefficient [cm]
-  std::vector<double> absorption; //!< \f$\Sigma_a\f$ [1/cm]
-  std::vector<double> nu_fission; //!< \f$\nu\Sigma_f\f$ [1/cm]
-  std::vector<double> kappa_fission; //!< \f$\kappa\Sigma_f\f$ [J/cm]
-  std::vector<double> chi;    //!< prompt + delayed fission spectrum
-  std::vector<double> scatter;//!< \f$\Sigma_{s,g\to g'}\f$, size G*G
-  std::vector<double> inv_velocity; //!< \f$1/v\f$ [s/cm]
+  std::vector<double> D;              //!< diffusion coefficient [cm]
+  std::vector<double> absorption;     //!< \f$\Sigma_a\f$ [1/cm]
+  std::vector<double> nu_fission;     //!< \f$\nu\Sigma_f\f$ [1/cm]
+  std::vector<double> kappa_fission;  //!< \f$\kappa\Sigma_f\f$ [J/cm]
+  std::vector<double> chi;            //!< prompt + delayed fission spectrum
+  std::vector<double> scatter;        //!< \f$\Sigma_{s,g\to g'}\f$, size G*G
+  std::vector<double> inv_velocity;   //!< \f$1/v\f$ [s/cm]
 
   //! Removal cross section \f$\Sigma_a + \sum_{g'\neq g}\Sigma_{s,g\to g'}\f$.
   //! Cached by XSLibrary::finalize() because every kernel needs it.
@@ -40,8 +40,8 @@ struct Composition {
 
 //! One axis of a branch-parameterised library (FR-XS-5).
 struct BranchAxis {
-  std::string name;             //!< e.g. "fuel_temperature"
-  std::vector<double> points;   //!< strictly increasing grid points
+  std::string name;            //!< e.g. "fuel_temperature"
+  std::vector<double> points;  //!< strictly increasing grid points
 };
 
 //! Extrapolation behaviour outside the branch grid (FR-XS-6).
@@ -49,8 +49,8 @@ enum class Extrapolation { clamp, linear, error };
 
 //! Delayed neutron data, shared by every composition (FR-XS-3).
 struct DelayedData {
-  std::vector<double> beta;   //!< delayed fraction per precursor group
-  std::vector<double> lambda; //!< decay constant per precursor group [1/s]
+  std::vector<double> beta;    //!< delayed fraction per precursor group
+  std::vector<double> lambda;  //!< decay constant per precursor group [1/s]
   //! Delayed spectrum, row-major \c chi_delayed[i*G + g].
   std::vector<double> chi_delayed;
 
@@ -137,6 +137,6 @@ private:
   bool finalized_ = false;
 };
 
-} // namespace openndm
+}  // namespace openndm
 
-#endif // OPENNDM_XSLIB_H
+#endif  // OPENNDM_XSLIB_H

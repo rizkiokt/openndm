@@ -19,7 +19,7 @@ void fill_two_group(Composition& c, double absorption_thermal)
   c.scatter = {0.0, 0.02, 0.0, 0.0};
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("removal is absorption plus out-scatter", "[xslib]")
 {
@@ -35,8 +35,8 @@ TEST_CASE("removal is absorption plus out-scatter", "[xslib]")
   REQUIRE(lib.finalized());
 }
 
-TEST_CASE("taking a mutable composition reference invalidates the library",
-  "[xslib]")
+TEST_CASE(
+    "taking a mutable composition reference invalidates the library", "[xslib]")
 {
   XSLibrary lib(2, 1);
   fill_two_group(lib.composition(0), 0.08);
@@ -74,7 +74,7 @@ TEST_CASE("negative scattering warns but does not fail", "[xslib]")
 {
   XSLibrary lib(2, 1);
   fill_two_group(lib.composition(0), 0.08);
-  lib.composition(0).scatter[2] = -1.0e-6; // thermal up to fast
+  lib.composition(0).scatter[2] = -1.0e-6;  // thermal up to fast
   std::vector<std::string> warnings;
   REQUIRE_NOTHROW(lib.finalize(&warnings));
   REQUIRE_FALSE(warnings.empty());
@@ -101,11 +101,12 @@ TEST_CASE("multilinear interpolation is exact on linear data", "[xslib]")
   XSLibrary lib(1, 1);
   lib.set_axes({{"temperature", {500.0, 1500.0}}, {"boron", {0.0, 2000.0}}});
   const double values[4][2] = {
-    {500.0, 0.0}, {500.0, 2000.0}, {1500.0, 0.0}, {1500.0, 2000.0}};
+      {500.0, 0.0}, {500.0, 2000.0}, {1500.0, 0.0}, {1500.0, 2000.0}};
   for (int state = 0; state < 4; ++state) {
     auto& c = lib.composition(0, state);
     c.D = {1.0};
-    c.absorption = {0.01 + 1.0e-6 * values[state][0] + 1.0e-6 * values[state][1]};
+    c.absorption = {
+        0.01 + 1.0e-6 * values[state][0] + 1.0e-6 * values[state][1]};
     c.nu_fission = {0.1};
     c.chi = {1.0};
     c.scatter = {0.0};
@@ -121,10 +122,9 @@ TEST_CASE("multilinear interpolation is exact on linear data", "[xslib]")
   // Reproducing the corners exactly is the check that catches an index
   // ordering mismatch between the axes and the flat state array.
   for (int state = 0; state < 4; ++state) {
-    const auto corner =
-      lib.interpolate({values[state][0], values[state][1]});
+    const auto corner = lib.interpolate({values[state][0], values[state][1]});
     const double expected =
-      0.01 + 1.0e-6 * values[state][0] + 1.0e-6 * values[state][1];
+        0.01 + 1.0e-6 * values[state][0] + 1.0e-6 * values[state][1];
     REQUIRE(corner.composition(0).absorption[0] == Approx(expected));
   }
 }
@@ -143,12 +143,12 @@ TEST_CASE("extrapolation policy is honoured", "[xslib]")
   lib.finalize();
 
   lib.set_extrapolation(Extrapolation::clamp);
-  REQUIRE(lib.interpolate({5000.0}).composition(0).absorption[0] ==
-    Approx(0.02));
+  REQUIRE(
+      lib.interpolate({5000.0}).composition(0).absorption[0] == Approx(0.02));
 
   lib.set_extrapolation(Extrapolation::linear);
-  REQUIRE(lib.interpolate({2000.0}).composition(0).absorption[0] ==
-    Approx(0.03));
+  REQUIRE(
+      lib.interpolate({2000.0}).composition(0).absorption[0] == Approx(0.03));
 
   lib.set_extrapolation(Extrapolation::error);
   REQUIRE_THROWS_AS(lib.interpolate({5000.0}), InputError);
@@ -157,6 +157,5 @@ TEST_CASE("extrapolation policy is honoured", "[xslib]")
 TEST_CASE("a non-monotonic branch axis is rejected", "[xslib]")
 {
   XSLibrary lib(1, 1);
-  REQUIRE_THROWS_AS(
-    lib.set_axes({{"boron", {1000.0, 0.0}}}), LibraryError);
+  REQUIRE_THROWS_AS(lib.set_axes({{"boron", {1000.0, 0.0}}}), LibraryError);
 }

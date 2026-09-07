@@ -33,14 +33,14 @@ struct NodeExpansion {
 
   double face_flux(double sign) const
   {
-    return sign * A * basis.odd_face + C * basis.even_face + b0 +
-      sign * b1 + b2;
+    return sign * A * basis.odd_face + C * basis.even_face + b0 + sign * b1 +
+           b2;
   }
   //! d(phi)/d(xi) at xi = sign/2.
   double face_derivative(double sign) const
   {
     return A * basis.odd_dface + sign * C * basis.even_dface + 2.0 * b1 +
-      sign * 6.0 * b2;
+           sign * 6.0 * b2;
   }
 };
 
@@ -50,13 +50,13 @@ public:
   const char* name() const override { return "sanm"; }
 
   void solve(const TwoNodeProblem& p, const XSLibrary& xs,
-    const std::vector<int>& composition, int G, int sweeps,
-    double* current) const override
+      const std::vector<int>& composition, int G, int sweeps,
+      double* current) const override
   {
     const Composition& cl =
-      xs.composition(composition[static_cast<std::size_t>(p.node_lo)]);
+        xs.composition(composition[static_cast<std::size_t>(p.node_lo)]);
     const Composition& cr =
-      xs.composition(composition[static_cast<std::size_t>(p.node_hi)]);
+        xs.composition(composition[static_cast<std::size_t>(p.node_hi)]);
     const double inv_k = 1.0 / p.k_eff;
 
     std::vector<NodeExpansion> ex(static_cast<std::size_t>(2 * G));
@@ -77,13 +77,13 @@ public:
         const double D = c.D[gg];
         // Moving the in-group fission production onto the left-hand side
         // makes the analytic basis exact for the whole in-group operator.
-        const double sr =
-          c.removal[gg] - c.chi[gg] * c.nu_fission[gg] * inv_k;
+        const double sr = c.removal[gg] - c.chi[gg] * c.nu_fission[gg] * inv_k;
         ex[e].basis = detail::AnalyticBasis::make(sr * h * h / D);
         ex[e].D_over_h = D / h;
         ex[e].phibar = (side == 0 ? p.flux_lo : p.flux_hi)[gg];
-        const auto fit = detail::leakage_fit(tl[gg], tl[static_cast<std::size_t>(G) + gg],
-          tl[static_cast<std::size_t>(2 * G) + gg], h_prev, h, h_next);
+        const auto fit =
+            detail::leakage_fit(tl[gg], tl[static_cast<std::size_t>(G) + gg],
+                tl[static_cast<std::size_t>(2 * G) + gg], h_prev, h, h_next);
         l0[e] = tl[static_cast<std::size_t>(G) + gg];
         l1[e] = fit[0];
         l2[e] = fit[1];
@@ -108,8 +108,8 @@ public:
             if (gp == g) continue;
             const std::size_t ep = static_cast<std::size_t>(side) * G + gp;
             const double coeff =
-              c.scatter[static_cast<std::size_t>(gp) * G + g] +
-              c.chi[gg] * c.nu_fission[static_cast<std::size_t>(gp)] * inv_k;
+                c.scatter[static_cast<std::size_t>(gp) * G + g] +
+                c.chi[gg] * c.nu_fission[static_cast<std::size_t>(gp)] * inv_k;
             q0 += coeff * ex[ep].phibar;
             q1 += coeff * ex[ep].moment1();
             q2 += coeff * ex[ep].moment2();
@@ -136,13 +136,13 @@ public:
         a[0] = fL * L.basis.odd_face;
         a[1] = fR * R.basis.odd_face;
         rhs[0] = fR * (R.C * R.basis.even_face + R.b0 - R.b1 + R.b2) -
-          fL * (L.C * L.basis.even_face + L.b0 + L.b1 + L.b2);
+                 fL * (L.C * L.basis.even_face + L.b0 + L.b1 + L.b2);
         // Row 1: J_L(+1/2) - J_R(-1/2) = 0, with J = -(D/h) dphi/dxi.
         a[2] = L.D_over_h * L.basis.odd_dface;
         a[3] = -R.D_over_h * R.basis.odd_dface;
         rhs[1] =
-          R.D_over_h * (-R.C * R.basis.even_dface + 2.0 * R.b1 - 6.0 * R.b2) -
-          L.D_over_h * (L.C * L.basis.even_dface + 2.0 * L.b1 + 6.0 * L.b2);
+            R.D_over_h * (-R.C * R.basis.even_dface + 2.0 * R.b1 - 6.0 * R.b2) -
+            L.D_over_h * (L.C * L.basis.even_dface + 2.0 * L.b1 + 6.0 * L.b2);
 
         if (detail::solve_dense(a, rhs, 2)) {
           L.A = rhs[0];
@@ -161,11 +161,11 @@ public:
   }
 };
 
-} // namespace
+}  // namespace
 
 std::unique_ptr<Kernel> make_sanm_kernel()
 {
   return std::make_unique<SanmKernel>();
 }
 
-} // namespace openndm
+}  // namespace openndm

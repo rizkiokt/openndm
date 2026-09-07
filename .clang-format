@@ -10,13 +10,13 @@ BinPackArguments: true
 BinPackParameters: true
 BreakBeforeBraces: Custom
 BraceWrapping:
-  AfterClass: true
+  AfterClass: false
   AfterFunction: true
   AfterNamespace: false
-  AfterStruct: true
+  AfterStruct: false
   BeforeElse: false
 ColumnLimit: 80
-ConstructorInitializerAllOnOneLineOrOnePerLine: false
+PackConstructorInitializers: Never
 DerivePointerAlignment: false
 IndentWidth: 2
 PointerAlignment: Left

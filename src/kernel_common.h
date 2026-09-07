@@ -28,7 +28,7 @@ namespace detail {
 //! the corresponding leakage repeated is the flat extrapolation used at a core
 //! boundary.
 inline std::array<double, 2> leakage_fit(double l_prev, double l_self,
-  double l_next, double h_prev, double h_self, double h_next)
+    double l_next, double h_prev, double h_self, double h_next)
 {
   const double a = h_prev / h_self;
   const double b = h_next / h_self;
@@ -55,8 +55,8 @@ inline std::array<double, 2> leakage_fit(double l_prev, double l_self,
 //! fission source is moved onto the left-hand side, the hyperbolic functions
 //! are replaced by their trigonometric counterparts.
 struct AnalyticBasis {
-  double k2 = 1.0;   //!< \f$\kappa^2\f$, signed
-  double x = 1.0;    //!< \f$|\kappa|\f$
+  double k2 = 1.0;  //!< \f$\kappa^2\f$, signed
+  double x = 1.0;   //!< \f$|\kappa|\f$
   bool hyperbolic = true;
   double odd_face = 0.0;    //!< odd(1/2)
   double even_face = 0.0;   //!< even(1/2)
@@ -74,9 +74,8 @@ struct AnalyticBasis {
     constexpr double K2_FLOOR = 1.0e-8;
     AnalyticBasis b;
     b.hyperbolic = (k2_in >= 0.0);
-    b.k2 = (std::abs(k2_in) < K2_FLOOR)
-      ? (b.hyperbolic ? K2_FLOOR : -K2_FLOOR)
-      : k2_in;
+    b.k2 = (std::abs(k2_in) < K2_FLOOR) ? (b.hyperbolic ? K2_FLOOR : -K2_FLOOR)
+                                        : k2_in;
     b.x = std::sqrt(std::abs(b.k2));
     const double x = b.x;
     const double x2 = x * x;
@@ -142,7 +141,7 @@ inline bool solve_dense(double* a, double* b, int n)
   return true;
 }
 
-} // namespace detail
-} // namespace openndm
+}  // namespace detail
+}  // namespace openndm
 
-#endif // OPENNDM_KERNEL_COMMON_H
+#endif  // OPENNDM_KERNEL_COMMON_H

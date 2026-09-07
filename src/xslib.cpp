@@ -14,7 +14,8 @@ double DelayedData::beta_total() const
 }
 
 XSLibrary::XSLibrary(int n_groups, int n_compositions)
-  : n_groups_(n_groups), n_comps_(n_compositions)
+    : n_groups_(n_groups),
+      n_comps_(n_compositions)
 {
   if (n_groups < 1) throw InputError("a library needs at least one group");
   if (n_compositions < 1) {
@@ -48,13 +49,13 @@ void XSLibrary::set_axes(std::vector<BranchAxis> axes)
     for (std::size_t i = 1; i < a.points.size(); ++i) {
       if (!(a.points[i] > a.points[i - 1])) {
         throw LibraryError(
-          "branch axis '" + a.name + "' is not strictly increasing");
+            "branch axis '" + a.name + "' is not strictly increasing");
       }
     }
     total *= a.points.size();
   }
   axes_ = std::move(axes);
-  comps_.assign(total * n_comps_, Composition {});
+  comps_.assign(total * n_comps_, Composition{});
   for (auto& c : comps_) {
     c.D.assign(n_groups_, 0.0);
     c.absorption.assign(n_groups_, 0.0);
@@ -71,7 +72,7 @@ Composition& XSLibrary::composition(int comp, int state)
 {
   if (comp < 0 || comp >= n_comps_) {
     throw InputError("composition index " + std::to_string(comp) +
-      " out of range [0, " + std::to_string(n_comps_) + ")");
+                     " out of range [0, " + std::to_string(n_comps_) + ")");
   }
   if (state < 0 || state >= n_states()) {
     throw InputError("branch state index out of range");
@@ -84,7 +85,7 @@ const Composition& XSLibrary::composition(int comp, int state) const
 {
   if (comp < 0 || comp >= n_comps_) {
     throw InputError("composition index " + std::to_string(comp) +
-      " out of range [0, " + std::to_string(n_comps_) + ")");
+                     " out of range [0, " + std::to_string(n_comps_) + ")");
   }
   if (state < 0 || state >= n_states()) {
     throw InputError("branch state index out of range");
@@ -118,18 +119,18 @@ void XSLibrary::finalize(std::vector<std::string>* warnings)
   for (int state = 0; state < n_states(); ++state) {
     for (int c = 0; c < n_comps_; ++c) {
       auto& comp = comps_[static_cast<std::size_t>(state) * n_comps_ + c];
-      const std::string where =
-        "composition " + std::to_string(c) + " state " + std::to_string(state);
+      const std::string where = "composition " + std::to_string(c) + " state " +
+                                std::to_string(state);
 
       comp.removal.assign(G, 0.0);
       for (int g = 0; g < G; ++g) {
         if (!(comp.D[g] > 0.0)) {
           throw LibraryError(where + " group " + std::to_string(g) +
-            " has a non-positive diffusion coefficient");
+                             " has a non-positive diffusion coefficient");
         }
         if (comp.absorption[g] < 0.0) {
           throw LibraryError(where + " group " + std::to_string(g) +
-            " has a negative absorption cross section");
+                             " has a negative absorption cross section");
         }
         double out_scatter = 0.0;
         for (int gp = 0; gp < G; ++gp) {
@@ -139,8 +140,9 @@ void XSLibrary::finalize(std::vector<std::string>* warnings)
             // FR-XS-8 requires a warning rather than a failure.
             if (warnings) {
               warnings->push_back(where + ": negative scattering transfer " +
-                std::to_string(g) + "->" + std::to_string(gp) + " = " +
-                std::to_string(s));
+                                  std::to_string(g) + "->" +
+                                  std::to_string(gp) + " = " +
+                                  std::to_string(s));
             }
           }
           if (gp != g) out_scatter += s;
@@ -148,25 +150,39 @@ void XSLibrary::finalize(std::vector<std::string>* warnings)
         comp.removal[g] = comp.absorption[g] + out_scatter;
         if (comp.removal[g] <= 0.0 && warnings) {
           warnings->push_back(where + " group " + std::to_string(g) +
-            " has a non-positive removal cross section");
+                              " has a non-positive removal cross section");
         }
       }
 
       const double chi_sum =
-        std::accumulate(comp.chi.begin(), comp.chi.end(), 0.0);
-      const bool fissile =
-        std::any_of(comp.nu_fission.begin(), comp.nu_fission.end(),
-          [](double v) { return v > 0.0; });
+          std::accumulate(comp.chi.begin(), comp.chi.end(), 0.0);
+      const bool fissile = std::any_of(comp.nu_fission.begin(),
+          comp.nu_fission.end(), [](double v) { return v > 0.0; });
       if (fissile) {
         if (std::abs(chi_sum - 1.0) > 1.0e-6) {
           throw LibraryError(where + ": fission spectrum sums to " +
-            std::to_string(chi_sum) + ", expected 1");
+                             std::to_string(chi_sum) + ", expected 1");
         }
       } else if (chi_sum > 0.0) {
         // Harmless but almost always a mistake worth surfacing.
         if (warnings) {
           warnings->push_back(
-            where + " has a fission spectrum but no fission source");
+              where + " has a fission spectrum but no fission source");
+        }
+      }
+
+      if (fissile && warnings) {
+        const bool heating = std::any_of(comp.kappa_fission.begin(),
+            comp.kappa_fission.end(), [](double v) { return v > 0.0; });
+        if (!heating) {
+          // Power is formed from kappa-fission, so a fissile composition
+          // without it contributes to the eigenvalue and to nothing else. The
+          // symptom is a silently zero power distribution.
+          warnings->push_back(
+              where +
+              " produces neutrons but has no kappa-fission, so it "
+              "will carry no power; set kappa_fission to get a power "
+              "distribution");
         }
       }
     }
@@ -178,7 +194,7 @@ void XSLibrary::finalize(std::vector<std::string>* warnings)
     }
     if (delayed_.n_precursors() > MAX_DELAYED_GROUPS) {
       throw LibraryError("at most " + std::to_string(MAX_DELAYED_GROUPS) +
-        " delayed precursor groups are supported");
+                         " delayed precursor groups are supported");
     }
   }
   finalized_ = true;
@@ -187,7 +203,7 @@ void XSLibrary::finalize(std::vector<std::string>* warnings)
 bool XSLibrary::has_uncertainty() const
 {
   return std::any_of(comps_.begin(), comps_.end(),
-    [](const Composition& c) { return c.has_uncertainty(); });
+      [](const Composition& c) { return c.has_uncertainty(); });
 }
 
 int XSLibrary::state_index(const std::vector<int>& idx) const
@@ -207,7 +223,8 @@ XSLibrary XSLibrary::interpolate(const std::vector<double>& state) const
   }
   if (state.size() != axes_.size()) {
     throw InputError("expected " + std::to_string(axes_.size()) +
-      " branch coordinates, got " + std::to_string(state.size()));
+                     " branch coordinates, got " +
+                     std::to_string(state.size()));
   }
 
   const int n_axes = static_cast<int>(axes_.size());
@@ -225,17 +242,17 @@ XSLibrary XSLibrary::interpolate(const std::vector<double>& state) const
     }
     if (x < pts.front() || x > pts.back()) {
       switch (extrapolation_) {
-      case Extrapolation::error:
-        throw InputError("branch coordinate " + std::to_string(x) +
-          " is outside axis '" + axes_[a].name + "'");
-      case Extrapolation::clamp:
-        lo[a] = (x < pts.front()) ? 0 : last - 1;
-        frac[a] = (x < pts.front()) ? 0.0 : 1.0;
-        continue;
-      case Extrapolation::linear:
-        lo[a] = (x < pts.front()) ? 0 : last - 1;
-        frac[a] = (x - pts[lo[a]]) / (pts[lo[a] + 1] - pts[lo[a]]);
-        continue;
+        case Extrapolation::error:
+          throw InputError("branch coordinate " + std::to_string(x) +
+                           " is outside axis '" + axes_[a].name + "'");
+        case Extrapolation::clamp:
+          lo[a] = (x < pts.front()) ? 0 : last - 1;
+          frac[a] = (x < pts.front()) ? 0.0 : 1.0;
+          continue;
+        case Extrapolation::linear:
+          lo[a] = (x < pts.front()) ? 0 : last - 1;
+          frac[a] = (x - pts[lo[a]]) / (pts[lo[a] + 1] - pts[lo[a]]);
+          continue;
       }
     }
     int i = 0;
@@ -263,7 +280,7 @@ XSLibrary XSLibrary::interpolate(const std::vector<double>& state) const
     const int s = state_index(idx);
     for (int c = 0; c < n_comps_; ++c) {
       const Composition& src =
-        comps_[static_cast<std::size_t>(s) * n_comps_ + c];
+          comps_[static_cast<std::size_t>(s) * n_comps_ + c];
       Composition& dst = out.comps_[c];
       for (int g = 0; g < n_groups_; ++g) {
         dst.D[g] += weight * src.D[g];
@@ -282,4 +299,4 @@ XSLibrary XSLibrary::interpolate(const std::vector<double>& state) const
   return out;
 }
 
-} // namespace openndm
+}  // namespace openndm

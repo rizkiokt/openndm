@@ -29,8 +29,9 @@ jobs:
       - name: clang-format (NFR-QA-4)
         run: |
           sudo apt-get update -qq && sudo apt-get install -y clang-format
-          find include src -name '*.h' -o -name '*.cpp' \
-            | xargs clang-format --dry-run --Werror
+          for f in $(find include src tests/cpp -name '*.h' -o -name '*.cpp'); do
+            clang-format --dry-run --Werror "$f" || exit 1
+          done
 
   test:
     name: ${{ matrix.os }} / ${{ matrix.compiler }} / py${{ matrix.python }}

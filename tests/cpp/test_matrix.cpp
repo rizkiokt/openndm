@@ -1,6 +1,5 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
-
 #include <cmath>
 #include <numeric>
 #include <random>
@@ -37,7 +36,7 @@ GroupMatrix laplacian(const SparsePattern& pattern, double shift)
   return A;
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("deterministic reductions do not depend on ordering", "[matrix]")
 {
@@ -112,5 +111,5 @@ TEST_CASE("BiCGSTAB accepts a good initial guess", "[matrix]")
   std::vector<double> x = exact;
   const auto result = bicgstab(A, b, x, precond, 1.0e-12, 100);
   REQUIRE(result.converged);
-  REQUIRE(result.iterations == 0); // already converged, no work needed
+  REQUIRE(result.iterations == 0);  // already converged, no work needed
 }
