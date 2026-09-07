@@ -1,0 +1,65 @@
+[build-system]
+requires = ["scikit-build-core>=0.8", "pybind11>=2.11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "openndm"
+version = "0.1.0"
+description = "Open Nodal Diffusion Method: a nodal diffusion solver built on the OpenMC stack"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "OpenNDM contributors" }]
+keywords = ["nuclear", "reactor", "neutronics", "diffusion", "nodal", "openmc"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = ["numpy>=1.24", "h5py>=3.8"]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.6"]
+# OpenMC is deliberately not a hard dependency: the solver must import and run
+# without it, and only openndm.gc needs it (FR-OMC-14).
+openmc = ["openmc>=0.13.3", "uncertainties>=3.1"]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "ruff>=0.4",
+  "matplotlib>=3.6",
+]
+docs = ["sphinx>=7.0", "furo", "myst-parser", "nbsphinx"]
+
+[project.urls]
+Homepage = "https://github.com/rizkiokt/openndm"
+Documentation = "https://github.com/rizkiokt/openndm/tree/main/docs"
+Issues = "https://github.com/rizkiokt/openndm/issues"
+
+[tool.scikit-build]
+wheel.packages = ["python/openndm"]
+cmake.version = ">=3.16"
+cmake.args = ["-DOPENNDM_BUILD_PYTHON=ON"]
+build-dir = "build/{wheel_tag}"
+sdist.include = ["include", "src", "python", "tests", "benchmarks", "CMakeLists.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+markers = [
+  "slow: verification runs that take more than a few seconds",
+  "openmc: requires OpenMC to be installed",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "NPY", "RUF"]
+ignore = ["B028"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

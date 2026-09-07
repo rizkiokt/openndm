@@ -17,13 +17,13 @@ struct Settings {
   SolveMode mode = SolveMode::forward;
 
   //! Outer (eigenvalue) iteration control (FR-SOL-6).
-  double k_tolerance = 1.0e-7;
-  double fission_source_tolerance = 1.0e-6;
+  double k_tolerance = 1.0e-9;
+  double fission_source_tolerance = 1.0e-8;
   int max_outer = 500;
   int min_outer = 2;
 
   //! Inner (within-group) linear solve control.
-  double inner_tolerance = 1.0e-3;
+  double inner_tolerance = 1.0e-5;
   int max_inner = 50;
   //! Gauss-Seidel sweeps over energy groups per outer iteration. More than one
   //! is only needed with significant upscattering.
