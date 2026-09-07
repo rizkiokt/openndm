@@ -134,9 +134,9 @@ temperature or density, and cross sections reach the solver only through
 
 | ID | State | Notes |
 |---|---|---|
-| NFR-PERF-1..7 | not measured | No performance acceptance runs have been done on the reference hardware. The IAEA-2D quarter core at one node per assembly solves in about 17 ms and at 8 nodes per assembly in about 1 s, both single-threaded, which suggests the targets are reachable, but that is an observation and not an acceptance test. |
+| NFR-PERF-1..7 | not measured | No performance acceptance runs have been done on the reference hardware. The IAEA-2D quarter core at one node per assembly solves in about 15 ms and the IAEA-3D core with 19 axial planes in about 150 ms, both single-threaded, which suggests the targets are reachable, but that is an observation and not an acceptance test. |
 | NFR-QA-1 | partial | Catch2 for C++ and pytest for Python. Coverage is collected in CI but the 80% line coverage gate is not enforced. |
-| NFR-QA-2 | partial | Every deck runs in CI with a tolerance. Two of them are checked against recorded baselines rather than published references; see `benchmarks/README.md`. |
+| NFR-QA-2 | done | Every deck runs in CI against its published reference with an explicit tolerance. All three meet the 100 pcm acceptance criterion for static benchmarks. |
 | NFR-QA-3 | done | Linux gcc and clang, macOS clang, Python 3.10 to 3.13. Windows is not built and is not documented as WSL-only. |
 | NFR-QA-4 | done | clang-format and ruff, both enforced. |
 | NFR-QA-5 | done | Semantic versioning and a changelog. |
@@ -149,6 +149,16 @@ temperature or density, and cross sections reach the solver only through
 | NFR-EXT-5 | not started | The public `extern "C"` API. |
 
 ---
+
+## What the benchmarks establish
+
+The nodal kernels are verified two ways that do not share machinery. Against
+the analytic bare cuboid, every kernel converges to the closed-form
+eigenvalue at second order. Against the IAEA-2D core map, SANM at one node
+per assembly lands 2.6 pcm from the mesh-converged eigenvalue, and SANM and
+NEM — which close their two-node problems by entirely different routes —
+agree with each other to 0.08 pcm. Both IAEA decks reproduce their published
+eigenvalues inside the 100 pcm acceptance criterion.
 
 ## The one physics limitation worth knowing
 

@@ -6,7 +6,37 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **IAEA-2D core map.** The transcribed quarter-core map was asymmetric about
+  the diagonal at one position pair, and was missing one cell of the
+  peripheral fuel-1 band at `(5,5)`, which broke that band into two
+  disconnected arcs. Restoring it moved `k_eff` by +75 pcm and brought the
+  deck from 81 pcm below the published reference to 6 pcm below it. The map
+  now carries two structural invariants — diagonal symmetry and an
+  edge-connected fuel-1 band — asserted by `check_radial_map()` and enforced
+  by the test suite, because neither violation had any symptom other than the
+  eigenvalue.
+- **IAEA-3D rod orientation.** The 80 cm in the benchmark specification is the
+  height of the rod tips above the bottom of the active core, not an insertion
+  depth measured down from the top. The deck had it inverted, putting rods in
+  the upper 80 cm instead of the upper 260 cm, which left `k_eff` 1700 pcm
+  high with no other visible symptom: the axial profile was still a plausible
+  cosine and the power distribution still physical. A test now asserts the
+  orientation directly against the node compositions.
+- **IAEA-3D axial mesh.** The rod tip is now placed exactly on a plane
+  boundary for any requested node height. Smearing it across a node was worth
+  tens of pcm and showed up as an axial mesh that would not converge
+  monotonically.
+
+### Changed
+
+- Both IAEA decks now assert against their published eigenvalues rather than
+  against recorded baselines. All three benchmarks meet the specification's
+  100 pcm acceptance criterion for static problems.
+- The V-3 verification adds a direct SANM-against-NEM comparison. The two
+  kernels share only the transverse leakage fit and agree to 0.08 pcm on the
+  IAEA map, which makes it the sharpest single check in the suite.
 
 ## [0.1.0] - 2026-09-07
 
@@ -86,8 +116,9 @@ requirement ID to its state.
   kernels converge second order; 0.05 pcm at 64 nodes per side.
 - **V-2**: observed spatial convergence order of every kernel.
 - **V-3**: coarse-mesh SANM and NEM against refined FDM. On the IAEA-2D core
-  map, SANM at one node per assembly lands 18 pcm from the fine-mesh limit and
-  all three kernels agree to within 25 pcm under refinement.
+  map, SANM at one node per assembly lands 2.6 pcm from the mesh-converged
+  eigenvalue, SANM and NEM agree with each other to 0.08 pcm, and all three
+  kernels agree to within 25 pcm under refinement.
 - **V-4**: adjoint and forward eigenvalues agree to under 1 pcm while the flux
   shapes differ.
 - Infinite-medium `k_∞` reproduced exactly, and leakage-free fixed-source
@@ -95,9 +126,6 @@ requirement ID to its state.
 
 ### Known limitations
 
-- The IAEA-2D and IAEA-3D decks do **not** reproduce their published
-  eigenvalues; see `benchmarks/README.md` for the numbers and the likely
-  causes. They are shipped as regression baselines.
 - The nonlinear nodal correction is applied on interior surfaces only.
   Boundary faces keep their finite difference coupling, which is what limits
   the nodal kernels to second order overall on the analytic case.

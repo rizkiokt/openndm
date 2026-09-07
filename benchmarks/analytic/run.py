@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
+from common import benchmark_settings
 
 import openndm
 
@@ -39,14 +40,7 @@ def main() -> int:
     library.finalize()
 
     reference = analytic()
-    settings = openndm.Settings(
-        verbosity=0,
-        k_tolerance=1.0e-11,
-        fission_source_tolerance=1.0e-10,
-        inner_tolerance=1.0e-9,
-        max_inner=400,
-        max_outer=5000,
-    )
+    settings = benchmark_settings()
     print(f"analytic k_eff = {reference:.9f}\n")
     print(f"{'nodes/side':>10}  {'FDM':>22}  {'NEM':>22}  {'SANM':>22}")
     for n in (4, 8, 16, 32, 64):

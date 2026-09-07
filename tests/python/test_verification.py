@@ -81,25 +81,55 @@ def test_v1_nodal_kernels_beat_finite_difference(kernel, tight):
     )
 
 
-def test_v3_coarse_mesh_nodal_matches_fine_mesh_fdm(tight):
-    """V-3: coarse SANM and NEM agree with a refined FDM solve.
+#: Mesh-converged IAEA-2D eigenvalue. SANM and NEM both sit on this to within
+#: 0.1 pcm from four nodes per assembly onward, and FDM approaches it from
+#: below at second order.
+IAEA_2D_CONVERGED = 1.0295271
+
+#: Tolerance in pcm on how far a nodal kernel may sit from the converged
+#: eigenvalue when run at one node per assembly.
+COARSE_MESH_TOLERANCE = {"sanm": 25.0, "nem": 150.0}
+
+
+@pytest.mark.parametrize("kernel", NODAL_KERNELS)
+def test_v3_coarse_mesh_nodal_matches_fine_mesh_fdm(kernel, tight):
+    """V-3: coarse SANM and NEM agree with a refined finite difference solve.
 
     This is the check that catches a wrong transverse leakage, a wrong
     discontinuity factor convention or a broken two-node closure: those leave
     the nodal kernels converging to a different answer than the reference
-    kernel, which mesh refinement alone would not reveal.
+    kernel, which mesh refinement alone would not reveal. FDM is the reference
+    because it shares no machinery with either nodal kernel.
     """
     library = iaea_library()
-    fine = openndm.Model(iaea_geometry(subdivide=8), library, tight)
-    reference = fine.solve(kernel="fdm").k_eff
+    reference = (
+        openndm.Model(iaea_geometry(subdivide=8), library, tight)
+        .solve(kernel="fdm")
+        .k_eff
+    )
+    coarse = openndm.Model(iaea_geometry(subdivide=1), library, tight)
+    error_pcm = 1.0e5 * (coarse.solve(kernel=kernel).k_eff - reference)
+    assert abs(error_pcm) < COARSE_MESH_TOLERANCE[kernel], (
+        f"{kernel} on one node per assembly is {error_pcm:+.1f} pcm from the "
+        f"fine-mesh FDM reference {reference:.6f}"
+    )
 
-    for kernel in NODAL_KERNELS:
-        coarse = openndm.Model(iaea_geometry(subdivide=1), library, tight)
-        error_pcm = 1.0e5 * (coarse.solve(kernel=kernel).k_eff - reference)
-        assert abs(error_pcm) < 150.0, (
-            f"{kernel} on one node per assembly is {error_pcm:+.1f} pcm from "
-            f"the fine-mesh FDM reference {reference:.6f}"
-        )
+
+def test_v3_sanm_and_nem_agree_to_a_fraction_of_a_pcm(tight):
+    """The two nodal kernels share only the transverse leakage fit.
+
+    NEM closes its two-node problem with quartic polynomials, two moment
+    equations and the coarse-mesh outer-face currents; SANM closes it with
+    analytic basis functions and the node-average constraint alone. They have
+    no reason to agree this closely unless both are right, which makes this
+    the sharpest single check in the suite.
+    """
+    library = iaea_library()
+    geometry = iaea_geometry(subdivide=4)
+    nem = openndm.Model(geometry, library, tight).solve(kernel="nem").k_eff
+    sanm = openndm.Model(geometry, library, tight).solve(kernel="sanm").k_eff
+    assert abs(1.0e5 * (nem - sanm)) < 1.0, (nem, sanm)
+    assert abs(1.0e5 * (sanm - IAEA_2D_CONVERGED)) < 2.0, sanm
 
 
 def test_v3_kernels_converge_to_the_same_limit(tight):
@@ -113,6 +143,8 @@ def test_v3_kernels_converge_to_the_same_limit(tight):
     }
     spread_pcm = 1.0e5 * (max(results.values()) - min(results.values()))
     assert spread_pcm < 25.0, f"kernels disagree by {spread_pcm:.1f} pcm: {results}"
+    for kernel, k in results.items():
+        assert abs(1.0e5 * (k - IAEA_2D_CONVERGED)) < 25.0, (kernel, k)
 
 
 @pytest.mark.parametrize("kernel", ALL_KERNELS)

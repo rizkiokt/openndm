@@ -19,6 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 from common import (
     IAEA_BOUNDARIES,
+    benchmark_settings,
+    check_radial_map,
     iaea_library,
     radial_map_to_compositions,
     report,
@@ -31,6 +33,7 @@ PUBLISHED_K_EFF = 1.02959
 
 
 def build(subdivide: int = 1) -> tuple[openndm.Geometry, openndm.XSLibrary]:
+    check_radial_map()
     radial = radial_map_to_compositions()
     core = radial[np.newaxis, :, :]
     geometry = openndm.Geometry.from_lattice(
@@ -54,7 +57,7 @@ def main() -> int:
     args = parser.parse_args()
 
     geometry, library = build(args.subdivide)
-    settings = openndm.Settings(verbosity=0)
+    settings = benchmark_settings()
     print(f"IAEA-2D: {geometry.n_nodes} nodes, {args.subdivide} node(s)/assembly")
 
     result = None

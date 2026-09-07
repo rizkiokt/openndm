@@ -23,7 +23,9 @@ IAEA_XS = [
 ]
 
 #: IAEA quarter-core radial map. Row 0 and column 0 lie on the symmetry lines;
-#: 0 marks an out-of-core position.
+#: 0 marks an out-of-core position. Kept in step with
+#: ``benchmarks/common.IAEA_RADIAL_MAP``, which
+#: ``test_benchmarks.test_conftest_map_matches_the_benchmark_deck`` enforces.
 IAEA_MAP = np.array(
     [
         [3, 2, 2, 2, 3, 2, 2, 1, 4],
@@ -31,12 +33,16 @@ IAEA_MAP = np.array(
         [2, 2, 2, 2, 2, 2, 2, 1, 4],
         [2, 2, 2, 2, 2, 2, 2, 1, 4],
         [3, 2, 2, 2, 3, 2, 1, 1, 4],
-        [2, 2, 2, 2, 2, 2, 1, 4, 4],
+        [2, 2, 2, 2, 2, 1, 1, 4, 4],
         [2, 2, 2, 2, 1, 1, 4, 4, 0],
         [1, 1, 1, 1, 1, 4, 4, 0, 0],
-        [4, 4, 4, 4, 4, 0, 0, 0, 0],
+        [4, 4, 4, 4, 4, 4, 0, 0, 0],
     ]
 )
+
+#: Published reference eigenvalues for the IAEA PWR benchmark.
+IAEA_2D_REFERENCE = 1.02959
+IAEA_3D_REFERENCE = 1.02903
 
 
 def analytic_k(D, absorption, nu_fission, side, n_dimensions=3):

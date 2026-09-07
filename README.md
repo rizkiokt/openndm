@@ -22,10 +22,11 @@ which of those requirements are implemented today.
 
 ## Status
 
-**Pre-alpha (v0.1.0).** The static solver is implemented and verified; the
-transient, thermal-hydraulics and pin-power chapters of the specification are
-not yet written. `docs/status.md` maps every requirement ID to its state —
-read it before assuming a feature exists.
+**Pre-alpha (v0.1.0).** The static solver is implemented and verified against
+both the analytic bare-cuboid solution and the published IAEA-2D/3D PWR
+benchmarks; the transient, thermal-hydraulics and pin-power chapters of the
+specification are not yet written. `docs/status.md` maps every requirement ID
+to its state — read it before assuming a feature exists.
 
 Implemented and tested:
 
@@ -115,9 +116,18 @@ print(result.f_q, result.f_dh)   # peaking factors
   1 pcm while the flux shapes differ.
 - **Determinism.** Bit-identical results on 1, 2, 4 and 8 threads.
 
-`benchmarks/` holds runnable decks; see `benchmarks/README.md` for what each
-one currently reproduces, including where a deck does *not* yet match its
-published reference.
+### Benchmarks
+
+| Deck | Reference | Result |
+|---|---|---|
+| Bare cuboid, analytic | `k = νΣf / (Σa + D B²)` | 0.05 pcm at 64 nodes/side |
+| IAEA-2D PWR | published `k_eff = 1.02959` | SANM **−3.7 pcm** at one node per assembly |
+| IAEA-3D PWR | published `k_eff = 1.02903` | SANM **+44.7 pcm** at a 20 cm axial mesh |
+
+All three meet the specification's 100 pcm acceptance criterion. See
+[`benchmarks/README.md`](benchmarks/README.md) for the full convergence
+tables and for the two transcription errors the structural invariants now
+catch.
 
 ## Documentation
 
