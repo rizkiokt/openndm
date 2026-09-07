@@ -148,7 +148,7 @@ temperature or density, and cross sections reach the solver only through
 | V-4 | done | Adjoint eigenvalue equality, and first-order perturbation theory against a direct re-solve, which tests the adjoint flux shape rather than only the operator transpose. |
 | NFR-EXT-1 | done | See FR-GEO-6. |
 | NFR-EXT-2 | done | Group count, precursor count and branch axes are all run-time. |
-| NFR-EXT-3 | partial | The wheel job is configured for cp310–cp313 on manylinux and macOS but has not been run. |
+| NFR-EXT-3 | partial | cp310-cp313 wheels build in CI on manylinux_2_28 and macOS arm64, with x86_64 macOS cross-compiled from the arm64 runner because GitHub is retiring the Intel one. Nothing is published to PyPI yet. |
 | NFR-EXT-4 | done | No dependency beyond a C++17 compiler; the build fetches nothing at configure time. |
 | NFR-EXT-5 | not started | The public `extern "C"` API. |
 
