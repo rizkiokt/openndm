@@ -25,14 +25,25 @@ struct Settings {
   //! Inner (within-group) linear solve control.
   double inner_tolerance = 1.0e-5;
   int max_inner = 50;
-  //! Gauss-Seidel sweeps over energy groups per outer iteration. More than one
-  //! is only needed with significant upscattering.
-  int group_sweeps = 1;
+  //! Maximum Gauss-Seidel sweeps over energy groups per outer iteration.
+  //!
+  //! One sweep is exact for a purely down-scattering problem with no Wielandt
+  //! shift. Both upscattering and the shift couple groups in a way a single
+  //! lagged sweep cannot represent, so the sweep repeats until the flux stops
+  //! changing or this bound is reached. In particular, when chi and nu-fission
+  //! occupy different groups, as they do in any two-group LWR library, the
+  //! entire shift lives off the group diagonal and a single sweep cancels it
+  //! exactly.
+  int group_sweeps = 50;
+  //! Relative flux change between group sweeps below which the sweep stops.
+  double group_sweep_tolerance = 1.0e-8;
 
-  //! Wielandt shift. The shifted eigenvalue is k/(1 - k/k_shift); a smaller
-  //! multiplier accelerates the outer iteration at the cost of a harder inner
-  //! solve. Set \c wielandt_shift to 0 to disable.
-  double wielandt_shift = 0.2;
+  //! Additive Wielandt shift: the shifted operator subtracts the fission
+  //! operator evaluated at k_shift = k_eff + wielandt_shift. Smaller
+  //! accelerates the outer iteration at the cost of a harder inner solve; the
+  //! system caps it internally so the shifted operator never turns singular.
+  //! Set to 0 to disable.
+  double wielandt_shift = 0.05;
   //! Outer iteration at which the shift starts being applied.
   int wielandt_start = 3;
 

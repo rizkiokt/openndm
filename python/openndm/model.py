@@ -394,10 +394,9 @@ class Model:
 
         Call this after :meth:`swap_assemblies` or after changing cross
         sections, so the cached per-node data and coupling coefficients follow.
+        The solver object survives, so buffers stay allocated.
         """
-        system = self._solver.system if hasattr(self._solver, "system") else None
-        del system
-        self._solver = _core.Solver(self.geometry._g, self.library._lib)
+        self._solver.reset()
 
     def swap_assemblies(self, a: int, b: int) -> None:
         """Exchange the compositions of two radial positions (FR-OPT-7).

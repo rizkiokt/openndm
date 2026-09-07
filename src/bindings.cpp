@@ -55,34 +55,39 @@ PYBIND11_MODULE(_core, m)
 #endif
 
   // ------------------------------------------------------------- exceptions
-  static py::exception<Error> base_exc(m, "OpenNDMError", PyExc_RuntimeError);
-  static py::exception<InputError> input_exc(m, "InputError", base_exc.ptr());
-  static py::exception<LibraryError> lib_exc(
-    m, "LibraryError", base_exc.ptr());
-  static py::exception<NotImplementedError> nyi_exc(
-    m, "NotImplementedError", base_exc.ptr());
-
-  // ConvergenceError carries the iteration count and residual, which a plain
-  // pybind11 exception cannot, so it is declared in openndm.exceptions and
-  // resolved lazily here. Resolving it at module init would import the
-  // package while the package is still importing this module.
+  //
+  // Every C++ error surfaces as the matching class from openndm.exceptions
+  // rather than as a separate extension-local type, so that
+  // `except openndm.InputError` catches what the core raises and users can
+  // subclass the hierarchy. The lookup is lazy because the package is still
+  // importing this module when it loads.
   py::register_exception_translator([](std::exception_ptr p) {
+    static const auto raise_as = [](const char* name, const py::object& exc) {
+      py::object module = py::module_::import("openndm.exceptions");
+      py::object cls = module.attr(name);
+      PyErr_SetObject(cls.ptr(), exc.ptr());
+    };
     try {
       if (p) std::rethrow_exception(p);
     } catch (const ConvergenceError& e) {
-      static py::object cls =
-        py::module_::import("openndm.exceptions").attr("ConvergenceError");
+      py::object module = py::module_::import("openndm.exceptions");
+      py::object cls = module.attr("ConvergenceError");
       py::object exc = cls(e.what(), py::arg("iterations") = e.iterations(),
         py::arg("residual") = e.residual());
       PyErr_SetObject(cls.ptr(), exc.ptr());
     } catch (const InputError& e) {
-      input_exc(e.what());
+      py::object module = py::module_::import("openndm.exceptions");
+      raise_as("InputError", module.attr("InputError")(e.what()));
     } catch (const LibraryError& e) {
-      lib_exc(e.what());
+      py::object module = py::module_::import("openndm.exceptions");
+      raise_as("LibraryError", module.attr("LibraryError")(e.what()));
     } catch (const NotImplementedError& e) {
-      nyi_exc(e.what());
+      py::object module = py::module_::import("openndm.exceptions");
+      raise_as(
+        "NotImplementedError_", module.attr("NotImplementedError_")(e.what()));
     } catch (const Error& e) {
-      base_exc(e.what());
+      py::object module = py::module_::import("openndm.exceptions");
+      raise_as("OpenNDMError", module.attr("OpenNDMError")(e.what()));
     }
   });
 
@@ -211,7 +216,13 @@ PYBIND11_MODULE(_core, m)
     .def("set_axes", &XSLibrary::set_axes, py::arg("axes"))
     .def_property("extrapolation", &XSLibrary::extrapolation,
       &XSLibrary::set_extrapolation)
+    // Reading returns a snapshot, so inspecting a library can never
+    // invalidate it; mutation goes through the explicitly named accessor.
     .def("composition",
+      py::overload_cast<int, int>(&XSLibrary::composition, py::const_),
+      py::arg("composition"), py::arg("state") = 0,
+      py::return_value_policy::copy)
+    .def("mutable_composition",
       py::overload_cast<int, int>(&XSLibrary::composition),
       py::arg("composition"), py::arg("state") = 0,
       py::return_value_policy::reference_internal)
@@ -252,6 +263,8 @@ PYBIND11_MODULE(_core, m)
     .def_readwrite("inner_tolerance", &Settings::inner_tolerance)
     .def_readwrite("max_inner", &Settings::max_inner)
     .def_readwrite("group_sweeps", &Settings::group_sweeps)
+    .def_readwrite(
+      "group_sweep_tolerance", &Settings::group_sweep_tolerance)
     .def_readwrite("wielandt_shift", &Settings::wielandt_shift)
     .def_readwrite("wielandt_start", &Settings::wielandt_start)
     .def_readwrite("nodal_update_interval", &Settings::nodal_update_interval)

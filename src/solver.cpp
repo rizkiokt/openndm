@@ -20,10 +20,11 @@ namespace {
 //! The shift is held back for the first few outers because a tight shift
 //! applied to a poor flux guess makes the inner systems nearly singular
 //! without buying any outer convergence.
-double reciprocal_shift(double k, const Settings& s, int outer)
+double reciprocal_shift(
+  double k, const Settings& s, int outer, double ceiling)
 {
   if (s.wielandt_shift <= 0.0 || outer < s.wielandt_start) return 0.0;
-  return 1.0 / (k + s.wielandt_shift);
+  return std::min(1.0 / (k + s.wielandt_shift), ceiling);
 }
 
 double sum(const std::vector<double>& v)
@@ -46,6 +47,10 @@ void Solver::reset()
   has_solution_ = false;
   flux_.clear();
   k_eff_ = 1.0;
+  // Cross sections may have been mutated in place since the last solve, for
+  // instance by a boron search, so the cached per-node data is refreshed
+  // before the coupling that depends on it is rebuilt.
+  cmfd_.refresh_cross_sections();
   cmfd_.build_coupling();
 }
 
@@ -78,6 +83,10 @@ Result Solver::solve(const Settings& settings)
   if (!settings.warm_start || !has_solution_ || flux_.size() != size) {
     flux_.assign(size, 1.0);
     k_eff_ = 1.0;
+    // Discard the nonlinear correction as well, so that a cold solve of the
+    // same model always retraces the same iteration path. An adjoint run is
+    // the exception: it needs the Dhat converged by the forward solve.
+    if (!cmfd_.adjoint()) cmfd_.build_coupling();
   }
 
   auto kernel = Kernel::create(settings.kernel);
@@ -98,13 +107,21 @@ Result Solver::solve(const Settings& settings)
   double k = k_eff_;
   int total_inner = 0;
 
+  // The two-node kernels solve the forward transverse-integrated problem, so
+  // running them against an adjoint flux would produce meaningless coupling
+  // corrections. The adjoint instead keeps the Dhat converged by the forward
+  // solve, which is exactly the transpose of the corrected forward operator.
+  const bool update_nodal =
+    !kernel->is_finite_difference() && !cmfd_.adjoint();
+
   for (int outer = 1; outer <= settings.max_outer; ++outer) {
-    if (!kernel->is_finite_difference() && outer >= settings.nodal_start &&
+    if (update_nodal && outer >= settings.nodal_start &&
       ((outer - settings.nodal_start) % settings.nodal_update_interval == 0)) {
       cmfd_.nodal_update(*kernel, flux_, k, settings);
     }
 
-    const double inv_shift = reciprocal_shift(k, settings, outer);
+    const double inv_shift =
+      reciprocal_shift(k, settings, outer, cmfd_.max_reciprocal_shift());
     cmfd_.assemble(inv_shift);
     total_inner +=
       cmfd_.solve_groups(source_old, k, inv_shift, flux_, settings);
@@ -216,13 +233,16 @@ Result Solver::solve_fixed_source(
   Result result;
   result.kernel = kernel->name();
 
-  cmfd_.assemble(0.0);
+  // Assembling at a reciprocal shift of one puts the in-group fission term on
+  // the diagonal, which is what makes this a subcritical multiplication
+  // operator rather than a pure absorber.
+  cmfd_.assemble(1.0);
   double previous = 0.0;
   for (int outer = 1; outer <= settings.max_outer; ++outer) {
     if (!kernel->is_finite_difference() && outer >= settings.nodal_start &&
       ((outer - settings.nodal_start) % settings.nodal_update_interval == 0)) {
       cmfd_.nodal_update(*kernel, flux_, 1.0, settings);
-      cmfd_.assemble(0.0);
+      cmfd_.assemble(1.0);
     }
     cmfd_.solve_fixed_source(source, flux_, settings);
 

@@ -63,3 +63,7 @@ ignore = ["B028"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["openndm"]
+known-local-folder = ["conftest"]

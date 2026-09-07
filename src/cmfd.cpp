@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "openndm/error.h"
 
@@ -52,6 +53,10 @@ void CmfdSystem::refresh_cross_sections()
 {
   const int G = n_groups_;
   const auto& nodes = geom_.nodes();
+  has_upscatter_ = false;
+  // Fraction of the removal term the shift is never allowed to consume.
+  constexpr double SHIFT_MARGIN = 0.25;
+  double limit = std::numeric_limits<double>::infinity();
   for (int i = 0; i < geom_.n_nodes(); ++i) {
     const Node& node = nodes[static_cast<std::size_t>(i)];
     const Composition& c = xs_.composition(node.composition);
@@ -72,16 +77,23 @@ void CmfdSystem::refresh_cross_sections()
         nu_fission_[idx] = c.nu_fission[gg] * V;
         chi_[idx] = c.chi[gg];
       }
+      const double production = chi_[idx] * nu_fission_[idx];
+      if (production > 0.0) {
+        limit = std::min(limit, (1.0 - SHIFT_MARGIN) * removal_[idx] / production);
+      }
       for (int gp = 0; gp < G; ++gp) {
         // scatter_[i][from][to]; transposed for the adjoint.
         const std::size_t src = adjoint_
           ? static_cast<std::size_t>(gp) * G + g
           : static_cast<std::size_t>(g) * G + gp;
-        scatter_[(static_cast<std::size_t>(i) * G + g) * G + gp] =
-          c.scatter[src] * V;
+        const double value = c.scatter[src] * V;
+        scatter_[(static_cast<std::size_t>(i) * G + g) * G + gp] = value;
+        // scatter_[i][g][gp] transfers g -> gp, so gp < g is upscattering.
+        if (gp < g && value != 0.0) has_upscatter_ = true;
       }
     }
   }
+  max_inv_shift_ = std::max(0.0, limit);
 }
 
 void CmfdSystem::set_adjoint(bool adjoint)
@@ -236,7 +248,16 @@ int CmfdSystem::solve_groups(const std::vector<double>& fission_src,
   group_flux_.resize(static_cast<std::size_t>(n));
   int total_inner = 0;
 
-  for (int sweep = 0; sweep < std::max(1, s.group_sweeps); ++sweep) {
+  // A single lagged sweep is exact only when neither upscattering nor the
+  // Wielandt shift couples the groups. Otherwise the sweep repeats until the
+  // flux settles, because the shift enters entirely through the source of one
+  // group formed from the fluxes of the others.
+  const bool needs_repeats = (inv_k_shift > 0.0) || has_upscatter_;
+  const int max_sweeps =
+    needs_repeats ? std::max(2, s.group_sweeps) : std::max(1, s.group_sweeps);
+
+  for (int sweep = 0; sweep < max_sweeps; ++sweep) {
+    if (needs_repeats) prev_flux_.assign(flux.begin(), flux.end());
     for (int g = 0; g < G; ++g) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
@@ -266,6 +287,15 @@ int CmfdSystem::solve_groups(const std::vector<double>& fission_src,
           group_flux_[static_cast<std::size_t>(i)];
       }
     }
+
+    if (!needs_repeats || sweep + 1 >= max_sweeps) break;
+    double change = 0.0;
+    double scale = 0.0;
+    for (std::size_t i = 0; i < flux.size(); ++i) {
+      change = std::max(change, std::abs(flux[i] - prev_flux_[i]));
+      scale = std::max(scale, std::abs(flux[i]));
+    }
+    if (scale > 0.0 && change / scale < s.group_sweep_tolerance) break;
   }
   return total_inner;
 }
@@ -279,7 +309,13 @@ int CmfdSystem::solve_fixed_source(const std::vector<double>& external,
   group_flux_.resize(static_cast<std::size_t>(n));
   int total_inner = 0;
 
-  for (int sweep = 0; sweep < std::max(1, s.group_sweeps); ++sweep) {
+  // The in-group fission term sits on the matrix diagonal here, so a single
+  // sweep is exact unless the library upscatters.
+  const int max_sweeps =
+    has_upscatter_ ? std::max(2, s.group_sweeps) : std::max(1, s.group_sweeps);
+
+  for (int sweep = 0; sweep < max_sweeps; ++sweep) {
+    if (has_upscatter_) prev_flux_.assign(flux.begin(), flux.end());
     for (int g = 0; g < G; ++g) {
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
@@ -310,6 +346,14 @@ int CmfdSystem::solve_fixed_source(const std::vector<double>& external,
           group_flux_[static_cast<std::size_t>(i)];
       }
     }
+    if (!has_upscatter_ || sweep + 1 >= max_sweeps) break;
+    double change = 0.0;
+    double scale = 0.0;
+    for (std::size_t i = 0; i < flux.size(); ++i) {
+      change = std::max(change, std::abs(flux[i] - prev_flux_[i]));
+      scale = std::max(scale, std::abs(flux[i]));
+    }
+    if (scale > 0.0 && change / scale < s.group_sweep_tolerance) break;
   }
   return total_inner;
 }

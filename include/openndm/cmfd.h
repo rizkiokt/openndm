@@ -59,6 +59,17 @@ public:
   int solve_fixed_source(const std::vector<double>& external,
     std::vector<double>& flux, const Settings& s);
 
+  //! Largest reciprocal Wielandt shift that leaves every shifted diagonal
+  //! entry safely positive.
+  //!
+  //! The shift subtracts \f$\chi_g\nu\Sigma_{f,g}/k_s\f$ from the removal
+  //! term. Where the emission spectrum and the production cross section share
+  //! a group, as they do in a one-group model, a tight shift cancels removal
+  //! outright and leaves a singular operator. Capping the shift here keeps the
+  //! acceleration without ever handing the inner solver a matrix it cannot
+  //! factor.
+  double max_reciprocal_shift() const { return max_inv_shift_; }
+
   //! Transpose the operator in place for the adjoint solve (FR-MODE-2).
   void set_adjoint(bool adjoint);
   bool adjoint() const { return adjoint_; }
@@ -85,6 +96,9 @@ private:
   const XSLibrary& xs_;
   int n_groups_;
   bool adjoint_ = false;
+  //! True when any composition transfers neutrons to a lower group index.
+  bool has_upscatter_ = false;
+  double max_inv_shift_ = 0.0;
 
   //! Cached per node/group data, flattened as node*G + g.
   std::vector<double> removal_;    //!< \f$\Sigma_r V\f$
@@ -108,6 +122,7 @@ private:
   mutable std::vector<double> group_flux_;
   mutable std::vector<double> current_;
   mutable std::vector<double> leakage_;
+  mutable std::vector<double> prev_flux_;
 };
 
 } // namespace openndm

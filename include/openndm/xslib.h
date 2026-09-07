@@ -85,7 +85,13 @@ public:
   Extrapolation extrapolation() const { return extrapolation_; }
 
   //! Mutable access to the composition at \c (comp, state).
+  //!
+  //! Taking this reference marks the library unfinalized, because the caller
+  //! can invalidate the cached removal cross sections through it. Call
+  //! finalize() again before solving.
   Composition& composition(int comp, int state = 0);
+
+  //! Read-only access, which leaves the finalized state alone.
   const Composition& composition(int comp, int state = 0) const;
 
   DelayedData& delayed() { return delayed_; }

@@ -159,7 +159,7 @@ class XSLibrary:
             ``{'absorption': [...], 'nu_fission': [...]}`` (FR-XS-9).
         """
         G = self.n_groups
-        comp = self._lib.composition(int(index), int(state))
+        comp = self._lib.mutable_composition(int(index), int(state))
 
         if D is not None and transport is not None:
             raise InputError("give either D or transport, not both")
@@ -270,7 +270,11 @@ class XSLibrary:
 
     # --------------------------------------------------------------- reading
     def composition(self, index: int, state: int = 0):
-        """Raw composition record, for inspection."""
+        """Snapshot of one composition's group constants, for inspection.
+
+        The returned record is a copy: mutating it does not change the
+        library. Use :meth:`set_composition` to write.
+        """
         return self._lib.composition(int(index), int(state))
 
     def interpolate(self, **state) -> XSLibrary:
