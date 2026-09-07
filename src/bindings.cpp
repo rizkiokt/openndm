@@ -330,6 +330,16 @@ PYBIND11_MODULE(_core, m)
           },
           py::arg("source"), py::arg("settings"))
       .def("reset", &Solver::reset)
+      // Surface currents make the node neutron balance checkable from Python,
+      // and are what a coupling driver or a pin power reconstruction needs.
+      .def("surface_currents",
+          [](const Solver& s) {
+            const auto data = s.surface_currents();
+            const py::ssize_t n = s.geometry_surfaces();
+            const py::ssize_t g =
+                n ? static_cast<py::ssize_t>(data.size()) / n : 0;
+            return py::array_t<double>({n, g}, data.data());
+          })
       .def_property_readonly("k_eff", &Solver::k_eff)
       .def_property_readonly("flux", [](py::object self) {
         const Solver& s = self.cast<const Solver&>();

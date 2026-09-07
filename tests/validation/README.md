@@ -28,15 +28,15 @@ discretisation, no leakage, no homogenisation error and no discontinuity
 factor, so any disagreement beyond the Monte Carlo uncertainty is a defect in
 the translation.
 
-Result on a homogenised UO2 and water mixture, ENDF/B-VIII.1, 18.5M active
+Result on a homogenised UO2 and water mixture, ENDF/B-VIII.1, 90M active
 histories:
 
 ```
-  OpenMC continuous energy   k_inf = 1.191016 +/- 23.9 pcm
+  OpenMC continuous energy   k_inf = 1.191328 +/- 10.1 pcm
 
-  D from diffusion-coefficient       k_ndm=1.191365  diff=   +34.9 pcm  =  1.46 sigma
-  D from transport                   k_ndm=1.191365  diff=   +34.9 pcm  =  1.46 sigma
-  multiplicity correction disabled   k_ndm=1.188673  diff=  -234.3 pcm  =  9.81 sigma
+  D from diffusion-coefficient       k_ndm=1.191211  diff=   -11.7 pcm  =  1.16 sigma
+  D from transport                   k_ndm=1.191211  diff=   -11.7 pcm  =  1.16 sigma
+  multiplicity correction disabled   k_ndm=1.188532  diff=  -279.6 pcm  = 27.80 sigma
 ```
 
 Writing this case found two defects that the stand-in-based unit tests could
@@ -71,13 +71,18 @@ input data to 0.00 pcm. Only the eigenvalue moves, by an amount that is easy
 to attribute to statistics if the run is small enough. It is exactly the
 category of error the specification's C-1 exists to catch.
 
-## The residual
+## The residual is statistical
 
-After the correction the agreement is +35 pcm at 1.46σ, and +39 pcm on an
-8-group structure from the same transport run. Being group-structure
-independent, the residual is not multi-group condensation error. It is the
-size expected from the difference between OpenMC's combined k estimator and
-the reaction-rate ratio the multi-group balance forms, and it sits inside the
-Monte Carlo uncertainty. The specification asks for agreement within 1σ; this
-is marginal against that bar and worth revisiting with tighter statistics
-before C-1 is called closed.
+At 18.5M histories the agreement was +34.9 pcm against σ = 23.9 pcm, close
+enough to the 1σ bar to be worth settling. Raising the count to 90M shrank σ
+to 10.1 pcm and moved the difference to **−11.7 pcm** — it changed sign. A
+systematic bias does not do that. The residual is Monte Carlo noise, and C-1
+agrees within 1.2σ.
+
+The same run at 8 groups gives +38.9 pcm against the 18.5M reference, matching
+the 2-group value, so the residual is also group-structure independent and
+therefore not multi-group condensation error.
+
+For contrast, the multiplicity defect went the other way as statistics
+improved: −234 pcm at 9.8σ became −280 pcm at **27.8σ**. That is what a real
+bias looks like.

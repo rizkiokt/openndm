@@ -35,6 +35,16 @@ struct TwoNodeProblem {
   //! Discontinuity factors on the shared interface, per group.
   const double* adf_lo = nullptr;
   const double* adf_hi = nullptr;
+  //! External source, per group, as three node-average values per node for
+  //! the same quadratic fit the transverse leakage uses. Null for an
+  //! eigenvalue solve, where there is no external source.
+  //!
+  //! Omitting this term leaves a fixed-source nodal solve reconstructing the
+  //! within-node shape from the scattering and fission sources alone, which
+  //! is wrong wherever the external source carries any of the shape.
+  const double* src_lo = nullptr;  //!< 3*G: neighbour-, self, neighbour+
+  const double* src_hi = nullptr;
+
   //! Transverse leakage expansion, per group: three node-average values used
   //! for the quadratic fit, for each of the two nodes.
   const double* tl_lo = nullptr;  //!< 3*G: neighbour-, self, neighbour+

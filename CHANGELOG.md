@@ -12,14 +12,40 @@ All notable changes to OpenNDM are recorded here. The format follows
   the first of the specification's §6.3 cases. A uniform infinite medium runs
   in OpenMC with continuous-energy physics and the multi-group cross sections
   from that same run are solved by OpenNDM, isolating the translation path
-  from every other source of error. It agrees to 35 pcm, 1.5 sigma.
+  from every other source of error. It agrees to 12 pcm, 1.2 sigma.
 - Opt-in OpenMC integration tests (`tests/python/test_openmc_integration.py`),
   skipped unless OpenMC, its executable and a nuclear data library are all
   available.
 - `scattering_multiplicity` option on `from_mgxs_library`.
+- **Analytic verification suite** (`tests/python/test_analytic.py`), the
+  standard set a nodal diffusion code is verified against: a reflected slab
+  closed by a transcendental criticality condition, an albedo boundary against
+  its own analytic condition plus all three of its limits, and a method of
+  manufactured solutions for the full multi-group operator (V-2).
+- **First-order perturbation theory** against a direct re-solve (V-2's
+  companion, V-4). Checking that the adjoint eigenvalue equals the forward one
+  only confirms the operator was transposed; weighting a localised
+  perturbation with the adjoint flux tests its *shape*, and the error must
+  fall linearly with the perturbation rather than hitting a floor.
+- **Symmetry invariance**: a diagonally symmetric core map must give a
+  diagonally symmetric power, and rotating or mirroring a lopsided core must
+  be a pure relabelling.
+- `Model.surface_currents()` and `Model.neutron_balance()`. The node-wise
+  balance is the standard internal consistency check for a nodal code, and
+  closes to 3e-11 on all three kernels.
 
 ### Fixed
 
+- **The external source was missing from the two-node problem**, so a
+  fixed-source solve with a nodal kernel reconstructed the within-node shape
+  from the scattering and fission sources alone. Found by the manufactured
+  solution, where it made SANM and NEM nine times *worse* than plain finite
+  difference: a nodal kernel losing to FDM on a smooth problem is the
+  signature of a term missing from its local problem. The external source is
+  now expanded on the same quadratic basis as the transverse leakage, which
+  puts both nodal kernels ahead of FDM and raises their observed order of
+  accuracy above two. The eigenvalue path is untouched, since there is no
+  external source in it.
 - **(n,2n) and (n,3n) production was lost in translation**, worth 230 pcm on a
   UO2 and water mixture. OpenMC's `absorption` score excludes those reactions;
   the extra neutrons appear only as an excess in the `nu-scatter matrix` row

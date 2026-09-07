@@ -388,7 +388,8 @@ void CmfdSystem::compute_currents(
 }
 
 double CmfdSystem::nodal_update(const Kernel& kernel,
-    const std::vector<double>& flux, double k_eff, const Settings& s)
+    const std::vector<double>& flux, double k_eff, const Settings& s,
+    const std::vector<double>* external)
 {
   if (kernel.is_finite_difference()) return 0.0;
   compute_currents(flux, current_);
@@ -437,6 +438,8 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
   {
     std::vector<double> tl_lo(static_cast<std::size_t>(3) * G);
     std::vector<double> tl_hi(static_cast<std::size_t>(3) * G);
+    std::vector<double> src_lo(static_cast<std::size_t>(3) * G);
+    std::vector<double> src_hi(static_cast<std::size_t>(3) * G);
     std::vector<double> adf_lo(static_cast<std::size_t>(G));
     std::vector<double> adf_hi(static_cast<std::size_t>(G));
     std::vector<double> current(static_cast<std::size_t>(G));
@@ -481,6 +484,21 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
             xs_.adf_value(nl.composition, 2 * a + 1, g);
         adf_hi[static_cast<std::size_t>(g)] =
             xs_.adf_value(nr.composition, 2 * a + 0, g);
+        if (external) {
+          const auto& q = *external;
+          src_lo[static_cast<std::size_t>(0) * G + g] =
+              q[static_cast<std::size_t>(prev) * G + g];
+          src_lo[static_cast<std::size_t>(1) * G + g] =
+              q[static_cast<std::size_t>(L) * G + g];
+          src_lo[static_cast<std::size_t>(2) * G + g] =
+              q[static_cast<std::size_t>(R) * G + g];
+          src_hi[static_cast<std::size_t>(0) * G + g] =
+              q[static_cast<std::size_t>(L) * G + g];
+          src_hi[static_cast<std::size_t>(1) * G + g] =
+              q[static_cast<std::size_t>(R) * G + g];
+          src_hi[static_cast<std::size_t>(2) * G + g] =
+              q[static_cast<std::size_t>(next) * G + g];
+        }
       }
 
       TwoNodeProblem p;
@@ -496,6 +514,10 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
       p.adf_hi = adf_hi.data();
       p.tl_lo = tl_lo.data();
       p.tl_hi = tl_hi.data();
+      if (external) {
+        p.src_lo = src_lo.data();
+        p.src_hi = src_hi.data();
+      }
       p.h_lo_prev = nodes[static_cast<std::size_t>(prev)]
                         .width[static_cast<std::size_t>(a)];
       p.h_hi_next = nodes[static_cast<std::size_t>(next)]

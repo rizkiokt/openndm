@@ -42,8 +42,11 @@ public:
 
   //! Run the nonlinear two-node update, refreshing Dhat (FR-SOL-4).
   //! \return the largest relative change in Dhat, as a convergence indicator.
+  //! \param external optional node-average external source density,
+  //!        node*G + g; null for an eigenvalue solve.
   double nodal_update(const Kernel& kernel, const std::vector<double>& flux,
-      double k_eff, const Settings& s);
+      double k_eff, const Settings& s,
+      const std::vector<double>* external = nullptr);
 
   //! Fission source per node, \f$\sum_g \nu\Sigma_{f,g}\phi_g V\f$.
   void fission_source(

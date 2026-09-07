@@ -193,3 +193,232 @@ def test_infinite_medium_reproduces_k_infinity(tight):
     a1, a2, f2, s12 = 0.010, 0.080, 0.135, 0.020
     k_inf = f2 * s12 / (a2 * (a1 + s12))
     assert result.k_eff == pytest.approx(k_inf, abs=1.0e-10)
+
+
+# ------------------------------------------------- adjoint perturbation theory
+def _fission_inner_product(model, forward, adjoint):
+    r"""\langle \phi^\dagger, F \phi \rangle over the whole core."""
+    geometry, library = model.geometry, model.library
+    compositions = geometry.compositions
+    nu_fission = library.array("nu_fission")[compositions]
+    chi = library.array("chi")[compositions]
+    volume = geometry.volumes
+    production = np.einsum("ng,ng->n", nu_fission, forward)
+    return float(np.einsum("ng,ng,n->", adjoint, chi, production * volume))
+
+
+def test_v4_first_order_perturbation_theory_matches_a_direct_resolve(tight):
+    r"""V-4: the adjoint flux weighted against a perturbation.
+
+    Checking that the adjoint eigenvalue equals the forward one only confirms
+    that the operator was transposed; it says nothing about the adjoint flux
+    *shape*, which is what the adjoint is actually for. First-order
+    perturbation theory does test the shape:
+
+    .. math::
+
+        \delta(1/k) = \frac{\langle \phi^\dagger, \delta A \phi \rangle}
+                           {\langle \phi^\dagger, F \phi \rangle}
+
+    where the term in :math:`\delta\phi` drops out precisely because
+    :math:`\phi^\dagger` is the adjoint eigenfunction. A wrong adjoint shape
+    leaves the estimate biased by an amount that does not shrink with the
+    perturbation, so the error must fall linearly as the perturbation does.
+
+    Run on the finite difference kernel, so that the operator is a fixed
+    linear system and the nonlinear coupling coefficients cannot shift
+    underneath the perturbation.
+    """
+    geometry = iaea_geometry()
+    library = iaea_library()
+    model = openndm.Model(geometry, library, tight)
+
+    forward = np.asarray(model.solve(kernel="fdm").flux)
+    adjoint = np.asarray(model.solve_adjoint(kernel="fdm").flux)
+    k0 = model.solve(kernel="fdm").k_eff
+    denominator = _fission_inner_product(model, forward, adjoint)
+
+    # Perturb the thermal absorption of the inner fuel, composition 1.
+    base = library.composition(1).absorption[1]
+    target = geometry.compositions == 1
+    volume = geometry.volumes
+
+    errors = []
+    for delta in (1.0e-3, 5.0e-4, 2.5e-4):
+        numerator = float(
+            np.sum(adjoint[target, 1] * delta * volume[target] * forward[target, 1])
+        )
+        predicted = 1.0 / k0 + numerator / denominator
+
+        library.set_composition(1, absorption=[0.010, base + delta])
+        library.finalize(warn=False)
+        model.refresh()
+        actual = 1.0 / model.solve(kernel="fdm").k_eff
+        library.set_composition(1, absorption=[0.010, base])
+        library.finalize(warn=False)
+        model.refresh()
+
+        errors.append(abs(predicted - actual) / abs(actual - 1.0 / k0))
+
+    # First-order theory is exact to O(delta^2), so halving the perturbation
+    # must halve the relative error. A wrong adjoint shape gives a floor.
+    assert errors[-1] < 0.05, errors
+    for coarse, fine in itertools.pairwise(errors):
+        assert fine < 0.65 * coarse, errors
+
+
+def test_adjoint_weighting_differs_from_flux_weighting(tight):
+    """The adjoint must actually be doing something.
+
+    If the adjoint flux were quietly the forward flux, perturbation theory
+    above would still work for a uniform perturbation. Weighting a *localised*
+    perturbation is where the two diverge.
+    """
+    model = openndm.Model(iaea_geometry(), iaea_library(), tight)
+    forward = np.asarray(model.solve(kernel="fdm").flux)
+    adjoint = np.asarray(model.solve_adjoint(kernel="fdm").flux)
+    ratio = adjoint[:, 1] / forward[:, 1]
+    assert ratio.max() / ratio.min() > 1.05, ratio.max() / ratio.min()
+
+
+# ------------------------------------------------------ symmetry invariance
+def test_symmetric_core_map_gives_a_symmetric_power_distribution(tight):
+    """The IAEA map is symmetric about the diagonal, so its power must be too.
+
+    This is the cheapest possible check on the x and y indexing paths, and it
+    fails on any asymmetry between them: a transposed lattice index, a face
+    ordering mistake, or a boundary condition applied to the wrong axis.
+    """
+    model = openndm.Model(iaea_geometry(), iaea_library(), tight)
+    radial = model.solve().radial_power()
+    assert np.allclose(radial, radial.T, atol=1.0e-10), np.abs(
+        radial - radial.T
+    ).max()
+
+
+def _asymmetric_core():
+    """A deliberately lopsided core, so a rotation is a real change."""
+    core = np.full((3, 6, 6), 1, dtype=int)
+    core[:, :4, :4] = 0
+    core[:, 0, 0] = 2
+    core[:, 5, :] = openndm.INACTIVE
+    core[:, :, 5] = openndm.INACTIVE
+    return core
+
+
+def _rotation_library():
+    lib = openndm.XSLibrary(2, 3)
+    for index, (a2, f2) in enumerate(((0.080, 0.135), (0.100, 0.120), (0.130, 0.135))):
+        lib.set_composition(
+            index,
+            D=[1.5, 0.4],
+            absorption=[0.010, a2],
+            nu_fission=[0.0, f2],
+            kappa_fission=[0.0, f2],
+            chi=[1.0, 0.0],
+            scatter=[[0.0, 0.020], [0.0, 0.0]],
+        )
+    lib.finalize(warn=False)
+    return lib
+
+
+@pytest.mark.parametrize("kernel", ALL_KERNELS)
+def test_rotating_the_core_rotates_the_power_and_leaves_k_unchanged(kernel, tight):
+    """Rotating the whole problem must be a relabelling and nothing more."""
+    library = _rotation_library()
+    boundaries = dict.fromkeys(
+        ["x_min", "x_max", "y_min", "y_max"], "vacuum"
+    ) | {"z_min": "reflective", "z_max": "reflective"}
+
+    def solve(core):
+        geometry = openndm.Geometry.from_lattice(
+            core, pitch=20.0, boundaries=boundaries, outside="vacuum"
+        )
+        result = openndm.Model(geometry, library, tight).solve(kernel=kernel)
+        return result.k_eff, result.radial_power()
+
+    core = _asymmetric_core()
+    k0, power0 = solve(core)
+    k90, power90 = solve(np.rot90(core, k=1, axes=(1, 2)))
+
+    # The two solves take different iteration paths through the same problem,
+    # so they agree to the outer convergence tolerance rather than to machine
+    # precision. That is still 0.0001 pcm.
+    assert k90 == pytest.approx(k0, abs=1.0e-9)
+    assert np.allclose(np.rot90(power0, k=1), power90, atol=1.0e-7)
+
+
+def test_mirroring_the_core_mirrors_the_power(tight):
+    library = _rotation_library()
+    boundaries = dict.fromkeys(
+        ["x_min", "x_max", "y_min", "y_max"], "vacuum"
+    ) | {"z_min": "reflective", "z_max": "reflective"}
+
+    def solve(core):
+        geometry = openndm.Geometry.from_lattice(
+            core, pitch=20.0, boundaries=boundaries, outside="vacuum"
+        )
+        result = openndm.Model(geometry, library, tight).solve()
+        return result.k_eff, result.radial_power()
+
+    core = _asymmetric_core()
+    k0, power0 = solve(core)
+    k1, power1 = solve(core[:, ::-1, :])
+    assert k1 == pytest.approx(k0, abs=1.0e-9)
+    assert np.allclose(power0[::-1, :], power1, atol=1.0e-7)
+
+
+# --------------------------------------------------------- neutron balance
+@pytest.mark.parametrize("kernel", ALL_KERNELS)
+def test_node_neutron_balance_closes(kernel, tight):
+    """Every node must conserve neutrons to the iteration tolerance.
+
+    The standard internal consistency check for a nodal code. It fails on a
+    wrong coupling coefficient, a mis-assembled scattering term, or a boundary
+    condition applied to the wrong face, none of which need move k_eff far
+    enough to be obvious.
+    """
+    model = openndm.Model(iaea_geometry(planes=4), iaea_library(), tight)
+    model.solve(kernel=kernel)
+    residual = np.abs(model.neutron_balance())
+    assert residual.max() < 1.0e-8, residual.max()
+
+
+def test_neutron_balance_needs_a_solve_first(tight):
+    model = openndm.Model(iaea_geometry(), iaea_library(), tight)
+    with pytest.raises(openndm.InputError, match="no solution"):
+        model.neutron_balance()
+
+
+def test_global_balance_relates_leakage_absorption_and_production(tight):
+    """Core-wide: leakage plus absorption equals production over k.
+
+    Summing the node balance collapses every scattering term, so this is an
+    independent statement about the boundary treatment in particular.
+    """
+    geometry = iaea_geometry()
+    library = iaea_library()
+    model = openndm.Model(geometry, library, tight)
+    result = model.solve()
+
+    flux = np.asarray(result.flux)
+    volume = geometry.volumes
+    compositions = geometry.compositions
+    absorption = library.array("absorption")[compositions]
+    nu_fission = library.array("nu_fission")[compositions]
+
+    total_absorption = float(np.einsum("ng,ng,n->", absorption, flux, volume))
+    production = float(np.einsum("ng,ng,n->", nu_fission, flux, volume))
+
+    currents = model.surface_currents()
+    leakage = 0.0
+    for index, surface in enumerate(geometry._g.surfaces):
+        if not surface.is_boundary():
+            continue
+        # Outward normal points along +axis when the node is on the low side.
+        sign = 1.0 if surface.lo >= 0 else -1.0
+        leakage += sign * float(currents[index].sum()) * surface.area
+
+    assert leakage > 0.0, "a core with vacuum and zero-flux faces must leak"
+    balance = leakage + total_absorption - production / result.k_eff
+    assert abs(balance) / production < 1.0e-9, balance / production

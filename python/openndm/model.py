@@ -210,6 +210,7 @@ class Model:
         self.library = library
         self.settings = settings if settings is not None else Settings()
         self._solver = _core.Solver(geometry._g, library._lib)
+        self._last_result: Result | None = None
 
     # ---------------------------------------------------------------- solves
     def solve(self, settings: Settings | None = None, **overrides) -> Result:
@@ -233,11 +234,12 @@ class Model:
             If the outer iteration exhausts ``max_outer``. The exception
             carries the iteration count and the last residual.
         """
-        return Result(
+        self._last_result = Result(
             self._solver.solve(self._settings(settings, overrides)._s),
             self.geometry,
             self.library,
         )
+        return self._last_result
 
     def solve_adjoint(self, **overrides) -> Result:
         """Adjoint static eigenvalue (FR-MODE-2).
@@ -387,6 +389,75 @@ class Model:
                 self.solve(warm_start=warm_start and i > 0, **overrides)
             )
         return results
+
+    def surface_currents(self) -> np.ndarray:
+        """Net current on every surface, shape ``(n_surfaces, n_groups)``.
+
+        Positive along the surface normal, which runs from the surface's
+        low-side node to its high-side node. To form the leakage out of a
+        node, add ``+J * area`` for every surface where the node is on the low
+        side and ``-J * area`` where it is on the high side; that works
+        unchanged for a boundary surface, where only one side exists.
+
+        Requires a completed solve.
+        """
+        return self._solver.surface_currents()
+
+    def neutron_balance(self) -> np.ndarray:
+        r"""Residual of the node balance, shape ``(n_nodes, n_groups)``.
+
+        For a converged solution every entry is zero to within the iteration
+        tolerance:
+
+        .. math::
+
+            \sum_s \pm J_s A_s + \Sigma_{r,g} V \phi_g
+                - \sum_{g' \neq g} \Sigma_{s,g' \to g} V \phi_{g'}
+                - \frac{\chi_g}{k} \sum_{g'} \nu\Sigma_{f,g'} V \phi_{g'}
+                = 0
+
+        Residuals are normalised by the node's total reaction rate, so they
+        are dimensionless and comparable between nodes. This is the standard
+        internal consistency check for a nodal code: it fails on a wrong
+        coupling coefficient, a mis-assembled scattering term or a boundary
+        condition applied to the wrong face, none of which need move k_eff
+        very far.
+        """
+        result = self._last_result
+        if result is None:
+            raise InputError("no solution available; call solve() first")
+
+        geometry = self.geometry
+        library = self.library
+        n_groups = library.n_groups
+        flux = np.asarray(result.flux).reshape(geometry.n_nodes, n_groups)
+        volume = geometry.volumes
+        compositions = geometry.compositions
+
+        removal = library.array("removal")[compositions]
+        nu_fission = library.array("nu_fission")[compositions]
+        chi = library.array("chi")[compositions]
+        scatter = library.array("scatter")[compositions]
+
+        residual = removal * flux * volume[:, None]
+        # In-scatter, excluding the within-group term which never leaves.
+        in_scatter = np.einsum("nij,ni->nj", scatter, flux)
+        in_scatter -= np.einsum("nii,ni->ni", scatter, flux)
+        residual -= in_scatter * volume[:, None]
+        fission = np.einsum("ng,ng->n", nu_fission, flux)
+        residual -= chi * (fission / result.k_eff)[:, None] * volume[:, None]
+
+        currents = self.surface_currents()
+        for index, surface in enumerate(geometry._g.surfaces):
+            flow = currents[index] * surface.area
+            if surface.lo >= 0:
+                residual[surface.lo] += flow
+            if surface.hi >= 0:
+                residual[surface.hi] -= flow
+
+        scale = removal * flux * volume[:, None]
+        scale = np.maximum(np.abs(scale), np.abs(scale).max() * 1.0e-12)
+        return residual / scale
 
     # --------------------------------------------------------- manipulation
     def refresh(self) -> None:

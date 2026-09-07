@@ -63,6 +63,10 @@ public:
     std::vector<double> l1(static_cast<std::size_t>(2 * G));
     std::vector<double> l2(static_cast<std::size_t>(2 * G));
     std::vector<double> l0(static_cast<std::size_t>(2 * G));
+    // External source, expanded on the same quadratic basis as the leakage.
+    std::vector<double> q_ext0(static_cast<std::size_t>(2 * G), 0.0);
+    std::vector<double> q_ext1(static_cast<std::size_t>(2 * G), 0.0);
+    std::vector<double> q_ext2(static_cast<std::size_t>(2 * G), 0.0);
 
     // Fixed per-node data: the analytic basis and the transverse leakage fit.
     for (int side = 0; side < 2; ++side) {
@@ -87,6 +91,15 @@ public:
         l0[e] = tl[static_cast<std::size_t>(G) + gg];
         l1[e] = fit[0];
         l2[e] = fit[1];
+        const double* sq = side == 0 ? p.src_lo : p.src_hi;
+        if (sq) {
+          const auto sfit =
+              detail::leakage_fit(sq[gg], sq[static_cast<std::size_t>(G) + gg],
+                  sq[static_cast<std::size_t>(2 * G) + gg], h_prev, h, h_next);
+          q_ext0[e] = sq[static_cast<std::size_t>(G) + gg];
+          q_ext1[e] = sfit[0];
+          q_ext2[e] = sfit[1];
+        }
         // A flat first guess for every group; the sweeps below refine it.
         ex[e].C = ex[e].phibar / ex[e].basis.even_avg;
       }
@@ -101,9 +114,9 @@ public:
           const double h = side == 0 ? p.h_lo : p.h_hi;
           const std::size_t e = static_cast<std::size_t>(side) * G + g;
           const std::size_t gg = static_cast<std::size_t>(g);
-          double q0 = -l0[e];
-          double q1 = -l1[e];
-          double q2 = -l2[e];
+          double q0 = q_ext0[e] - l0[e];
+          double q1 = q_ext1[e] - l1[e];
+          double q2 = q_ext2[e] - l2[e];
           for (int gp = 0; gp < G; ++gp) {
             if (gp == g) continue;
             const std::size_t ep = static_cast<std::size_t>(side) * G + gp;

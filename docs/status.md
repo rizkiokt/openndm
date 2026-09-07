@@ -41,7 +41,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 
 | ID | State | Notes |
 |---|---|---|
-| FR-OMC-1 | done | `from_mgxs_library`, validated end to end against a real OpenMC run (C-1, `tests/validation/`). Reproduces OpenMC's k_inf to 35 pcm, 1.5 sigma. Handles (n,xn) scattering multiplicity, which is worth 230 pcm and which the stand-in tests could not have caught. |
+| FR-OMC-1 | done | `from_mgxs_library`, validated end to end against a real OpenMC run (C-1, `tests/validation/`). Reproduces OpenMC's k_inf to 12 pcm, 1.2 sigma. Handles (n,xn) scattering multiplicity, which is worth 230 pcm and which the stand-in tests could not have caught. |
 | FR-OMC-2 | partial | Any domain type is accepted and each domain becomes a composition. Mapping mesh elements onto nodes is left to the caller ordering the domains to match the core map. |
 | FR-OMC-3 | partial | `from_mgxs_file` reads `mgxs.h5`. Untested against a real file. |
 | FR-OMC-4 | done | `from_statepoint`. |
@@ -75,7 +75,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 |---|---|---|
 | FR-MODE-1 | done | |
 | FR-MODE-2 | done | Reuses the coupling coefficients converged by a forward solve. |
-| FR-MODE-3 | done | Verified against exact algebra in a leakage-free box. |
+| FR-MODE-3 | done | Verified against exact algebra in a leakage-free box, and against a method of manufactured solutions for the full multi-group operator. |
 | FR-MODE-4 | done | Secant with a bisection fallback; the boron model is supplied by the caller. |
 | FR-MODE-5 | partial | Achievable through `Model.sweep`, but there is no dedicated rod-worth API. |
 | FR-MODE-6 | not started | Needs FR-TH. |
@@ -142,6 +142,10 @@ temperature or density, and cross sections reach the solver only through
 | NFR-QA-5 | done | Semantic versioning and a changelog. |
 | NFR-QA-6 | partial | Markdown documentation covering theory, architecture, status and contribution. No Sphinx build and no notebooks. |
 | NFR-QA-7 | partial | [`theory.md`](theory.md) writes out every equation the code currently solves, with the discretisation. It covers only what is implemented. |
+| V-1 | done | Analytic bare cuboid, and a reflected slab against its transcendental criticality condition. |
+| V-2 | done | Method of manufactured solutions for the multi-group operator, with the observed order of accuracy of each kernel. |
+| V-3 | done | Coarse nodal against refined finite difference; SANM against NEM to 0.08 pcm. |
+| V-4 | done | Adjoint eigenvalue equality, and first-order perturbation theory against a direct re-solve, which tests the adjoint flux shape rather than only the operator transpose. |
 | NFR-EXT-1 | done | See FR-GEO-6. |
 | NFR-EXT-2 | done | Group count, precursor count and branch axes are all run-time. |
 | NFR-EXT-3 | partial | The wheel job is configured for cp310–cp313 on manylinux and macOS but has not been run. |
@@ -156,7 +160,7 @@ C-1 from the specification's §6.3 runs a uniform infinite medium in OpenMC
 with continuous-energy physics, hands the multi-group cross sections tallied
 from that same run to OpenNDM, and compares eigenvalues. There is no spatial
 discretisation, no leakage and no homogenisation error, so the case isolates
-the translation and nothing else. It currently agrees to 35 pcm, 1.5 sigma,
+the translation and nothing else. It agrees to 12 pcm, 1.2 sigma, at 90M histories,
 after fixing the two defects it found: `MGXS.get_xs` takes integer domain ids
 rather than domain objects, and OpenMC's absorption score excludes (n,2n).
 The second was worth 230 pcm and had no symptom but the eigenvalue.

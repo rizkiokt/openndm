@@ -64,6 +64,11 @@ public:
     std::vector<double> l0(static_cast<std::size_t>(2 * G));
     std::vector<double> l1(static_cast<std::size_t>(2 * G));
     std::vector<double> l2(static_cast<std::size_t>(2 * G));
+    // External source on the same quadratic basis. Only its first and second
+    // moments reach the NEM unknowns: a flat source cannot change a shape
+    // whose node average is already fixed by the coarse-mesh solution.
+    std::vector<double> q_ext1(static_cast<std::size_t>(2 * G), 0.0);
+    std::vector<double> q_ext2(static_cast<std::size_t>(2 * G), 0.0);
     std::vector<double> sr_eff(static_cast<std::size_t>(2 * G));
 
     for (int side = 0; side < 2; ++side) {
@@ -92,6 +97,14 @@ public:
         l1[e] = fit[0];
         l2[e] = fit[1];
         (void)l0[e];
+        const double* sq = side == 0 ? p.src_lo : p.src_hi;
+        if (sq) {
+          const auto sfit =
+              detail::leakage_fit(sq[gg], sq[static_cast<std::size_t>(G) + gg],
+                  sq[static_cast<std::size_t>(2 * G) + gg], h_prev, h, h_next);
+          q_ext1[e] = sfit[0];
+          q_ext2[e] = sfit[1];
+        }
       }
     }
 
@@ -102,8 +115,8 @@ public:
           const Composition& c = side == 0 ? cl : cr;
           const std::size_t e = static_cast<std::size_t>(side) * G + g;
           const std::size_t gg = static_cast<std::size_t>(g);
-          double q1 = -l1[e];
-          double q2 = -l2[e];
+          double q1 = q_ext1[e] - l1[e];
+          double q2 = q_ext2[e] - l2[e];
           for (int gp = 0; gp < G; ++gp) {
             if (gp == g) continue;
             const std::size_t ep = static_cast<std::size_t>(side) * G + gp;

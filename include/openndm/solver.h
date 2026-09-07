@@ -54,6 +54,17 @@ public:
   const std::vector<double>& flux() const { return flux_; }
   double k_eff() const { return k_eff_; }
 
+  //! Net current on every surface for the retained flux, surface*G + g.
+  //!
+  //! Positive along the surface normal, which runs from the low-side node to
+  //! the high-side node. A caller checking the node balance adds \c +J*A to
+  //! the low-side node and \c -J*A to the high-side one, which works
+  //! unchanged for a boundary surface where only one side exists.
+  std::vector<double> surface_currents() const;
+
+  //! Number of surfaces, so a binding can shape the current array.
+  int geometry_surfaces() const { return geom_.n_surfaces(); }
+
   CmfdSystem& system() { return cmfd_; }
 
 private:

@@ -245,7 +245,7 @@ Result Solver::solve_fixed_source(
     if (!kernel->is_finite_difference() && outer >= settings.nodal_start &&
         ((outer - settings.nodal_start) % settings.nodal_update_interval ==
             0)) {
-      cmfd_.nodal_update(*kernel, flux_, 1.0, settings);
+      cmfd_.nodal_update(*kernel, flux_, 1.0, settings, &source);
       cmfd_.assemble(1.0);
     }
     cmfd_.solve_fixed_source(source, flux_, settings);
@@ -279,6 +279,16 @@ Result Solver::solve_fixed_source(
       std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
           .count();
   return result;
+}
+
+std::vector<double> Solver::surface_currents() const
+{
+  if (!has_solution_) {
+    throw InputError("no solution available; call solve() first");
+  }
+  std::vector<double> current;
+  cmfd_.compute_currents(flux_, current);
+  return current;
 }
 
 void Solver::compute_power(std::vector<double>& power) const

@@ -103,8 +103,15 @@ print(result.f_q, result.f_dh)   # peaking factors
 - **V-1, analytic buckling.** A bare homogeneous cuboid against
   `k = νΣf / (Σa + D B²)`. Every kernel converges second order; at 64 nodes per
   side the error is 0.1 pcm.
-- **V-2, convergence order.** The observed spatial order of each kernel,
-  measured over three mesh refinements.
+- **V-1, reflected slab.** A core plus reflector against the transcendental
+  criticality condition `D₁B tan(B a) = D₂κ coth(κb)`, which exercises a
+  material interface, a reflector and two boundary conditions at once.
+- **Albedo boundary.** Against its own analytic condition `D B tan(B a) = γ`
+  across five albedo values, plus all three limits: β=1 is reflective, β=0 is
+  vacuum, β=−1 is zero flux.
+- **V-2, manufactured solutions.** The full multi-group operator, scattering
+  and fission included, against a solution chosen in advance, with the
+  observed order of accuracy of each kernel.
 - **V-3, kernel consistency.** Coarse-mesh SANM and NEM against a refined FDM
   solution of the same problem. On the IAEA-2D core map, SANM at one node per
   assembly lands 18 pcm from the fine-mesh converged eigenvalue, and all three
@@ -115,6 +122,13 @@ print(result.f_q, result.f_dh)   # peaking factors
   answer.
 - **V-4, adjoint reciprocity.** Forward and adjoint eigenvalues agree to under
   1 pcm while the flux shapes differ.
+- **V-4, perturbation theory.** First-order adjoint-weighted reactivity
+  against a direct re-solve. This tests the adjoint flux *shape*; eigenvalue
+  equality alone only confirms the operator was transposed.
+- **Neutron balance.** Every node conserves neutrons to 3e-11, and the
+  core-wide leakage-plus-absorption-equals-production identity closes to 1e-9.
+- **Symmetry.** A symmetric core map gives a symmetric power; rotating or
+  mirroring a lopsided core is a pure relabelling.
 - **Determinism.** Bit-identical results on 1, 2, 4 and 8 threads.
 
 ### OpenMC coupling
@@ -123,7 +137,7 @@ print(result.f_q, result.f_dh)   # peaking factors
 uniform infinite medium in OpenMC with continuous-energy physics, whose
 multi-group cross sections are then solved by OpenNDM. It isolates the
 translation path from every other source of error, and reproduces OpenMC's
-`k_inf` to **35 pcm, 1.5σ**.
+`k_inf` to **12 pcm, 1.2σ** over 90M histories.
 
 Writing it found two defects that stand-in test doubles could not have caught,
 including one worth 230 pcm that fails silently — see
