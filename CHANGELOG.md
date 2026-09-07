@@ -106,6 +106,10 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Changed
 
+- CI linters are pinned, the wheel job builds against `manylinux_2_28` because
+  h5py ships nothing older, and the OpenMC coupling job runs on manual
+  dispatch with an explicit nuclear data URL rather than a hard-coded one. See
+  `tests/validation/README.md` for why that job cannot run on every push.
 - Both IAEA decks now assert against their published eigenvalues rather than
   against recorded baselines. All three benchmarks meet the specification's
   100 pcm acceptance criterion for static problems.

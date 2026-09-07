@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      cross_sections_url:
+        description: >-
+          URL of a nuclear data archive containing cross_sections.xml. Leave
+          empty to skip the OpenMC coupling validation, which cannot run
+          without one.
+        required: false
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -171,11 +179,20 @@ jobs:
           PY
 
   openmc-coupling:
-    name: OpenMC coupling validation (C-1)
+    name: OpenMC coupling validation (C-1, C-2)
     runs-on: ubuntu-latest
-    # The nuclear data download is large, so this runs on pushes and on
-    # demand rather than on every pull request.
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Manual trigger only, and it needs a nuclear data library URL supplied at
+    # dispatch time. There is no stable public URL to hard-code: the OpenMC
+    # official data libraries are served from rotating Box links and the page
+    # listing them is itself a 404 as of this writing. A job that silently
+    # skips when it cannot fetch data is worse than no job, because the
+    # silence is indistinguishable from success, so this one simply does not
+    # run unless it has been given somewhere to fetch from.
+    #
+    # C-1 and C-2 are otherwise run locally; see tests/validation/README.md.
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.cross_sections_url != ''
     defaults:
       run:
         shell: bash -el {0}
@@ -194,17 +211,27 @@ jobs:
       - name: Install OpenNDM
         run: pip install .
 
-      - name: Fetch a small nuclear data library
-        run: |
-          python -m openmc.data.download --help >/dev/null 2>&1 || true
-          # ENDF/B-VIII.0 in the OpenMC HDF5 distribution.
-          curl -sL -o nndc.tar.xz \
-            https://anl.box.com/shared/static/uhbxlrx7hvxqw27psymfbhi7bx7s6u6a.xz
-          tar -xf nndc.tar.xz
-          echo "OPENMC_CROSS_SECTIONS=$PWD/endfb-viii.0-hdf5/cross_sections.xml" \
-            >> "$GITHUB_ENV"
+      - name: Cache the nuclear data library
+        id: data
+        uses: actions/cache@v4
+        with:
+          path: nuclear-data
+          key: xs-${{ hashFiles('.github/workflows/ci.yml') }}-${{ inputs.cross_sections_url }}
 
-      - name: C-1 homogeneous consistency (FR-OMC-1)
+      - name: Fetch the nuclear data library
+        if: steps.data.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p nuclear-data
+          curl -fsSL "${{ inputs.cross_sections_url }}" -o data.tar.xz
+          tar -xf data.tar.xz -C nuclear-data --strip-components=1
+
+      - name: Point OpenMC at it
+        run: |
+          xs=$(find nuclear-data -name cross_sections.xml | head -1)
+          test -n "$xs" || { echo "no cross_sections.xml in the archive"; exit 1; }
+          echo "OPENMC_CROSS_SECTIONS=$PWD/$xs" >> "$GITHUB_ENV"
+
+      - name: C-1 and C-2 as unit tests (FR-OMC-1, FR-OMC-7)
         run: pytest tests/python/test_openmc_integration.py -v
 
       - name: The full C-1 and C-2 cases
@@ -227,9 +254,13 @@ jobs:
         uses: pypa/cibuildwheel@v2.21
         env:
           CIBW_BUILD: cp310-* cp311-* cp312-* cp313-*
-          # h5py, a runtime dependency, publishes no musllinux wheels, so the
-          # test step would build it from source in a container with no HDF5.
+          # h5py, a runtime dependency, publishes no musllinux wheels and no
+          # manylinux2014 wheels either, only manylinux_2_28. Without both of
+          # these the test step builds it from source in a container with no
+          # HDF5 and the job dies after the OpenNDM wheel has built fine.
           CIBW_SKIP: "*_i686 *-musllinux*"
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >
             pytest {project}/tests/python -q

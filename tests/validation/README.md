@@ -4,6 +4,20 @@ The cases in §6.3 of the specification. Unlike `tests/python/`, these need a
 working OpenMC installation *and* a nuclear data library, so they are opt-in
 rather than part of the default suite.
 
+**These do not run on every push.** There is no stable public URL for a
+nuclear data library to hard-code into CI: the official OpenMC libraries are
+served from rotating Box links, and the page listing them is currently a 404.
+The `openmc-coupling` job therefore runs only on a manual workflow dispatch,
+and only when given a `cross_sections_url` to fetch from. A job that silently
+skipped when it could not find data would be worse than no job at all,
+because the silence would be indistinguishable from success.
+
+What *does* run on every push is `tests/python/test_gc.py`, 45 tests covering
+the translation logic against stand-ins that enforce OpenMC's real API
+contracts, and `tests/python/test_openmc_integration.py`, which runs a small
+C-1 and C-2 whenever OpenMC, its executable and a data library all happen to
+be present.
+
 ```bash
 export OPENMC_CROSS_SECTIONS=/path/to/cross_sections.xml
 export PATH=/path/to/openmc/bin:$PATH        # the `openmc` executable

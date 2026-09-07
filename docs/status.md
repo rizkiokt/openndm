@@ -137,7 +137,7 @@ temperature or density, and cross sections reach the solver only through
 | NFR-PERF-1..7 | not measured | No performance acceptance runs have been done on the reference hardware. The IAEA-2D quarter core at one node per assembly solves in about 15 ms and the IAEA-3D core with 19 axial planes in about 150 ms, both single-threaded, which suggests the targets are reachable, but that is an observation and not an acceptance test. |
 | NFR-QA-1 | partial | Catch2 for C++ and pytest for Python. Coverage is collected in CI but the 80% line coverage gate is not enforced. |
 | NFR-QA-2 | done | Every deck runs in CI against its published reference with an explicit tolerance. All three meet the 100 pcm acceptance criterion for static benchmarks. |
-| NFR-QA-3 | done | Linux gcc and clang, macOS clang, Python 3.10 to 3.13. Windows is not built and is not documented as WSL-only. |
+| NFR-QA-3 | done | Linux gcc and clang, macOS clang, Python 3.10 to 3.13, all green. Windows is not built and is not documented as WSL-only. The OpenMC coupling job runs on manual dispatch only, because no stable public nuclear data URL exists to hard-code; see `tests/validation/README.md`. |
 | NFR-QA-4 | done | clang-format and ruff, both enforced. |
 | NFR-QA-5 | done | Semantic versioning and a changelog. |
 | NFR-QA-6 | partial | Markdown documentation covering theory, architecture, status and contribution. No Sphinx build and no notebooks. |
