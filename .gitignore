@@ -1,0 +1,40 @@
+# Build
+build/
+_skbuild/
+dist/
+*.egg-info/
+*.so
+*.dylib
+*.dll
+*.a
+*.o
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Outputs
+*.h5
+!tests/**/*ref*.h5
+statepoint*.h5
+summary.h5
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Docs
+docs/_build/
+docs/api/_autosummary/
