@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install linters
+        run: pip install ruff
+      - name: ruff (NFR-QA-4)
+        run: ruff check python tests benchmarks
+      - name: clang-format (NFR-QA-4)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y clang-format
+          find include src -name '*.h' -o -name '*.cpp' \
+            | xargs clang-format --dry-run --Werror
+
+  test:
+    name: ${{ matrix.os }} / ${{ matrix.compiler }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, compiler: gcc, python: "3.10" }
+          - { os: ubuntu-latest, compiler: gcc, python: "3.12" }
+          - { os: ubuntu-latest, compiler: gcc, python: "3.13" }
+          - { os: ubuntu-latest, compiler: clang, python: "3.12" }
+          - { os: macos-latest, compiler: clang, python: "3.12" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Select the compiler
+        if: runner.os == 'Linux'
+        run: |
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            echo "CC=clang"  >> "$GITHUB_ENV"
+            echo "CXX=clang++" >> "$GITHUB_ENV"
+          else
+            echo "CC=gcc"  >> "$GITHUB_ENV"
+            echo "CXX=g++" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install OpenMP for AppleClang
+        if: runner.os == 'macOS'
+        run: |
+          brew install libomp
+          echo "OpenMP_ROOT=$(brew --prefix libomp)" >> "$GITHUB_ENV"
+
+      - name: Build and install
+        run: pip install -v '.[dev]'
+
+      - name: Python tests
+        run: pytest tests/python -v --durations=10
+
+      - name: Verify the analytic benchmark
+        working-directory: benchmarks/analytic
+        run: python run.py
+
+  cpp-tests:
+    name: C++ unit tests and coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build lcov
+
+      - name: Configure with coverage instrumentation
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DOPENNDM_BUILD_TESTS=ON \
+            -DOPENNDM_BUILD_PYTHON=OFF \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="--coverage -O0"
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Run (NFR-QA-1)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Collect coverage
+        run: |
+          lcov --capture --directory build --output-file coverage.info \
+               --ignore-errors mismatch,gcov
+          lcov --remove coverage.info '/usr/*' '*/_deps/*' '*/tests/*' \
+               --output-file coverage.info
+          lcov --list coverage.info
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpp-coverage
+          path: coverage.info
+
+  no-openmc:
+    name: import without OpenMC (FR-OMC-14)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install .
+      - name: The solver must work with OpenMC absent
+        run: |
+          python - <<'PY'
+          import importlib.util
+          import sys
+
+          assert importlib.util.find_spec("openmc") is None, \
+              "this job is meaningless with OpenMC installed"
+
+          import numpy as np
+          import openndm
+
+          lib = openndm.XSLibrary(1, 1)
+          lib.set_composition(0, D=[1.0], absorption=[0.08], nu_fission=[0.1],
+                              kappa_fission=[0.1], chi=[1.0], scatter=[[0.0]])
+          lib.finalize()
+          geom = openndm.Geometry.from_lattice(
+              np.zeros((8, 8, 8), int), pitch=12.5,
+              boundaries=dict.fromkeys(
+                  ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"],
+                  "zero_flux"))
+          k = openndm.Model(geom, lib, openndm.Settings(verbosity=0)).solve().k_eff
+          reference = 0.1 / (0.08 + 3 * (np.pi / 100) ** 2)
+          error = 1e5 * (k - reference)
+          print(f"k_eff = {k:.8f}, {error:+.2f} pcm from analytic")
+          assert abs(error) < 25.0, error
+
+          # Importing openndm must not have dragged OpenMC in.
+          assert "openmc" not in sys.modules
+          PY
+
+  wheels:
+    name: build wheels
+    runs-on: ${{ matrix.os }}
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-13, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build wheels (NFR-EXT-3)
+        uses: pypa/cibuildwheel@v2.21
+        env:
+          CIBW_BUILD: cp310-* cp311-* cp312-* cp313-*
+          CIBW_SKIP: "*-musllinux_i686 *_i686"
+          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_COMMAND: >
+            pytest {project}/tests/python -q
+            -k "not benchmark"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl

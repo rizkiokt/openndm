@@ -63,6 +63,9 @@ ignore = ["B028"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011"]
+# Benchmark decks are standalone scripts that put the shared module on the
+# path before importing it, so imports cannot all sit at the top.
+"benchmarks/*/run.py" = ["E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["openndm"]
