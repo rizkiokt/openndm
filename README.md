@@ -55,6 +55,17 @@ pip install '.[dev]'     # plus pytest, ruff and the docs toolchain
 
 OpenMC is optional and only needed for `openndm.gc`.
 
+## Examples
+
+Four executed notebooks live in [`examples/`](examples/). The one the package
+exists for is
+[`02_openmc_to_openndm.ipynb`](examples/02_openmc_to_openndm.ipynb): an OpenMC
+lattice calculation becomes a nodal core calculation with no format conversion
+written by hand. On the run committed there it reproduces OpenMC's `k_inf` to
+12 pcm, 0.2σ.
+
+[`docs/user-guide.md`](docs/user-guide.md) is the reference.
+
 ## Quick start
 
 ```python
@@ -166,6 +177,8 @@ catch.
 
 | Document | Contents |
 |---|---|
+| [`docs/user-guide.md`](docs/user-guide.md) | **How to drive the solver.** Start here |
+| [`examples/`](examples/) | Four executed notebooks, including OpenMC to OpenNDM end to end |
 | [`docs/requirements.md`](docs/requirements.md) | The full specification |
 | [`docs/status.md`](docs/status.md) | Requirement-by-requirement implementation state |
 | [`docs/theory.md`](docs/theory.md) | Every equation the code solves, with the discretisation written out |

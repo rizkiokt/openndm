@@ -140,7 +140,7 @@ temperature or density, and cross sections reach the solver only through
 | NFR-QA-3 | done | Linux gcc and clang, macOS clang, Python 3.10 to 3.13, all green. Windows is not built and is not documented as WSL-only. The OpenMC coupling job runs on manual dispatch only, because no stable public nuclear data URL exists to hard-code; see `tests/validation/README.md`. |
 | NFR-QA-4 | done | clang-format and ruff, both enforced. |
 | NFR-QA-5 | done | Semantic versioning and a changelog. |
-| NFR-QA-6 | partial | Markdown documentation covering theory, architecture, status and contribution. No Sphinx build and no notebooks. |
+| NFR-QA-6 | partial | A user guide, a theory manual, architecture notes, this status map, and four worked notebooks in `examples/`, all executed with their outputs committed. No Sphinx build and no generated API reference. |
 | NFR-QA-7 | partial | [`theory.md`](theory.md) writes out every equation the code currently solves, with the discretisation. It covers only what is implemented. |
 | V-1 | done | Analytic bare cuboid, and a reflected slab against its transcendental criticality condition. |
 | V-2 | done | Method of manufactured solutions for the multi-group operator, with the observed order of accuracy of each kernel. |

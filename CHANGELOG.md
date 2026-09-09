@@ -8,6 +8,13 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **A user guide** (`docs/user-guide.md`), covering the whole API from
+  installation to troubleshooting, with every code snippet executed against
+  the build.
+- **Four worked notebooks** in `examples/`, each executed end to end with its
+  outputs committed. `02_openmc_to_openndm.ipynb` is the workflow the package
+  exists for: an OpenMC lattice run becomes a nodal core calculation with no
+  format conversion in between, reproducing OpenMC's k_inf to 12 pcm.
 - **C-1 OpenMC coupling validation** (`tests/validation/c1_homogeneous.py`),
   the first of the specification's §6.3 cases. A uniform infinite medium runs
   in OpenMC with continuous-energy physics and the multi-group cross sections
@@ -50,6 +57,11 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Fixed
 
+- **The critical boron search reported the wrong cause on failure.** An
+  unreachable target and a callback that does nothing both surfaced as "k_eff
+  is insensitive to boron", which sends the reader looking in the wrong place.
+  The two are now distinguished, and the unreachable case names the range of
+  k_eff that was actually attainable. Found while writing the notebooks.
 - **`compute_adf` returned its groups in increasing-energy order**, while
   `from_mgxs_library` and the solver both put group 1 at the highest energy,
   so every discontinuity factor was applied to the wrong group. An

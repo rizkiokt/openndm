@@ -337,8 +337,37 @@ class Model:
             if abs(f1) < tolerance:
                 return BoronSearchResult(x1, r1, iteration, history)
             if f1 == f0:
+                # Two evaluations gave the same eigenvalue, so the secant step
+                # is undefined. The usual cause is not an insensitive model but
+                # an unreachable target: the search walks to a bracket edge,
+                # gets clamped, and evaluates the same concentration twice.
+                # Saying so is far more useful than reporting insensitivity.
+                observed = [k for _, k in history]
+                low, high = min(observed), max(observed)
+                if high - low < 1.0e-12:
+                    raise ConvergenceError(
+                        f"k_eff did not respond to boron at all: it stayed at "
+                        f"{high:.6f} across {len(history)} concentrations "
+                        f"between {history[0][0]:.1f} and {history[-1][0]:.1f} "
+                        f"ppm. Check that apply_boron mutates the library it "
+                        f"is handed and re-finalizes it.",
+                        iterations=iteration,
+                        residual=abs(f1),
+                    )
+                if not low <= target_k <= high:
+                    raise ConvergenceError(
+                        f"k_eff = {target_k} is not reachable within the "
+                        f"bracket {bracket} ppm: over {len(history)} "
+                        f"evaluations k_eff stayed between {low:.6f} and "
+                        f"{high:.6f}. Widen the bracket, or check that boron "
+                        f"moves k_eff in the direction you expect.",
+                        iterations=iteration,
+                        residual=abs(f1),
+                    )
                 raise ConvergenceError(
-                    "boron search stalled: k_eff is insensitive to boron",
+                    f"boron search stalled: k_eff did not change between "
+                    f"{x0:.1f} and {x1:.1f} ppm. Check that apply_boron "
+                    f"mutates the library it is handed and re-finalizes it.",
                     iterations=iteration,
                     residual=abs(f1),
                 )
@@ -422,6 +451,12 @@ class Model:
         coupling coefficient, a mis-assembled scattering term or a boundary
         condition applied to the wrong face, none of which need move k_eff
         very far.
+
+        The residual is bounded by whichever convergence criterion is looser,
+        the inner linear solve or the outer iteration. At the library defaults
+        expect around ``1e-5``, set by ``Settings.inner_tolerance``; tightening
+        both that and ``fission_source_tolerance`` brings it to about
+        ``1e-10``. Compare against those rather than against a fixed number.
         """
         result = self._last_result
         if result is None:

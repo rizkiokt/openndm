@@ -264,6 +264,32 @@ def test_critical_boron_search_finds_the_target(tight):
     assert search.iterations <= 20
 
 
+def test_boron_search_says_when_the_target_is_out_of_reach(tight):
+    """The common failure is an unreachable target, not an inert model.
+
+    A subcritical core cannot be made critical by adding boron, and the search
+    then walks to a bracket edge and evaluates the same concentration twice.
+    Reporting that as insensitivity to boron sends the reader looking in the
+    wrong place, so the message names the reachable range instead.
+    """
+    library = iaea_library()
+    base = [library.composition(c).absorption[1] for c in range(3)]
+
+    def apply_boron(lib, ppm):
+        for c in range(3):
+            lib.set_composition(c, absorption=[0.010, base[c] + 1.0e-5 * ppm])
+        lib.finalize(warn=False)
+
+    model = openndm.Model(iaea_geometry(), library, tight)
+    with pytest.raises(openndm.ConvergenceError, match="not reachable") as excinfo:
+        # This core is supercritical across the whole range, so a target of
+        # 0.5 cannot be met by any concentration inside the bracket.
+        model.search_boron(
+            apply_boron, target_k=0.5, guess=100.0, bracket=(0.0, 200.0)
+        )
+    assert "k_eff stayed between" in str(excinfo.value)
+
+
 def test_boron_search_reports_failure_when_boron_has_no_effect(tight):
     model = openndm.Model(iaea_geometry(), iaea_library(), tight)
 
@@ -272,8 +298,9 @@ def test_boron_search_reports_failure_when_boron_has_no_effect(tight):
         # k_eff does not respond and say so rather than spin.
         return None
 
-    with pytest.raises(openndm.ConvergenceError, match=r"insensitive|did not reach"):
+    with pytest.raises(openndm.ConvergenceError, match="did not respond") as excinfo:
         model.search_boron(no_op, target_k=1.0, guess=500.0, max_iterations=4)
+    assert "apply_boron" in str(excinfo.value)
 
 
 def test_sweep_runs_every_case(tight):

@@ -128,6 +128,32 @@ published reference to 6 pcm below it. A single assembly is worth roughly
 100 pcm in a core this size, which is exactly the scale of a dropped cell —
 and exactly small enough to be mistaken for a solver problem.
 
+## Benchmarks attempted but not shipped
+
+**BIBLIS-2D.** The eight-composition cross section set is transcribed and
+looks internally consistent: one composition has no fission and is clearly the
+reflector, and the rest are plausible PWR fuels. The quarter-core map could
+not be verified and so the deck is not shipped.
+
+Two things say the map is wrong. It uses only five of the eight defined
+compositions, and a benchmark that bothers to define eight would use them.
+And its peripheral band is composition 4, which the cross section data says is
+fuel, rather than the non-fissile composition 3. Relabelling the band to 3
+moves the eigenvalue from +253 pcm to −194 pcm against the published 1.02513
+without fixing the unused compositions, so neither reading is right.
+
+The solver is not implicated: all three kernels converge to the same value,
+1.027551 at eight nodes per assembly, so whatever is wrong is in the deck.
+
+Reconstructing the map by searching for whatever reproduces 1.02513 is not an
+option here in the way it was for IAEA-2D. There the candidate was a single
+cell, the alternatives were physically incoherent, and the winner restored a
+visible structural regularity. An eight-by-eight map over eight compositions
+has no such handle: any number of maps would hit the published eigenvalue, and
+matching it by search would be fitting rather than verification.
+
+Closing this needs the reference specification.
+
 ## Adding a deck
 
 A deck is a directory with a `run.py` that imports shared data from
