@@ -16,4 +16,4 @@ nbsphinx==0.9.5
 # registered by IPython rather than by Pygments itself. nbsphinx does not
 # depend on IPython, so without this every code cell warns — which is
 # fatal under -W. Easy to miss locally for the same reason as linkify.
-ipython==8.29.0
+ipython==8.39.0
