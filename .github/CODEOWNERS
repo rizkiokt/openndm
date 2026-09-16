@@ -1,0 +1,25 @@
+# Every file needs review from the owner before it reaches main.
+#
+# The `main` ruleset requires code owner review, so this file is what makes
+# "@rizkiokt must approve" a rule rather than a convention. A pull request
+# touching any path below cannot merge without an approving review from the
+# owner listed for that path.
+
+*                       @rizkiokt
+
+# The numerical core and the verification suite are the parts where a wrong
+# merge is expensive and quiet: a physics regression passes every style check
+# and most of the unit tests. They are listed separately so that GitHub names
+# them explicitly in the review request rather than falling through to the
+# catch-all above.
+/src/                   @rizkiokt
+/include/               @rizkiokt
+/tests/validation/      @rizkiokt
+/tests/python/test_verification.py  @rizkiokt
+/benchmarks/            @rizkiokt
+
+# Release and distribution machinery: a bad merge here publishes.
+/.github/workflows/     @rizkiokt
+/conda-recipe/          @rizkiokt
+/pyproject.toml         @rizkiokt
+/CMakeLists.txt         @rizkiokt

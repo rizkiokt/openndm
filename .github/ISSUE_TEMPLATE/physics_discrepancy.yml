@@ -1,0 +1,74 @@
+name: Physics discrepancy
+description: The solver converges, but the answer disagrees with a reference you trust.
+labels: ["physics", "needs-verification"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        A disagreement is only a bug once there is something to disagree with.
+        The fields below exist to establish that: what the reference is, how
+        tight it is, and whether the gap is larger than the discretisation
+        error you should expect at your mesh.
+
+  - type: textarea
+    id: discrepancy
+    attributes:
+      label: The numbers
+      description: >-
+        What OpenNDM produced, what the reference says, and the difference.
+        Give eigenvalues in pcm and distributions as a max and RMS relative
+        error.
+      value: |
+        quantity        OpenNDM      reference     difference
+        k_eff
+        max pin power
+        RMS power
+    validations:
+      required: true
+
+  - type: input
+    id: reference-source
+    attributes:
+      label: Where the reference comes from
+      description: >-
+        A published benchmark and its revision, a Monte Carlo run (give the
+        code, version and reported uncertainty), or another deterministic code
+        and its options.
+      placeholder: "e.g. IAEA-2D, ANL-7416 Rev. 2, or OpenMC 0.14.0, 200 batches, sigma = 12 pcm"
+    validations:
+      required: true
+
+  - type: textarea
+    id: mesh
+    attributes:
+      label: Mesh and kernel
+      description: >-
+        Nodes per assembly, axial layers, and which kernel. Discretisation
+        error is the first thing to rule out: the nodal kernels are second
+        order in node size, so a one-node-per-assembly result is expected to
+        carry tens of pcm on some problems.
+      placeholder: "2x2 per assembly, 24 axial layers, SANM"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: convergence
+    attributes:
+      label: Convergence
+      options:
+        - label: The solve converged; it did not stop at the iteration limit.
+          required: true
+        - label: >-
+            I tightened the tolerances and refined the mesh, and the
+            disagreement did not shrink.
+
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Input
+      description: >-
+        The deck, or a link to it. If the case needs a cross section library,
+        say how to obtain it.
+      render: python
+    validations:
+      required: true
