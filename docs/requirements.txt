@@ -1,0 +1,19 @@
+# Documentation build requirements, used by Read the Docs and by the docs CI
+# job. Pinned so a theme or MyST release cannot change the rendered output
+# without a deliberate bump, which is the same reasoning the linters are
+# pinned under in CI.
+sphinx==8.1.3
+sphinx-rtd-theme==3.0.2
+sphinx-copybutton==0.5.2
+# The [linkify] extra pulls linkify-it-py, which myst_enable_extensions
+# = [... "linkify"] needs at parse time. Without it the build dies with
+# "Linkify enabled but not installed" — and it is easy to miss locally,
+# because any Anaconda-adjacent environment already has it.
+myst-parser[linkify]==4.0.0
+linkify-it-py==2.0.3
+nbsphinx==0.9.5
+# The notebooks declare pygments_lexer: ipython3, and that lexer is
+# registered by IPython rather than by Pygments itself. nbsphinx does not
+# depend on IPython, so without this every code cell warns — which is
+# fatal under -W. Easy to miss locally for the same reason as linkify.
+ipython==8.29.0

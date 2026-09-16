@@ -5,6 +5,10 @@ diffusion solver for reactor core analysis, with a C++17 core, a pybind11
 Python API, and a group-constant generation path built natively on the OpenMC
 stack.
 
+[![CI](https://github.com/rizkiokt/openndm/actions/workflows/ci.yml/badge.svg)](https://github.com/rizkiokt/openndm/actions/workflows/ci.yml)
+[![Documentation](https://readthedocs.org/projects/openndm/badge/?version=latest)](https://openndm.readthedocs.io/en/latest/)
+[![PyPI](https://img.shields.io/pypi/v/openndm.svg)](https://pypi.org/project/openndm/)
+[![conda-forge](https://img.shields.io/conda/vn/conda-forge/openndm.svg)](https://anaconda.org/conda-forge/openndm)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 OpenNDM is the second stage of a two-step lattice → core calculation scheme in
@@ -174,6 +178,9 @@ tables and for the two transcription errors the structural invariants now
 catch.
 
 ## Documentation
+
+The full documentation is at **[openndm.readthedocs.io](https://openndm.readthedocs.io)**, built with Sphinx using a theme provided by Read the Docs. The same material is
+readable as Markdown in this repository:
 
 | Document | Contents |
 |---|---|

@@ -2,29 +2,29 @@
 
 How to drive the solver. For the equations it implements see
 [`theory.md`](theory.md); for what is and is not built yet see
-[`status.md`](status.md); for runnable examples see [`../examples/`](../examples/).
+[`status.md`](status.md); for runnable examples see [`examples/`](https://github.com/rizkiokt/openndm/tree/main/examples).
 
 ---
 
 ## Contents
 
-1. [Installing](#1-installing)
-2. [The five objects](#2-the-five-objects)
-3. [Cross sections](#3-cross-sections)
-4. [Geometry](#4-geometry)
-5. [Settings](#5-settings)
-6. [Solving](#6-solving)
-7. [Reading results](#7-reading-results)
-8. [Checking your answer](#8-checking-your-answer)
-9. [Group constants from OpenMC](#9-group-constants-from-openmc)
-10. [Branch libraries and feedback](#10-branch-libraries-and-feedback)
-11. [Embedding and performance](#11-embedding-and-performance)
-12. [Files](#12-files)
-13. [When something goes wrong](#13-when-something-goes-wrong)
+1. [Installing](#installing)
+2. [The five objects](#the-five-objects)
+3. [Cross sections](#cross-sections)
+4. [Geometry](#geometry)
+5. [Settings](#settings)
+6. [Solving](#solving)
+7. [Reading results](#reading-results)
+8. [Checking your answer](#checking-your-answer)
+9. [Group constants from OpenMC](#group-constants-from-openmc)
+10. [Branch libraries and feedback](#branch-libraries-and-feedback)
+11. [Embedding and performance](#embedding-and-performance)
+12. [Files](#files)
+13. [When something goes wrong](#when-something-goes-wrong)
 
 ---
 
-## 1. Installing
+## Installing
 
 ```bash
 pip install .            # needs a C++17 compiler; CMake and ninja come from pip
@@ -43,7 +43,7 @@ print(openndm.__version__)
 
 ---
 
-## 2. The five objects
+## The five objects
 
 | Object | Holds |
 |---|---|
@@ -86,7 +86,7 @@ is not.
 
 ---
 
-## 3. Cross sections
+## Cross sections
 
 ### Conventions
 
@@ -181,7 +181,7 @@ them until the transient solver exists.
 
 ---
 
-## 4. Geometry
+## Geometry
 
 ### From a composition map
 
@@ -261,7 +261,7 @@ geom.set_composition(node, composition)        # in place
 
 ---
 
-## 5. Settings
+## Settings
 
 ```python
 settings = openndm.Settings(kernel="sanm", verbosity=1)
@@ -312,7 +312,7 @@ speed knob.
 
 ---
 
-## 6. Solving
+## Solving
 
 ### Eigenvalue
 
@@ -374,7 +374,7 @@ after mutating the geometry or library outside a sweep.
 
 ---
 
-## 7. Reading results
+## Reading results
 
 ```python
 result.k_eff                 # float
@@ -409,7 +409,7 @@ Each takes an optional `ax` and returns it.
 
 ---
 
-## 8. Checking your answer
+## Checking your answer
 
 Four habits, cheapest first.
 
@@ -465,11 +465,11 @@ with a thin reflector.
 
 ---
 
-## 9. Group constants from OpenMC
+## Group constants from OpenMC
 
 `openndm.gc` is the only part of the package that needs OpenMC. The full
 worked example is
-[`examples/02_openmc_to_openndm.ipynb`](../examples/02_openmc_to_openndm.ipynb).
+[`examples/02_openmc_to_openndm.ipynb`](https://github.com/rizkiokt/openndm/blob/main/examples/02_openmc_to_openndm.ipynb).
 
 ```python
 from openndm.gc import from_mgxs_library
@@ -553,7 +553,7 @@ Checkpoints after every branch point, so an interrupted run resumes.
 
 ---
 
-## 10. Branch libraries and feedback
+## Branch libraries and feedback
 
 Declare the axes first — doing so resizes the storage to one composition set
 per grid point and discards anything already stored.
@@ -584,7 +584,7 @@ a plausible wrong answer.
 
 ---
 
-## 11. Embedding and performance
+## Embedding and performance
 
 The whole workflow is in memory. Nothing touches the filesystem unless you ask
 for a statepoint.
@@ -606,7 +606,7 @@ for case in cases:
 
 ---
 
-## 12. Files
+## Files
 
 ### Cross section library
 
@@ -635,7 +635,7 @@ constants, which data library, which branch state.
 
 ---
 
-## 13. When something goes wrong
+## When something goes wrong
 
 ### Exceptions
 
@@ -678,7 +678,7 @@ differ. Expected in a strongly heterogeneous node; pick one with `prefer=`.
 ### The eigenvalue is wrong and nothing else looks wrong
 
 That is the hard case, and the reason for the checks in
-[section 8](#8-checking-your-answer). In order:
+[Checking your answer](#checking-your-answer). In order:
 
 1. Run `model.neutron_balance()`.
 2. Check the symmetry of the power against the symmetry of the map.
