@@ -1,5 +1,78 @@
 # Contributing to OpenNDM
 
+OpenNDM was initiated and is developed by **Rizki Oktavian, PhD**
+(<rizkiokt@gmail.com>). Contributions are welcome — bug reports, benchmark
+cases, kernels, documentation. If you are considering something substantial,
+open an issue or email first, so the design discussion happens before you have
+written the code rather than in review.
+
+By contributing you agree that your contribution is licensed under the MIT
+licence, and you agree to the [Code of Conduct](https://github.com/rizkiokt/openndm/blob/main/CODE_OF_CONDUCT.md).
+
+---
+
+## How a change gets merged
+
+**`main` is protected. Nothing is pushed to it directly, including by the
+maintainer.** Every change arrives as a pull request, passes CI, and is
+approved by the maintainer before it can merge. This is enforced by a
+repository ruleset, not by convention.
+
+Concretely, a pull request cannot merge until:
+
+| Requirement | What satisfies it |
+|---|---|
+| It is a pull request | Direct pushes to `main` are rejected |
+| CI is green | The `ci` check — lint, the test matrix, C++ tests, the no-OpenMC import, docs |
+| The maintainer approved it | Code owner review from [@rizkiokt](https://github.com/rizkiokt), per [`.github/CODEOWNERS`](https://github.com/rizkiokt/openndm/blob/main/.github/CODEOWNERS) |
+| The approval is current | Pushing new commits dismisses stale approvals |
+| History stays clean | Force pushes to `main` and deletion of `main` are blocked |
+
+### The steps
+
+1. **Fork**, or branch if you have write access. Branch names are free-form;
+   `fix/leakage-sign` and `feat/hex-geometry` read well.
+
+   ```bash
+   git switch -c fix/leakage-sign
+   ```
+
+2. **Install the pre-commit hooks.** They run the same linters CI does, plus a
+   secret scan and a check that no local filesystem path is baked into a
+   notebook's committed output. Catching these locally is much cheaper than in
+   review:
+
+   ```bash
+   pip install pre-commit
+   pre-commit install
+   ```
+
+3. **Make the change, with a test.** See [Running the tests](#running-the-tests).
+
+4. **Commit** using conventional-commit subjects — see [Commits](#commits).
+
+5. **Open the pull request.** The template asks one question that matters more
+   than the rest: *does this move any number?* Answer it honestly. A change to
+   `k_eff`, a flux, a power distribution or a convergence order is a physics
+   change, not a refactor, even when the diff looks like a cleanup.
+
+6. **Respond to review.** Push follow-up commits rather than force-pushing, so
+   the review history stays readable. The branch is squashed on merge, so the
+   intermediate commits do not end up in `main`.
+
+7. **Merge.** The maintainer merges once the checks and the approval are in
+   place. Your branch is deleted automatically.
+
+### For the maintainer
+
+The ruleset grants repository admins a bypass, because GitHub does not let
+anyone approve their own pull request and a sole maintainer would otherwise be
+unable to merge their own work. The bypass exists for that case only: the
+pull request, the CI run and the review still happen, and using the bypass to
+skip a red CI run defeats the point of having the rule.
+
+---
+
 ## Getting a development build
 
 OpenNDM is a C++17 core with pybind11 bindings. You need a C++17 compiler;
@@ -19,8 +92,11 @@ environment each time.
 ## Running the tests
 
 ```bash
-pytest tests/python                  # Python suite, about 11 s
-pytest tests/python -m "not slow"    # skip the mesh-refinement runs
+# `python -m pytest` rather than bare `pytest`: on a machine with Anaconda on
+# PATH, the bare command often resolves to Anaconda's pytest, which runs
+# against a different interpreter and cannot see the venv's openndm.
+python -m pytest tests/python                  # Python suite, about 11 s
+python -m pytest tests/python -m "not slow"    # skip the mesh-refinement runs
 
 cmake -S . -B build -DOPENNDM_BUILD_TESTS=ON -DOPENNDM_BUILD_PYTHON=OFF
 cmake --build build -j
