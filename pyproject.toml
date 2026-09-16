@@ -9,7 +9,8 @@ description = "Open Nodal Diffusion Method: a nodal diffusion solver built on th
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
-authors = [{ name = "OpenNDM contributors" }]
+authors = [{ name = "Rizki Oktavian", email = "rizkiokt@gmail.com" }]
+maintainers = [{ name = "Rizki Oktavian", email = "rizkiokt@gmail.com" }]
 keywords = ["nuclear", "reactor", "neutronics", "diffusion", "nodal", "openmc"]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
@@ -32,12 +33,21 @@ dev = [
   "ruff>=0.4",
   "matplotlib>=3.6",
 ]
-docs = ["sphinx>=7.0", "furo", "myst-parser", "nbsphinx"]
+docs = [
+  "sphinx>=7.0",
+  "sphinx-rtd-theme>=2.0",
+  "sphinx-copybutton>=0.5",
+  "myst-parser[linkify]>=3.0",
+  "nbsphinx>=0.9",
+  "ipython>=8.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/rizkiokt/openndm"
-Documentation = "https://github.com/rizkiokt/openndm/tree/main/docs"
+Documentation = "https://openndm.readthedocs.io"
 Issues = "https://github.com/rizkiokt/openndm/issues"
+Changelog = "https://github.com/rizkiokt/openndm/blob/main/CHANGELOG.md"
+Source = "https://github.com/rizkiokt/openndm"
 
 [tool.scikit-build]
 wheel.packages = ["python/openndm"]

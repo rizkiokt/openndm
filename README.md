@@ -5,6 +5,10 @@ diffusion solver for reactor core analysis, with a C++17 core, a pybind11
 Python API, and a group-constant generation path built natively on the OpenMC
 stack.
 
+[![CI](https://github.com/rizkiokt/openndm/actions/workflows/ci.yml/badge.svg)](https://github.com/rizkiokt/openndm/actions/workflows/ci.yml)
+[![Documentation](https://readthedocs.org/projects/openndm/badge/?version=latest)](https://openndm.readthedocs.io/en/latest/)
+[![PyPI](https://img.shields.io/pypi/v/openndm.svg)](https://pypi.org/project/openndm/)
+[![conda-forge](https://img.shields.io/conda/vn/conda-forge/openndm.svg)](https://anaconda.org/conda-forge/openndm)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 OpenNDM is the second stage of a two-step lattice → core calculation scheme in
@@ -175,6 +179,9 @@ catch.
 
 ## Documentation
 
+The full documentation is at **[openndm.readthedocs.io](https://openndm.readthedocs.io)**, built with Sphinx using a theme provided by Read the Docs. The same material is
+readable as Markdown in this repository:
+
 | Document | Contents |
 |---|---|
 | [`docs/user-guide.md`](docs/user-guide.md) | **How to drive the solver.** Start here |
@@ -183,8 +190,29 @@ catch.
 | [`docs/status.md`](docs/status.md) | Requirement-by-requirement implementation state |
 | [`docs/theory.md`](docs/theory.md) | Every equation the code solves, with the discretisation written out |
 | [`docs/architecture.md`](docs/architecture.md) | Module layout and the deviations from the specification, with rationale |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Build, test and style workflow |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Build, test and style workflow, and how to get a change merged |
+| [`SECURITY.md`](SECURITY.md) | What counts as a vulnerability here, and how to report one |
+
+## Author
+
+OpenNDM was initiated and is developed by **Rizki Oktavian, PhD**
+([@rizkiokt](https://github.com/rizkiokt)).
+
+If you would like to contribute, or want to discuss using OpenNDM in your own
+work, get in touch at <rizkiokt@gmail.com>. Bug reports and feature requests
+are better filed as [issues](https://github.com/rizkiokt/openndm/issues), and
+[`CONTRIBUTING.md`](CONTRIBUTING.md) describes the pull request workflow.
+
+## Citing
+
+If OpenNDM contributes to published work, please cite it. GitHub renders
+[`CITATION.cff`](CITATION.cff) into BibTeX from the *Cite this repository*
+button in the sidebar.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+OpenNDM is research software. It carries no nuclear quality assurance pedigree
+and is not qualified for licensing or safety analysis; see
+[SECURITY.md](SECURITY.md#a-note-on-results).

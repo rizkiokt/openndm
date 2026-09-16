@@ -1,0 +1,4 @@
+Git does not track empty directories, and conf.py names _static in
+html_static_path. Without a tracked file here the directory is absent from a
+fresh clone and Sphinx warns, which is fatal under -W. This placeholder keeps
+the directory present until there is real custom CSS or a logo to put in it.

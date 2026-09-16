@@ -1,0 +1,78 @@
+name: Bug report
+description: Something crashes, raises, or behaves differently from what the docs say.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        For a result that runs fine but looks numerically wrong, use the
+        **Physics discrepancy** template instead — it asks for the reference
+        the answer is being judged against, which is what makes that class of
+        report actionable.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: >-
+        A self-contained script that shows the problem. Inline the cross
+        sections rather than attaching a library where you can — a case that
+        runs on its own gets fixed much faster than one that needs a data file.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Traceback or error output
+      description: The complete output, not just the last line.
+      render: text
+
+  - type: textarea
+    id: version
+    attributes:
+      label: Version information
+      description: Output of the command below.
+      value: |
+        <!-- paste the output of:
+
+        python -c "import openndm, sys, platform; print(openndm.__version__, sys.version, platform.platform())"
+
+        -->
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install OpenNDM?
+      options:
+        - conda / mamba (conda-forge)
+        - pip, from a wheel on PyPI
+        - pip, built from source
+        - built from source with CMake directly
+        - other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: >-
+            I checked [docs/status.md](https://github.com/rizkiokt/openndm/blob/main/docs/status.md)
+            and this is not a feature that is simply not implemented yet.
+          required: true
+        - label: I searched existing issues for this.
+          required: true

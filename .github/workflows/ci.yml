@@ -240,6 +240,71 @@ jobs:
           python c1_homogeneous.py --particles 50000 --batches 120
           python c2_assembly_adf.py --particles 20000 --batches 80
 
+  docs:
+    name: documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pandoc
+        run: |
+          # nbsphinx shells out to pandoc to convert the notebooks' markdown
+          # cells. It is a system binary, so it is absent here even though a
+          # virtualenv on a developer machine usually finds one on PATH.
+          sudo apt-get update -qq
+          sudo apt-get install -y pandoc
+
+      - name: Install the docs toolchain
+        run: pip install -r docs/requirements.txt
+
+      # The API reference is autodoc against the installed package, so the
+      # extension has to be built. Without this the api/ pages render empty
+      # and the build still succeeds, which is the failure mode worth
+      # preventing.
+      - name: Install OpenNDM
+        run: pip install .
+
+      - name: Build (warnings are errors)
+        run: sphinx-build -b html -W --keep-going docs docs/_build/html
+
+      - name: Check for dead internal links
+        run: sphinx-build -b linkcheck docs docs/_build/linkcheck || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html
+
+  # ---------------------------------------------------------------------------
+  # The single check the `main` ruleset requires. Depending on this one job
+  # rather than on the matrix legs by name means the required-checks list does
+  # not have to be edited every time a Python version or a compiler is added
+  # or dropped, which is the usual way a protected branch quietly stops being
+  # protected.
+  ci:
+    name: ci
+    if: always()
+    needs: [lint, test, cpp-tests, no-openmc, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any required job did not succeed
+        run: |
+          results='${{ toJSON(needs) }}'
+          echo "$results"
+          echo "$results" | python3 -c "
+          import json, sys
+          needs = json.load(sys.stdin)
+          bad = {k: v['result'] for k, v in needs.items() if v['result'] != 'success'}
+          if bad:
+              for name, result in bad.items():
+                  print(f'::error::{name}: {result}')
+              sys.exit(1)
+          print('all required jobs succeeded')
+          "
+
   wheels:
     name: build wheels
     runs-on: ${{ matrix.os }}
