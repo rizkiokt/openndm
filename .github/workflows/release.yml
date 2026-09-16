@@ -1,0 +1,146 @@
+name: release
+
+# A tag is the trigger, and the tag is the source of truth for the version.
+# Nothing here can be started from a branch: the `pypi` environment is
+# restricted to tags, so a workflow run that is not from a tag cannot publish
+# even if it is dispatched by hand.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The tag says one version, pyproject.toml and CMakeLists.txt say another:
+  # that produces a wheel whose metadata and runtime disagree, and it is
+  # invisible until someone reads __version__. Fail before anything is built.
+  check-version:
+    name: tag matches the packaged version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          py=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          cm=$(grep -m1 'project(openndm VERSION' CMakeLists.txt \
+               | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
+          echo "tag=$tag  pyproject=$py  cmake=$cm"
+          if [ "$tag" != "$py" ] || [ "$tag" != "$cm" ]; then
+            echo "::error::version mismatch: tag=$tag pyproject=$py CMakeLists=$cm"
+            exit 1
+          fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+  sdist:
+    name: build sdist
+    needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pipx run build --sdist
+      - name: The sdist must be buildable on its own
+        run: |
+          # conda-forge builds from this artifact, so a missing file here
+          # surfaces as a broken feedstock rather than a broken wheel.
+          pip install dist/*.tar.gz -v
+          python -c "import openndm; print(openndm.__version__)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-sdist
+          path: dist/*.tar.gz
+
+  wheels:
+    name: wheels on ${{ matrix.os }}
+    needs: check-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pypa/cibuildwheel@v2.21
+        env:
+          CIBW_BUILD: cp310-* cp311-* cp312-* cp313-*
+          # Same constraints as CI: h5py ships neither musllinux nor
+          # manylinux2014 wheels, only manylinux_2_28.
+          CIBW_SKIP: "*_i686 *-musllinux*"
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_COMMAND: pytest {project}/tests/python -q -k "not benchmark"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  publish-pypi:
+    name: publish to PyPI
+    needs: [sdist, wheels]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/openndm/
+    permissions:
+      # Trusted publishing. There is no API token in this repository, and
+      # nothing to leak or rotate.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Uploads are not retried over an existing version: PyPI rejects a
+          # re-upload even of a deleted one, and a partially-failed release is
+          # fixed by bumping the patch version, not by forcing this through.
+          skip-existing: false
+          print-hash: true
+
+  github-release:
+    name: publish the GitHub release
+    needs: [publish-pypi, check-version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Pull this version's section out of the changelog
+        run: |
+          v="${{ needs.check-version.outputs.version }}"
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/       { exit }
+            found                   { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "No changelog section for $v; falling back to generated notes."
+          fi
+          cat notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: notes.md
+          generate_release_notes: true
+          draft: false

@@ -7,6 +7,11 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # conda recipes are Jinja templates, not YAML documents: the
+        # `{% set version = ... %}` header alone is a scanner error.
+        # conda-build renders it before parsing; a plain YAML load
+        # cannot. `conda build` and conda-forge's own CI validate it.
+        exclude: ^conda-recipe/meta\.yaml$
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
