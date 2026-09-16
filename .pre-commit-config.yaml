@@ -24,3 +24,21 @@ repos:
     hooks:
       - id: clang-format
         files: ^(include|src|tests/cpp)/.*\.(h|cpp)$
+
+  # A public repository with a committed, executed notebook set has two ways
+  # to leak: a credential in a source line, and a local path or hostname in a
+  # cell's captured output. gitleaks covers the first. The second is what
+  # actually happened here, so there is a check for it below.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: no-local-paths-in-notebooks
+        name: no absolute home paths in notebook outputs
+        entry: python scripts/check_notebook_paths.py
+        language: python
+        files: \.ipynb$
+        pass_filenames: true
