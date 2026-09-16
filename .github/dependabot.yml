@@ -1,0 +1,32 @@
+# Dependency updates arrive as pull requests, which is the only way into `main`
+# anyway under the branch ruleset. They still need review and green CI.
+version: 2
+updates:
+  # The pinned action versions in the workflows. An unpinned or stale action is
+  # the most common supply chain exposure a repository this size actually has.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels: ["dependencies", "ci"]
+
+  # Build requirements in pyproject.toml. Runtime dependencies are deliberately
+  # loose ranges, so this mostly surfaces scikit-build-core and pybind11.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build"
+    labels: ["dependencies"]
+    # The linters are pinned on purpose: an unpinned formatter turns every
+    # upstream release into a red build on an unrelated commit. Dependabot may
+    # propose the bump, but it goes in as a deliberate reformat commit.
+    groups:
+      linters:
+        patterns: ["ruff", "clang-format"]

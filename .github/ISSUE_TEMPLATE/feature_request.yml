@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a capability OpenNDM does not have.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        [docs/status.md](https://github.com/rizkiokt/openndm/blob/main/docs/status.md)
+        maps every requirement in the specification to what is actually built.
+        Much of the roadmap is already written down there — if your request is
+        on it, say so and the issue becomes a place to discuss priority rather
+        than scope.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The calculation you cannot do today
+      description: >-
+        Describe the analysis you are trying to run, not the API you imagine.
+        The physics problem usually admits a better design than the one that
+        comes to mind first.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: Sketch the API or the method if you have one.
+
+  - type: input
+    id: requirement-id
+    attributes:
+      label: Related requirement ID
+      description: >-
+        If this corresponds to an ID in docs/requirements.md, give it. Leave
+        blank if this is new scope.
+      placeholder: "e.g. FR-GEO-7, or blank"
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Would you be willing to implement this?
+      options:
+        - "Yes, with guidance on where it belongs"
+        - "Yes, I know the codebase well enough"
+        - "No, I am requesting it"
+    validations:
+      required: true

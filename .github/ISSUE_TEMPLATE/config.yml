@@ -1,0 +1,18 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question about using OpenNDM
+    url: https://github.com/rizkiokt/openndm/discussions
+    about: >-
+      How do I set up this geometry, why is my case not converging, what does
+      this setting do. Questions get answered faster in Discussions and stay
+      searchable for the next person.
+  - name: Theory and method background
+    url: https://github.com/rizkiokt/openndm/blob/main/docs/theory.md
+    about: >-
+      Every equation the solver implements, with its discretisation written
+      out. Check here before filing a physics discrepancy.
+  - name: What is and is not implemented yet
+    url: https://github.com/rizkiokt/openndm/blob/main/docs/status.md
+    about: >-
+      Requirement-by-requirement implementation status. A missing feature is
+      often listed here already.

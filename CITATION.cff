@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use OpenNDM in published work, please cite it."
+title: "OpenNDM: Open Nodal Diffusion Method"
+abstract: >-
+  A three-dimensional, multi-group nodal diffusion solver for reactor core
+  analysis, with a C++17 core and a group-constant generation path built
+  natively on the OpenMC stack. It provides the core-calculation stage of a
+  two-step lattice-to-core scheme in which OpenMC performs the lattice physics.
+type: software
+license: MIT
+repository-code: "https://github.com/rizkiokt/openndm"
+url: "https://openndm.readthedocs.io"
+version: 0.1.0
+date-released: "2026-09-16"
+keywords:
+  - nuclear engineering
+  - reactor physics
+  - neutron diffusion
+  - nodal methods
+  - neutronics
+  - OpenMC
+authors:
+  - family-names: Oktavian
+    given-names: Rizki
+    name-suffix: PhD
+    email: rizkiokt@gmail.com
+    alias: rizkiokt
+    orcid: "https://orcid.org/0000-0003-2814-1991"
