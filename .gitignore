@@ -38,3 +38,5 @@ summary.h5
 # Docs
 docs/_build/
 docs/api/_autosummary/
+# Notebooks copied in from examples/ at build time by docs/conf.py.
+docs/examples/*.ipynb

@@ -1,0 +1,9 @@
+# Documentation build requirements, used by Read the Docs and by the docs CI
+# job. Pinned so a theme or MyST release cannot change the rendered output
+# without a deliberate bump, which is the same reasoning the linters are
+# pinned under in CI.
+sphinx==8.1.3
+sphinx-rtd-theme==3.0.2
+sphinx-copybutton==0.5.2
+myst-parser==4.0.0
+nbsphinx==0.9.5
