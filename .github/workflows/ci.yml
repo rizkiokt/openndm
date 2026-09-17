@@ -130,7 +130,7 @@ jobs:
                --ignore-errors unused --output-file coverage.info
           lcov --list coverage.info
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cpp-coverage
           path: coverage.info
@@ -273,7 +273,7 @@ jobs:
       - name: Check for dead internal links
         run: sphinx-build -b linkcheck docs docs/_build/linkcheck || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: docs-html
           path: docs/_build/html
@@ -337,7 +337,7 @@ jobs:
           CIBW_TEST_COMMAND: >
             pytest {project}/tests/python -q
             -k "not benchmark"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
           path: wheelhouse/*.whl
