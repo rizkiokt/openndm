@@ -321,7 +321,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build wheels (NFR-EXT-3)
-        uses: pypa/cibuildwheel@v2.21
+        uses: pypa/cibuildwheel@v4.2
         env:
           CIBW_BUILD: cp310-* cp311-* cp312-* cp313-*
           # h5py, a runtime dependency, publishes no musllinux wheels and no
