@@ -10,7 +10,7 @@ sphinx-copybutton==0.5.2
 # "Linkify enabled but not installed" — and it is easy to miss locally,
 # because any Anaconda-adjacent environment already has it.
 myst-parser[linkify]==4.0.1
-linkify-it-py==2.0.3
+linkify-it-py==2.2.0
 nbsphinx==0.9.8
 # The notebooks declare pygments_lexer: ipython3, and that lexer is
 # registered by IPython rather than by Pygments itself. nbsphinx does not
