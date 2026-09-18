@@ -140,7 +140,7 @@ temperature or density, and cross sections reach the solver only through
 | NFR-QA-3 | done | Linux gcc and clang, macOS clang, Python 3.10 to 3.13, all green. Windows is not built and is not documented as WSL-only. The OpenMC coupling job runs on manual dispatch only, because no stable public nuclear data URL exists to hard-code; see `tests/validation/README.md`. |
 | NFR-QA-4 | done | clang-format and ruff, both enforced. |
 | NFR-QA-5 | done | Semantic versioning and a changelog. |
-| NFR-QA-6 | partial | A user guide, a theory manual, architecture notes, this status map, and four worked notebooks in `examples/`, all executed with their outputs committed. No Sphinx build and no generated API reference. |
+| NFR-QA-6 | done | A user guide, a theory manual, architecture notes, this status map, and four worked notebooks in `examples/`, all executed with their outputs committed. Built as a Sphinx site with an autodoc API reference; CI builds it with warnings as errors against the installed extension, so an API page that renders empty fails the build. |
 | NFR-QA-7 | partial | [`theory.md`](theory.md) writes out every equation the code currently solves, with the discretisation. It covers only what is implemented. |
 | V-1 | done | Analytic bare cuboid, and a reflected slab against its transcendental criticality condition. |
 | V-2 | done | Method of manufactured solutions for the multi-group operator, with the observed order of accuracy of each kernel. |
@@ -148,7 +148,7 @@ temperature or density, and cross sections reach the solver only through
 | V-4 | done | Adjoint eigenvalue equality, and first-order perturbation theory against a direct re-solve, which tests the adjoint flux shape rather than only the operator transpose. |
 | NFR-EXT-1 | done | See FR-GEO-6. |
 | NFR-EXT-2 | done | Group count, precursor count and branch axes are all run-time. |
-| NFR-EXT-3 | partial | cp310-cp313 wheels build in CI on manylinux_2_28 and macOS arm64, with x86_64 macOS cross-compiled from the arm64 runner because GitHub is retiring the Intel one. Nothing is published to PyPI yet. |
+| NFR-EXT-3 | partial | cp310-cp313 wheels build in CI on manylinux_2_28 and macOS arm64, with x86_64 macOS cross-compiled from the arm64 runner because GitHub is retiring the Intel one. The release pipeline is tag-triggered and uses trusted publishing, refusing to build unless the tag, `pyproject.toml` and `CMakeLists.txt` agree on the version, and there is a conda-forge recipe. No tag has been cut, so nothing is published yet. |
 | NFR-EXT-4 | done | No dependency beyond a C++17 compiler; the build fetches nothing at configure time. |
 | NFR-EXT-5 | not started | The public `extern "C"` API. |
 
