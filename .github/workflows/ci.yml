@@ -213,7 +213,7 @@ jobs:
 
       - name: Cache the nuclear data library
         id: data
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: nuclear-data
           key: xs-${{ hashFiles('.github/workflows/ci.yml') }}-${{ inputs.cross_sections_url }}
