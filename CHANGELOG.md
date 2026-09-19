@@ -73,6 +73,18 @@ Nothing yet.
 
 ### Fixed
 
+- **Subdividing an axis that had explicit node widths enlarged the core.**
+  `Geometry.from_lattice` gives `dx`/`dy`/`dz` per lattice cell and
+  `subdivide` splits each cell, but the explicit-width path repeated the
+  parent width once per child instead of sharing it, scaling that axis by the
+  subdivision factor. A 60 cm axial stack became a 120 cm one and `k_eff`
+  moved 2751 pcm, with no error raised and nothing else out of place: the
+  node count was right, the composition map was right, and the solution was
+  a perfectly good answer to a core twice the intended height. The
+  pitch-only path was always correct, which is why every shipped deck
+  escaped -- `iaea3d` supplies an explicit `dz` but only ever subdivides
+  radially, and `iaea2d` is uniform.
+
 - **The V-3 coarse-mesh test measured against a reference that was not
   converged.** It compared SANM and NEM at one node per assembly to an FDM
   solve at eight nodes per assembly and called that the fine-mesh converged
