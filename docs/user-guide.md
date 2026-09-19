@@ -18,9 +18,10 @@ How to drive the solver. For the equations it implements see
 8. [Checking your answer](#checking-your-answer)
 9. [Group constants from OpenMC](#group-constants-from-openmc)
 10. [Branch libraries and feedback](#branch-libraries-and-feedback)
-11. [Embedding and performance](#embedding-and-performance)
-12. [Files](#files)
-13. [When something goes wrong](#when-something-goes-wrong)
+11. [Control rods](#control-rods)
+12. [Embedding and performance](#embedding-and-performance)
+13. [Files](#files)
+14. [When something goes wrong](#when-something-goes-wrong)
 
 ---
 
@@ -581,6 +582,70 @@ grid, `lib.extrapolation` selects `"clamp"` (default), `"linear"` or
 A branch library cannot be solved directly; collapse it first. That is
 enforced, because silently solving at some default state is an easy way to get
 a plausible wrong answer.
+
+---
+
+## Control rods
+
+A `ControlRodBank` is a set of radial lattice columns that share one axial
+position, and a substitution from each unrodded composition to its rodded
+counterpart. Positions are given in steps, following the convention KOMODO's
+`%CROD` card uses, so an existing deck translates without arithmetic:
+`zero_position` is the tip height above the bottom of the mesh at step 0 and
+`step_size` is the travel per step. **Step 0 is fully inserted**; increasing
+steps withdraw the bank upward.
+
+```python
+import numpy as np
+import openndm
+
+banked = np.zeros((9, 9), dtype=bool)
+banked[0, 0] = True
+
+bank = openndm.ControlRodBank(
+    "A",
+    columns=banked,
+    rodded={FUEL: FUEL_RODDED, REFLECTOR: REFLECTOR_RODDED},
+    step_size=1.0,
+    zero_position=20.0,      # the bottom axial reflector
+)
+rods = openndm.ControlRods(geometry, [bank])
+
+rods.insert(A=80.0)          # tip 80 cm above the bottom of the active core
+model.refresh()              # the solver is holding this geometry
+print(model.solve().k_eff)
+```
+
+Build the geometry with the banks **withdrawn** — every node carrying its
+unrodded composition. `ControlRods` snapshots that state, which is what makes
+positions absolute rather than incremental: moving a bank twice gives the same
+core as setting its final position once, and `rods.withdraw()` restores
+exactly what was there before.
+
+Rod worth is a difference of two solves:
+
+```python
+rods.withdraw(); model.refresh()
+out = model.solve().k_eff
+rods.insert(A=0.0); model.refresh()
+worth_pcm = 1.0e5 * (out - model.solve().k_eff)
+```
+
+Every composition a bank can reach must appear in `rodded`, including
+reflector compositions if the rods travel through an axial reflector. A
+missing key raises rather than passing the node through unchanged, because an
+unsubstituted node is indistinguishable from a correctly withdrawn one.
+
+### The one thing to know about partial insertion
+
+A node is rodded when its **centre** lies above the tip. That is exact
+whenever the tip falls on a plane boundary, and rounds to the nearest plane in
+between, so `k_eff` is a staircase in rod position rather than a smooth curve.
+On a ten-plane test core the largest single step is about 1500 pcm.
+
+There is no cusping correction yet. Until there is, put the tip on a plane
+boundary wherever the answer matters — which is what `benchmarks/iaea3d` does,
+choosing its axial mesh so the tip always lands on one.
 
 ---
 

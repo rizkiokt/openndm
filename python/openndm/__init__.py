@@ -36,6 +36,7 @@ from .exceptions import (
 )
 from .geometry import INACTIVE, Geometry
 from .model import BoronSearchResult, Model, Result
+from .rods import ControlRodBank, ControlRods
 from .settings import Settings
 from .statepoint import StatePoint, write_statepoint
 from .xslib import XSLibrary
@@ -45,6 +46,8 @@ __version__ = _core.__version__
 __all__ = [
     "INACTIVE",
     "BoronSearchResult",
+    "ControlRodBank",
+    "ControlRods",
     "ConvergenceError",
     "Geometry",
     "InputError",

@@ -6,7 +6,31 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Control rod banks** (`ControlRodBank`, `ControlRods`), addressing rods by
+  bank and position rather than by editing compositions plane by plane
+  (FR-MODE-5). A bank carries a radial column mask, a substitution from each
+  unrodded composition to its rodded counterpart, and a position in steps on
+  the convention KOMODO's `%CROD` card uses -- `zero_position` and
+  `step_size`, with step 0 fully inserted -- so an existing deck translates
+  without arithmetic. The unrodded core is snapshotted at construction, which
+  makes positions absolute: moving a bank twice matches setting its final
+  position once, and withdrawing restores exactly what was there before.
+  Verified against `benchmarks/iaea3d`, which places the same rods by hand:
+  with the tip on a plane boundary the bank builds that core node for node.
+
+  A composition a bank reaches but cannot substitute raises rather than
+  passing the node through unchanged, because an unsubstituted node is
+  indistinguishable from a correctly withdrawn one.
+
+  There is no cusping correction yet. A node is rodded when its centre lies
+  above the tip, which is exact on a plane boundary and rounds to the nearest
+  plane in between, so `k_eff` is a staircase in rod position -- largest
+  single step about 1500 pcm on a ten-plane test core. Put the tip on a plane
+  boundary where the answer matters, as `benchmarks/iaea3d` does.
+- `Geometry.dz`, the axial node widths after subdivision, which a bank needs
+  to place a tip at a continuous position.
 
 ## [0.2.0] - 2026-09-19
 
