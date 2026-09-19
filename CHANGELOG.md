@@ -12,6 +12,14 @@ All notable changes to OpenNDM are recorded here. The format follows
   order: control rod banks, then kinetics, then thermal hydraulics, with the
   independent items listed separately. `status.md` records what exists;
   nothing recorded what comes next.
+- **The documentation builds as a Sphinx site** with an autodoc API reference
+  (#3). CI builds it with warnings as errors against the installed extension,
+  so an API page that renders empty fails the build rather than passing
+  quietly. This completes NFR-QA-6.
+- **A release pipeline** (#7): tag-triggered, using trusted publishing, and
+  refusing to build unless the tag, `pyproject.toml` and `CMakeLists.txt`
+  agree on the version. A conda-forge recipe ships alongside it. Nothing is
+  published yet, because no tag has been cut.
 - **A user guide** (`docs/user-guide.md`), covering the whole API from
   installation to troubleshooting, with every code snippet executed against
   the build.
