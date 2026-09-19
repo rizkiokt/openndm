@@ -61,6 +61,23 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Fixed
 
+- **The V-3 coarse-mesh test measured against a reference that was not
+  converged.** It compared SANM and NEM at one node per assembly to an FDM
+  solve at eight nodes per assembly and called that the fine-mesh converged
+  eigenvalue. FDM on the IAEA-2D map is still 19.6 pcm from its own limit at
+  that mesh, approaching from below at second order, so the test charged
+  FDM's discretisation error to whichever kernel was under test: SANM
+  measures 22.2 pcm against that reference and 3.7 pcm against the limit, and
+  the 25 pcm tolerance was 89% consumed by an artifact unrelated to SANM. The
+  reference is now a Richardson extrapolation over two refinements, which
+  borrows nothing from either nodal kernel, and SANM's tolerance drops to 10
+  pcm. The extrapolated limit lands 1.1 pcm from the eigenvalue SANM and NEM
+  converge to, so three kernels sharing no spatial machinery now agree on one
+  answer with one of them arriving at a verified order; that is asserted in
+  its own test. The same wrong number had been copied into the README and
+  `docs/status.md`, where it made a boundary-face nodal correction look worth
+  scheduling: the real headroom on a core problem is 2.6 pcm, not 18.
+
 - **The critical boron search reported the wrong cause on failure.** An
   unreachable target and a callback that does nothing both surfaced as "k_eff
   is insensitive to boron", which sends the reader looking in the wrong place.

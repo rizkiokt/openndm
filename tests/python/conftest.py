@@ -119,6 +119,16 @@ def iaea_geometry(subdivide=1, planes=1):
 @pytest.fixture
 def tight():
     """Settings tight enough that iteration error does not mask a bug."""
+    return tight_settings()
+
+
+def tight_settings() -> openndm.Settings:
+    """The same settings as the ``tight`` fixture, for module-scoped callers.
+
+    A module-scoped fixture cannot depend on a function-scoped one, and the
+    mesh-converged reference in ``test_verification`` is far too expensive to
+    rebuild per test.
+    """
     return openndm.Settings(
         verbosity=0,
         k_tolerance=1.0e-11,

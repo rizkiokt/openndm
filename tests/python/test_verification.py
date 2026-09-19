@@ -22,6 +22,7 @@ from conftest import (
     iaea_geometry,
     iaea_library,
     one_group_library,
+    tight_settings,
 )
 
 
@@ -76,8 +77,7 @@ def test_v1_nodal_kernels_beat_finite_difference(kernel, tight):
     fdm_error = abs(model.solve(kernel="fdm").k_eff - reference)
     nodal_error = abs(model.solve(kernel=kernel).k_eff - reference)
     assert nodal_error < 0.6 * fdm_error, (
-        f"{kernel} error {nodal_error:.3e} is not better than FDM "
-        f"{fdm_error:.3e}"
+        f"{kernel} error {nodal_error:.3e} is not better than FDM {fdm_error:.3e}"
     )
 
 
@@ -87,13 +87,57 @@ def test_v1_nodal_kernels_beat_finite_difference(kernel, tight):
 IAEA_2D_CONVERGED = 1.0295271
 
 #: Tolerance in pcm on how far a nodal kernel may sit from the converged
-#: eigenvalue when run at one node per assembly.
-COARSE_MESH_TOLERANCE = {"sanm": 25.0, "nem": 150.0}
+#: eigenvalue when run at one node per assembly. Measured: SANM +3.7, NEM
+#: -110.4.
+COARSE_MESH_TOLERANCE = {"sanm": 10.0, "nem": 150.0}
 
 
+@pytest.fixture(scope="module")
+def fdm_mesh_converged() -> float:
+    """FDM's own mesh-converged eigenvalue on the IAEA-2D map.
+
+    Extrapolated from two refinements rather than taken from the finest one.
+    FDM at eight nodes per assembly is still 19.6 pcm from its own limit, so
+    using that solve directly as the reference charges its discretisation
+    error to whichever kernel is under test: SANM at one node per assembly
+    measures 22 pcm against it but 3.7 pcm against the limit.
+
+    Richardson extrapolation is legitimate here because FDM's second order is
+    established independently -- V-2 measures the observed order of every
+    kernel, and on this problem it is 1.9 over the last two refinements. The
+    extrapolated value borrows nothing from SANM or NEM, so this stays a
+    genuinely independent reference.
+    """
+    library = iaea_library()
+    settings = tight_settings()
+
+    def solve(subdivide: int) -> float:
+        model = openndm.Model(iaea_geometry(subdivide=subdivide), library, settings)
+        return model.solve(kernel="fdm").k_eff
+
+    coarse, fine = solve(8), solve(16)
+    return fine + (fine - coarse) / 3.0
+
+
+@pytest.mark.slow
+def test_v3_fdm_extrapolates_to_the_nodal_limit(fdm_mesh_converged):
+    """FDM's limit and the nodal kernels' limit are the same eigenvalue.
+
+    Three kernels, no shared spatial machinery, one answer. FDM reaches it
+    from below at second order and needs extrapolating to get there; SANM and
+    NEM sit on it from four nodes per assembly onward.
+    """
+    error_pcm = 1.0e5 * (fdm_mesh_converged - IAEA_2D_CONVERGED)
+    assert abs(error_pcm) < 3.0, (
+        f"extrapolated FDM limit {fdm_mesh_converged:.7f} is {error_pcm:+.2f} "
+        f"pcm from the SANM/NEM limit {IAEA_2D_CONVERGED:.7f}"
+    )
+
+
+@pytest.mark.slow
 @pytest.mark.parametrize("kernel", NODAL_KERNELS)
-def test_v3_coarse_mesh_nodal_matches_fine_mesh_fdm(kernel, tight):
-    """V-3: coarse SANM and NEM agree with a refined finite difference solve.
+def test_v3_coarse_mesh_nodal_matches_fine_mesh_fdm(kernel, tight, fdm_mesh_converged):
+    """V-3: coarse SANM and NEM agree with a mesh-converged finite difference solve.
 
     This is the check that catches a wrong transverse leakage, a wrong
     discontinuity factor convention or a broken two-node closure: those leave
@@ -101,17 +145,11 @@ def test_v3_coarse_mesh_nodal_matches_fine_mesh_fdm(kernel, tight):
     kernel, which mesh refinement alone would not reveal. FDM is the reference
     because it shares no machinery with either nodal kernel.
     """
-    library = iaea_library()
-    reference = (
-        openndm.Model(iaea_geometry(subdivide=8), library, tight)
-        .solve(kernel="fdm")
-        .k_eff
-    )
-    coarse = openndm.Model(iaea_geometry(subdivide=1), library, tight)
-    error_pcm = 1.0e5 * (coarse.solve(kernel=kernel).k_eff - reference)
+    coarse = openndm.Model(iaea_geometry(subdivide=1), iaea_library(), tight)
+    error_pcm = 1.0e5 * (coarse.solve(kernel=kernel).k_eff - fdm_mesh_converged)
     assert abs(error_pcm) < COARSE_MESH_TOLERANCE[kernel], (
         f"{kernel} on one node per assembly is {error_pcm:+.1f} pcm from the "
-        f"fine-mesh FDM reference {reference:.6f}"
+        f"mesh-converged FDM reference {fdm_mesh_converged:.6f}"
     )
 
 
@@ -155,8 +193,7 @@ def test_v4_adjoint_eigenvalue_matches_forward(kernel, tight):
     adjoint = model.solve_adjoint(kernel=kernel)
     difference_pcm = 1.0e5 * abs(forward.k_eff - adjoint.k_eff)
     assert difference_pcm < 1.0, (
-        f"{kernel}: adjoint k_eff differs from forward by "
-        f"{difference_pcm:.3f} pcm"
+        f"{kernel}: adjoint k_eff differs from forward by {difference_pcm:.3f} pcm"
     )
 
 
@@ -291,9 +328,7 @@ def test_symmetric_core_map_gives_a_symmetric_power_distribution(tight):
     """
     model = openndm.Model(iaea_geometry(), iaea_library(), tight)
     radial = model.solve().radial_power()
-    assert np.allclose(radial, radial.T, atol=1.0e-10), np.abs(
-        radial - radial.T
-    ).max()
+    assert np.allclose(radial, radial.T, atol=1.0e-10), np.abs(radial - radial.T).max()
 
 
 def _asymmetric_core():
@@ -326,9 +361,10 @@ def _rotation_library():
 def test_rotating_the_core_rotates_the_power_and_leaves_k_unchanged(kernel, tight):
     """Rotating the whole problem must be a relabelling and nothing more."""
     library = _rotation_library()
-    boundaries = dict.fromkeys(
-        ["x_min", "x_max", "y_min", "y_max"], "vacuum"
-    ) | {"z_min": "reflective", "z_max": "reflective"}
+    boundaries = dict.fromkeys(["x_min", "x_max", "y_min", "y_max"], "vacuum") | {
+        "z_min": "reflective",
+        "z_max": "reflective",
+    }
 
     def solve(core):
         geometry = openndm.Geometry.from_lattice(
@@ -350,9 +386,10 @@ def test_rotating_the_core_rotates_the_power_and_leaves_k_unchanged(kernel, tigh
 
 def test_mirroring_the_core_mirrors_the_power(tight):
     library = _rotation_library()
-    boundaries = dict.fromkeys(
-        ["x_min", "x_max", "y_min", "y_max"], "vacuum"
-    ) | {"z_min": "reflective", "z_max": "reflective"}
+    boundaries = dict.fromkeys(["x_min", "x_max", "y_min", "y_max"], "vacuum") | {
+        "z_min": "reflective",
+        "z_max": "reflective",
+    }
 
     def solve(core):
         geometry = openndm.Geometry.from_lattice(
