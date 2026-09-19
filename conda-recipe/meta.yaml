@@ -1,18 +1,18 @@
 {% set name = "openndm" %}
-{% set version = "0.1.0" %}
+{% set version = "0.2.0" %}
 
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  # conda-forge builds from the PyPI sdist, not from the git tag, so the
-  # release workflow must have finished publishing before this is submitted.
-  # Regenerate the checksum with:
+  # conda-forge builds from the PyPI sdist, not from the git tag. The
+  # checksum below is of the 281566-byte sdist published by the v0.2.0
+  # release, and must be regenerated on every version bump:
   #   python -c "import hashlib,urllib.request as u; \
   #     print(hashlib.sha256(u.urlopen(URL).read()).hexdigest())"
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: 0000000000000000000000000000000000000000000000000000000000000000
+  sha256: d0ef309177f1c783492d2d9140bf6b9910ad711e57c8185c8290340ca5796d70
 
 build:
   number: 0
