@@ -13,9 +13,19 @@ updates:
     commit-message:
       prefix: "ci"
     labels: ["dependencies", "ci"]
+    # One pull request for all of them. Ungrouped, a week's updates arrived as
+    # five separate PRs, and because main requires branches to be up to date
+    # and dismisses stale reviews, each merge forced the rest to rebase and be
+    # re-approved. The cost is quadratic in PR count for changes that are
+    # almost always trivial version bumps.
+    groups:
+      actions:
+        patterns: ["*"]
 
-  # Build requirements in pyproject.toml. Runtime dependencies are deliberately
-  # loose ranges, so this mostly surfaces scikit-build-core and pybind11.
+  # Python dependencies: the build requirements in pyproject.toml and the
+  # pinned documentation toolchain in docs/requirements.txt, which this entry
+  # is observed to update despite naming only the root directory. Runtime
+  # dependencies are deliberately loose ranges, so they rarely appear here.
   - package-ecosystem: pip
     directory: /
     schedule:
@@ -30,3 +40,11 @@ updates:
     groups:
       linters:
         patterns: ["ruff", "clang-format"]
+      # The Sphinx stack and the build backend. These are pinned in
+      # docs/requirements.txt and pyproject.toml and move together in
+      # practice; the documentation job builds with -W, so a group that
+      # breaks rendering fails as one unit rather than bisecting across
+      # five separate pull requests.
+      python-packages:
+        patterns: ["*"]
+        exclude-patterns: ["ruff", "clang-format"]

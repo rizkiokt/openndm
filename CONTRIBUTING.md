@@ -79,7 +79,7 @@ OpenNDM is a C++17 core with pybind11 bindings. You need a C++17 compiler;
 CMake, ninja and pybind11 arrive through the build requirements.
 
 ```bash
-python -m venv --system-site-packages .venv
+python -m venv .venv
 source .venv/bin/activate
 pip install cmake ninja pybind11 scikit-build-core
 pip install --no-build-isolation -e '.[dev]'
@@ -88,6 +88,17 @@ pip install --no-build-isolation -e '.[dev]'
 `--no-build-isolation` with an editable install means a C++ change is picked up
 by re-running the `pip install` line, without re-resolving the build
 environment each time.
+
+**Do not add `--system-site-packages`.** It lets whatever is installed
+system-wide — an Anaconda base environment in particular — satisfy imports
+inside the virtualenv, so a dependency the project fails to declare still
+resolves locally and the omission only surfaces in CI. Four consecutive CI
+failures were traced to exactly this: `linkify-it-py`, `ipython` and `pandoc`
+were all present through Anaconda and missing from the declared requirements,
+and each local build passed while the runner failed.
+
+If a docs or test dependency is missing, the fix is to declare it in
+`pyproject.toml` or `docs/requirements.txt`, not to borrow it from the system.
 
 ## Running the tests
 
