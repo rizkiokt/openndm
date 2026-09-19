@@ -7,7 +7,7 @@ import pytest
 
 import openndm
 
-from conftest import IAEA_MAP, iaea_geometry
+from conftest import IAEA_MAP, iaea_geometry, one_group_library
 
 
 def test_uniform_lattice_node_and_surface_counts():
@@ -90,7 +90,8 @@ def test_albedo_boundary_requires_values():
 def test_unknown_boundary_name_is_rejected():
     with pytest.raises(ValueError, match="unknown boundary condition"):
         openndm.Geometry.from_lattice(
-            np.zeros((1, 2, 2), dtype=int), pitch=10.0,
+            np.zeros((1, 2, 2), dtype=int),
+            pitch=10.0,
             boundaries={"x_max": "perfectly_matched"},
         )
 
@@ -104,9 +105,7 @@ def test_unknown_face_name_is_rejected():
 
 def test_empty_core_map_is_rejected():
     with pytest.raises(openndm.InputError, match="no active positions"):
-        openndm.Geometry.from_lattice(
-            np.full((1, 2, 2), openndm.INACTIVE), pitch=10.0
-        )
+        openndm.Geometry.from_lattice(np.full((1, 2, 2), openndm.INACTIVE), pitch=10.0)
 
 
 def test_negative_width_is_rejected():
@@ -120,3 +119,42 @@ def test_iaea_map_has_the_expected_active_count():
     g = iaea_geometry()
     assert g.n_nodes == int((IAEA_MAP != 0).sum())
     assert g.n_compositions == 4  # the rodded reflector is unused in 2D
+
+
+@pytest.mark.parametrize("sub", [1, 2, 3, 4])
+def test_subdivision_preserves_extent_with_explicit_widths(sub):
+    """Refining the mesh must not change the size of the core (FR-GEO-4).
+
+    Explicit widths are given per lattice cell, so subdividing an axis splits
+    each cell into equal parts. Repeating the parent width instead scales the
+    whole axis by the subdivision factor, which enlarges the core without any
+    error: on this 60 cm stack it produced a 120 cm one and moved k_eff by
+    2751 pcm.
+    """
+    core = np.zeros((4, 4, 4), dtype=int)
+    dz = [10.0, 20.0, 20.0, 10.0]
+    g = openndm.Geometry.from_lattice(core, pitch=20.0, dz=dz, subdivide=(1, 1, sub))
+    assert g.n_nodes == 4 * 4 * 4 * sub
+    assert float(np.sum(dz)) == pytest.approx(60.0)
+    assert g.total_volume == pytest.approx(80.0 * 80.0 * 60.0)
+
+
+def test_subdivision_refines_the_same_problem(tight):
+    """The refined mesh must solve the same core, not a different one."""
+    core = np.zeros((4, 4, 4), dtype=int)
+    dz = [10.0, 20.0, 20.0, 10.0]
+    faces = ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max")
+    boundaries = dict.fromkeys(faces, "zero_flux")
+    library = one_group_library()
+
+    def k_eff(sub):
+        geometry = openndm.Geometry.from_lattice(
+            core, pitch=20.0, dz=dz, subdivide=(1, 1, sub), boundaries=boundaries
+        )
+        return openndm.Model(geometry, library, tight).solve().k_eff
+
+    change_pcm = 1.0e5 * (k_eff(2) - k_eff(1))
+    assert abs(change_pcm) < 200.0, (
+        f"axial refinement moved k_eff by {change_pcm:+.1f} pcm, which is a "
+        "resized core rather than a refined mesh"
+    )
