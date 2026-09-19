@@ -75,9 +75,10 @@ class Geometry:
             Uniform node size. Ignored along an axis for which an explicit
             width array is given.
         dx, dy, dz : sequence of float, optional
-            Explicit non-uniform node widths (FR-GEO-1). Their lengths must
-            match the corresponding dimension of ``composition`` after
-            subdivision.
+            Explicit non-uniform node widths (FR-GEO-1), one per *lattice*
+            cell, before subdivision. ``subdivide`` splits each of them into
+            equal parts, so the extent along the axis does not depend on how
+            finely it is meshed.
         boundaries : mapping, optional
             Condition per outer face, keyed ``'x_min'``, ``'x_max'``,
             ``'y_min'``, ``'y_max'``, ``'z_min'``, ``'z_max'`` and valued
@@ -133,7 +134,10 @@ class Geometry:
             if explicit is None:
                 widths.append(np.full(n, p[axis] / sub_n, dtype=float))
             else:
-                w = np.repeat(np.asarray(explicit, dtype=float), sub_n)
+                # Each lattice cell splits into sub_n nodes that share its
+                # width. Repeating the parent width instead would scale the
+                # whole axis by sub_n, silently enlarging the core.
+                w = np.repeat(np.asarray(explicit, dtype=float) / sub_n, sub_n)
                 if w.size != n:
                     raise ValueError(
                         f"axis {axis}: {w.size} widths for {n} nodes"
