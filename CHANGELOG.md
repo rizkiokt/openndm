@@ -8,6 +8,10 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **A roadmap** (`docs/roadmap.md`), recording what is planned and why in that
+  order: control rod banks, then kinetics, then thermal hydraulics, with the
+  independent items listed separately. `status.md` records what exists;
+  nothing recorded what comes next.
 - **A user guide** (`docs/user-guide.md`), covering the whole API from
   installation to troubleshooting, with every code snippet executed against
   the build.

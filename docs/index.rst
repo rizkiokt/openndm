@@ -60,6 +60,7 @@ distributed through conda-forge. The solver itself imports and runs without it.
    :caption: Project
 
    status
+   roadmap
    requirements
    architecture
    contributing
