@@ -129,7 +129,7 @@ print(result.f_q, result.f_dh)   # peaking factors
   observed order of accuracy of each kernel.
 - **V-3, kernel consistency.** Coarse-mesh SANM and NEM against a refined FDM
   solution of the same problem. On the IAEA-2D core map, SANM at one node per
-  assembly lands 18 pcm from the fine-mesh converged eigenvalue, and all three
+  assembly lands 3.7 pcm from the mesh-converged FDM eigenvalue, and all three
   kernels agree to within 25 pcm under refinement. This is the check that
   catches a wrong transverse leakage, a wrong discontinuity factor convention
   or a broken two-node closure; mesh refinement alone would not, because a

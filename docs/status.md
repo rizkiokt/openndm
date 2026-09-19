@@ -192,10 +192,12 @@ condition. This is why the nodal kernels are only about 4× more accurate than
 FDM on the analytic bare cuboid rather than the order of magnitude they achieve
 inside a core: on that problem the entire remaining error lives at the
 boundary. It matters much less on a real core, where the outer boundary sits
-in a reflector far from the fuel, which is why SANM at one node per assembly
-still lands 18 pcm from the fine-mesh limit on the IAEA map.
+in a reflector far from the fuel: SANM at one node per assembly lands 2.6 pcm
+from the fine-mesh limit on the IAEA map, so on a core problem there is almost
+nothing left for a boundary correction to recover.
 
 Closing it means adding a one-node boundary problem to the `Kernel` interface:
 the node-average constraint fixes one coefficient and the boundary condition
 fixes the other, so it is exactly determined and structurally simpler than the
-two-node problem already implemented.
+two-node problem already implemented. Worth doing for the analytic problem and
+for completeness of FR-SOL-4; not worth doing for core accuracy.
