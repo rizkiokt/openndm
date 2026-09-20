@@ -27,7 +27,65 @@ import numpy as np
 
 from .exceptions import InputError
 
-__all__ = ["ControlRodBank", "ControlRods"]
+__all__ = ["ControlRodBank", "ControlRods", "RodWorth"]
+
+
+@dataclass(frozen=True)
+class RodWorth:
+    """A bank worth curve (FR-MODE-5).
+
+    Worth is a reactivity difference, not a difference in ``k_eff``:
+
+    .. math:: w(p) = \\rho_{ref} - \\rho(p) = 1/k(p) - 1/k_{ref}
+
+    reported in pcm and signed so that **inserting a bank gives positive
+    worth**, which is the usual convention. Using :math:`\\Delta k/k` instead
+    is a common shortcut that drifts from this by of order its own square,
+    which matters once a bank is worth several thousand pcm.
+
+    Attributes
+    ----------
+    bank : str or None
+        The bank swept, or None for a multi-bank sequence.
+    steps : ndarray
+        Position of each point, in steps. The sequence index for a
+        multi-bank sweep.
+    tip_height : ndarray
+        Tip height above the bottom of the mesh, in cm.
+    k_eff : ndarray
+    integral : ndarray
+        Worth relative to the reference position, in pcm.
+    differential : ndarray
+        The derivative of :attr:`integral` with respect to position, in pcm
+        per step. Central differences inside the sweep, one-sided at its
+        ends, over the actual spacing -- so a non-uniform sweep is handled,
+        but a sweep of one point has no derivative and returns zero.
+
+        Note the sign. Steps *withdraw* the bank and withdrawal reduces
+        worth, so this is negative for a normal bank, largest in magnitude
+        where the bank is most effective. A differential worth curve is
+        conventionally plotted as its negative, the reactivity added per
+        step of withdrawal. It is left as a plain derivative here so that
+        integrating it returns :attr:`integral` exactly, rather than
+        returning it with a sign flip.
+    reference_k : float
+        ``k_eff`` at the reference position.
+    """
+
+    bank: str | None
+    steps: np.ndarray
+    tip_height: np.ndarray
+    k_eff: np.ndarray
+    integral: np.ndarray
+    differential: np.ndarray
+    reference_k: float
+
+    def __repr__(self) -> str:
+        span = float(np.max(self.integral) - np.min(self.integral))
+        return (
+            f"<RodWorth bank={self.bank!r} points={self.steps.size} "
+            f"span={span:.1f} pcm>"
+        )
 
 
 @dataclass(frozen=True)
@@ -254,7 +312,9 @@ class ControlRods:
         targets = names or tuple(self._banks)
         return self.insert(dict.fromkeys(targets, None))
 
-    def converge_cusping(self, model, max_sweeps: int = 8, tolerance: float = 1.0e-6):
+    def converge_cusping(
+        self, model, max_sweeps: int = 8, tolerance: float = 1.0e-6, **overrides
+    ):
         """Solve, re-weighting the tip node's mixture with the flux each time.
 
         :meth:`insert` weights the partial node by volume alone, which is the
@@ -274,17 +334,145 @@ class ControlRods:
         tolerance : float
             Stop once the largest relative change in a mixed cross section
             falls below this.
+        **overrides
+            Settings overridden for every solve, e.g. ``warm_start=True``.
         """
-        result = model.solve()
+        result = model.solve(**overrides)
         for _ in range(max_sweeps):
             change = self._reweight_from_flux(np.asarray(result.flux))
             if change is None or change < tolerance:
                 break
             model.refresh()
-            result = model.solve()
+            result = model.solve(**overrides)
         return result
 
+    def worth_curve(
+        self,
+        model,
+        bank: str | None = None,
+        positions=None,
+        *,
+        reference=None,
+        cusping: bool = True,
+        warm_start: bool = True,
+    ) -> RodWorth:
+        """Integral and differential worth of a bank over a set of positions.
+
+        Parameters
+        ----------
+        model : Model
+            Must hold this object's geometry and library.
+        bank : str, optional
+            Bank to sweep. Every other bank stays where it is, which is how
+            an overlapping sequence is modelled: set the others first. Pass
+            None to sweep a prepared sequence instead, giving ``positions``
+            as a sequence of ``{bank: steps}`` mappings.
+        positions : sequence
+            Positions in steps, or mappings when ``bank`` is None.
+        reference : float or mapping, optional
+            The position worth is measured from. Defaults to fully
+            withdrawn, which is the usual convention and makes an inserted
+            bank's worth positive.
+        cusping : bool
+            Converge the cusping correction at each point, where a bank has
+            `cusp` slots. Turning it off measures the volume-weighted
+            mixture instead, which is biased -- see
+            :meth:`converge_cusping`.
+        warm_start : bool
+            Reuse the previous point's flux and coupling coefficients. A
+            worth curve is the case warm starting exists for (FR-OPT-3):
+            neighbouring positions differ in one node.
+
+        Returns
+        -------
+        RodWorth
+
+        Notes
+        -----
+        The bank positions are restored when the sweep finishes, and the
+        model refreshed, so measuring worth does not move the rods.
+        """
+        if positions is None:
+            raise InputError("worth_curve needs positions to sweep")
+        if bank is None:
+            states = [dict(p) for p in positions]
+            steps = np.arange(len(states), dtype=float)
+            for state in states:
+                for name in state:
+                    self._bank(name)
+        else:
+            self._bank(bank)
+            steps = np.asarray(positions, dtype=float)
+            states = [{bank: float(p)} for p in steps]
+        if not states:
+            raise InputError("worth_curve needs at least one position")
+
+        if reference is None:
+            reference_state = dict.fromkeys(self._banks)
+        elif isinstance(reference, Mapping):
+            reference_state = dict(reference)
+        elif bank is None:
+            raise InputError(
+                "a multi-bank sweep needs its reference given as a mapping"
+            )
+        else:
+            reference_state = {bank: float(reference)}
+
+        restore = self.positions
+        try:
+            reference_k = self._solve_at(model, reference_state, cusping, warm_start)
+            eigenvalues = [
+                self._solve_at(model, state, cusping, warm_start) for state in states
+            ]
+        finally:
+            self.insert(restore)
+            model.refresh()
+
+        k_eff = np.asarray(eigenvalues, dtype=float)
+        # Worth is a reactivity difference: rho_ref - rho(p) with
+        # rho = 1 - 1/k, which is 1/k - 1/k_ref. Positive when the bank is
+        # further in than the reference, and unlike dk/k it stays additive
+        # over a sequence.
+        integral = 1.0e5 * (1.0 / k_eff - 1.0 / reference_k)
+        if steps.size > 1:
+            differential = np.gradient(integral, steps)
+        else:
+            differential = np.zeros_like(integral)
+
+        tip = np.array(
+            [self._tip_height_at(state, bank) for state in states], dtype=float
+        )
+        return RodWorth(
+            bank=bank,
+            steps=steps,
+            tip_height=tip,
+            k_eff=k_eff,
+            integral=integral,
+            differential=differential,
+            reference_k=float(reference_k),
+        )
+
     # ----------------------------------------------------------------- inner
+    def _solve_at(self, model, state, cusping: bool, warm_start: bool) -> float:
+        self.insert(state)
+        model.refresh()
+        wants_cusping = cusping and any(
+            b.cusp is not None for b in self._banks.values()
+        )
+        if wants_cusping:
+            return self.converge_cusping(model, warm_start=warm_start).k_eff
+        return model.solve(warm_start=warm_start).k_eff
+
+    def _tip_height_at(self, state, bank: str | None) -> float:
+        if bank is not None:
+            return self._banks[bank].tip_height(state[bank])
+        heights = [
+            self._banks[name].tip_height(steps)
+            for name, steps in state.items()
+            if steps is not None
+        ]
+        return min(heights) if heights else float(np.sum(self._geometry.dz))
+
     def _partial_plane(self, bank: ControlRodBank, steps):
         """Plane holding the rod tip and the share of it the rod occupies."""
         if steps is None:

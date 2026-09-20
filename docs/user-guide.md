@@ -635,14 +635,46 @@ positions absolute rather than incremental: moving a bank twice gives the same
 core as setting its final position once, and `rods.withdraw()` restores
 exactly what was there before.
 
-Rod worth is a difference of two solves:
+### Worth curves
+
+`worth_curve` sweeps a bank and returns integral and differential worth:
 
 ```python
-rods.withdraw(); model.refresh()
-out = model.solve().k_eff
-rods.insert(A=0.0); model.refresh()
-worth_pcm = 1.0e5 * (out - model.solve().k_eff)
+curve = rods.worth_curve(model, "A", range(0, 229, 12))
+
+curve.steps           # positions swept
+curve.tip_height      # cm above the bottom of the mesh
+curve.k_eff
+curve.integral        # pcm, relative to fully withdrawn
+curve.differential    # d(integral)/d(step)
 ```
+
+Worth is a **reactivity** difference, `1/k(p) − 1/k_ref`, signed so that an
+inserted bank has positive worth. `Δk/k` is a common shortcut that drifts from
+this by of order its own square, which matters once a bank is worth several
+thousand pcm.
+
+Mind the sign of `differential`: steps *withdraw* the bank, so it is negative
+for a normal bank. It is a plain derivative of `integral`, so integrating it
+returns `integral`; a conventional differential-worth plot is its negative.
+
+Every other bank stays where it is, which is how an overlapping sequence is
+modelled — set the others first. For a sequence that moves several banks, pass
+mappings instead:
+
+```python
+curve = rods.worth_curve(
+    model,
+    positions=[{"A": None, "B": None}, {"A": 0.0, "B": None}, {"A": 0.0, "B": 0.0}],
+    reference={"A": None, "B": None},
+)
+```
+
+Points warm start from each other by default, which is the case warm starting
+exists for: neighbouring positions differ in one node. It is an accelerator,
+not an approximation — the curve is the same either way, and a test asserts it.
+The bank is put back where it was when the sweep finishes, so measuring worth
+does not move the rods.
 
 Every composition a bank can reach must appear in `rodded`, including
 reflector compositions if the rods travel through an axial reflector. A

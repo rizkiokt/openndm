@@ -499,3 +499,143 @@ def test_cusp_slots_must_be_distinct():
             rodded={FUEL: RODDED, 3: RODDED},
             cusp={FUEL: CUSP, 3: CUSP},
         )
+
+
+# -------------------------------------------------------------- worth curves
+def test_worth_curve_matches_two_direct_solves(tight):
+    """The curve must agree with worth computed the long way round."""
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    curve = rods.worth_curve(model, "A", [0.0, 50.0, 100.0])
+
+    rods.withdraw()
+    model.refresh()
+    withdrawn = model.solve().k_eff
+    rods.insert(A=0.0)
+    model.refresh()
+    inserted = rods.converge_cusping(model).k_eff
+    direct = 1.0e5 * (1.0 / inserted - 1.0 / withdrawn)
+
+    assert curve.integral[0] == pytest.approx(direct, abs=0.01)
+    assert curve.integral[-1] == pytest.approx(0.0, abs=1.0e-9)
+
+
+def test_inserting_gives_positive_worth(tight):
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    curve = rods.worth_curve(model, "A", [0.0, 100.0])
+    assert curve.integral[0] > 0.0, "an inserted bank must have positive worth"
+
+
+def test_worth_falls_monotonically_as_the_bank_withdraws(tight):
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    curve = rods.worth_curve(model, "A", np.arange(0.0, 100.1, 12.5))
+    assert np.all(np.diff(curve.integral) < 0.0), (
+        f"worth must fall as the bank withdraws, got {curve.integral}"
+    )
+
+
+def test_differential_integrates_back_to_the_integral(tight):
+    """The two curves must describe the same function."""
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    steps = np.arange(0.0, 100.1, 5.0)
+    curve = rods.worth_curve(model, "A", steps)
+
+    rebuilt = curve.integral[0] + np.concatenate(
+        [
+            [0.0],
+            np.cumsum(
+                np.diff(steps)
+                * 0.5
+                * (curve.differential[:-1] + curve.differential[1:])
+            ),
+        ]
+    )
+    span = float(np.max(curve.integral) - np.min(curve.integral))
+    assert np.max(np.abs(rebuilt - curve.integral)) < 0.02 * span, (
+        "trapezoid-integrating the differential curve must return the "
+        "integral curve to within the trapezoid error"
+    )
+
+
+def test_worth_curve_restores_the_bank(tight):
+    """Measuring worth must not move the rods."""
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    rods.insert(A=40.0)
+    before = geometry.compositions.copy()
+    rods.worth_curve(model, "A", [0.0, 50.0, 100.0])
+    assert rods.positions == {"A": 40.0}
+    assert np.array_equal(geometry.compositions, before)
+
+
+def test_warm_start_does_not_change_the_curve(tight):
+    """Warm starting is an accelerator, not an approximation (FR-OPT-3)."""
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    steps = [0.0, 25.0, 50.0, 75.0, 100.0]
+    warm = rods.worth_curve(model, "A", steps, warm_start=True)
+    cold = rods.worth_curve(model, "A", steps, warm_start=False)
+    assert np.max(np.abs(warm.integral - cold.integral)) < 0.5
+
+
+def test_worth_curve_takes_an_explicit_reference(tight):
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    curve = rods.worth_curve(model, "A", [0.0, 50.0], reference=50.0)
+    assert curve.integral[-1] == pytest.approx(0.0, abs=1.0e-9)
+    assert curve.integral[0] > 0.0
+
+
+def test_worth_curve_over_a_multi_bank_sequence(tight):
+    """A prepared sequence models bank overlap."""
+    columns_a = np.zeros((3, 3), dtype=bool)
+    columns_a[0, 0] = True
+    columns_b = np.zeros((3, 3), dtype=bool)
+    columns_b[2, 2] = True
+    geometry = openndm.Geometry.from_lattice(
+        np.full((NPLANES, 3, 3), FUEL, dtype=int),
+        pitch=(20.0, 20.0, 20.0),
+        dz=DZ,
+        boundaries=dict.fromkeys(
+            ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max"), "zero_flux"
+        ),
+    )
+    banks = [
+        openndm.ControlRodBank(name, columns=columns, rodded={FUEL: RODDED})
+        for name, columns in (("A", columns_a), ("B", columns_b))
+    ]
+    rods = openndm.ControlRods(geometry, banks)
+    model = openndm.Model(geometry, rod_library(), tight)
+
+    sequence = [
+        {"A": None, "B": None},
+        {"A": 50.0, "B": None},
+        {"A": 0.0, "B": None},
+        {"A": 0.0, "B": 50.0},
+        {"A": 0.0, "B": 0.0},
+    ]
+    curve = rods.worth_curve(
+        model, positions=sequence, reference={"A": None, "B": None}
+    )
+    assert curve.bank is None
+    assert np.array_equal(curve.steps, np.arange(5.0))
+    assert curve.integral[0] == pytest.approx(0.0, abs=1.0e-9)
+    assert np.all(np.diff(curve.integral) > 0.0), (
+        f"each step of the sequence inserts more, so worth must rise: {curve.integral}"
+    )
+
+
+def test_worth_curve_validates_its_arguments(tight):
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    with pytest.raises(openndm.InputError, match="needs positions"):
+        rods.worth_curve(model, "A")
+    with pytest.raises(openndm.InputError, match="at least one position"):
+        rods.worth_curve(model, "A", [])
+    with pytest.raises(openndm.InputError, match="unknown bank"):
+        rods.worth_curve(model, "B", [0.0])
+    with pytest.raises(openndm.InputError, match="reference given as a mapping"):
+        rods.worth_curve(model, positions=[{"A": 0.0}], reference=0.0)
