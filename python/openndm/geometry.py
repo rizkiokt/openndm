@@ -43,9 +43,10 @@ class Geometry:
     a hexagonal builder be added later without touching them (FR-GEO-6).
     """
 
-    def __init__(self, core: _core.Geometry, *, shape=None):
+    def __init__(self, core: _core.Geometry, *, shape=None, dz=None):
         self._g = core
         self._shape = shape or core.lattice_shape
+        self._dz = None if dz is None else np.asarray(dz, dtype=float)
 
     # ------------------------------------------------------------- builders
     @classmethod
@@ -163,7 +164,11 @@ class Geometry:
         spec.inactive_bc = _boundary(outside)
         spec.inactive_albedo = list(map(float, outside_albedo or []))
 
-        return cls(_core.Geometry.from_cartesian(spec), shape=(nz, ny, nx))
+        return cls(
+            _core.Geometry.from_cartesian(spec),
+            shape=(nz, ny, nx),
+            dz=widths[2],
+        )
 
     # ------------------------------------------------------------ properties
     @property
@@ -198,6 +203,19 @@ class Geometry:
         return self._g.compositions
 
     @property
+    def dz(self) -> np.ndarray:
+        """Axial node widths in cm, one per plane of ``shape[0]``.
+
+        A control rod bank at a continuous position needs the plane
+        boundaries, and a caller reconstructing them from its own input gets
+        them wrong as soon as ``subdivide`` is used: the widths here are the
+        post-subdivision ones.
+        """
+        if self._dz is None:
+            self._dz = self._derive_dz()
+        return self._dz
+
+    @property
     def lattice_to_node(self) -> np.ndarray:
         """Node index per flat lattice position, -1 where inactive."""
         return self._g.lattice_to_node
@@ -218,6 +236,22 @@ class Geometry:
         active = mapping >= 0
         out[active] = values[mapping[active]]
         return out.reshape(self.shape + values.shape[1:])
+
+    def _derive_dz(self) -> np.ndarray:
+        """Recover the axial widths from the node graph.
+
+        Only reached for a Geometry built straight from a ``_core.Geometry``
+        rather than through :meth:`from_lattice`, which records them.
+        """
+        dz = np.zeros(self.shape[0], dtype=float)
+        for node in self._g.nodes:
+            dz[node.ijk[2]] = node.width[2]
+        if np.any(dz <= 0.0):
+            raise ValueError(
+                "could not recover the axial mesh: plane(s) "
+                f"{np.flatnonzero(dz <= 0.0).tolist()} have no active node"
+            )
+        return dz
 
     def set_composition(self, node: int, composition: int) -> None:
         """Reassign one node's composition in place (FR-OPT-7)."""

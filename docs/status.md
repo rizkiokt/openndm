@@ -77,7 +77,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | FR-MODE-2 | done | Reuses the coupling coefficients converged by a forward solve. |
 | FR-MODE-3 | done | Verified against exact algebra in a leakage-free box, and against a method of manufactured solutions for the full multi-group operator. |
 | FR-MODE-4 | done | Secant with a bisection fallback; the boron model is supplied by the caller. |
-| FR-MODE-5 | partial | Achievable through `Model.sweep`, but there is no dedicated rod-worth API. |
+| FR-MODE-5 | partial | `ControlRodBank` and `ControlRods` give banks a radial map, a composition substitution and a position in steps on KOMODO's `%CROD` convention. Verified against `benchmarks/iaea3d`, which places the same rods by hand, node for node. Rod worth is a difference of two solves; there is no worth-curve helper. A node is rodded when its centre lies above the tip, which is exact on a plane boundary and rounds to the nearest plane otherwise: there is no cusping correction. |
 | FR-MODE-6 | not started | Needs FR-TH. |
 | FR-MODE-7 | not started | Needs FR-KIN. |
 | FR-MODE-8 | done | `Model.sweep`, reusing geometry and library, warm starting by default. |
