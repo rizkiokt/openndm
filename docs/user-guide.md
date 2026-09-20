@@ -373,6 +373,19 @@ results = model.sweep(mutate, [(0, 6), (2, 50)], warm_start=True)
 `sweep` mutates the model in place, so cases compound. Call `model.refresh()`
 after mutating the geometry or library outside a sweep.
 
+**Re-finalize the library after writing a composition.** `removal` is derived
+from absorption and the scattering matrix when you call `finalize()`, and the
+kernels read it rather than recomputing it. Writing a composition marks the
+library unfinalized; `refresh()` and every solve refuse until you finalize
+again, because otherwise the solve would quietly use the old absorption while
+every accessor reported the new one.
+
+```python
+lib.set_composition(2, D=..., absorption=..., ...)
+lib.finalize(warn=False)     # without this the next solve raises
+model.refresh()
+```
+
 ---
 
 ## Reading results

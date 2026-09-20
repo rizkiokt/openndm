@@ -6,6 +6,20 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Writing a composition after `finalize()` was silently ignored by the
+  solver.** `removal` is derived from absorption and the scattering matrix at
+  finalize time and the kernels read it rather than recomputing it, so a
+  mutated library solved with the *old* absorption while `composition()`
+  reported the new one. The C++ contract was already right -- taking mutable
+  access marks the library unfinalized -- and `Model.__init__` checked it, but
+  `Model.refresh()` did not, and `refresh()` is exactly what the documentation
+  tells you to call after changing cross sections. On an 8x8x8 test case the
+  discarded change was worth 39000 pcm. `refresh()`, `solve()` and
+  `solve_fixed_source()` now refuse a library that has been modified since it
+  was finalized, and say to call `finalize()`.
+
 ### Added
 
 - **Control rod banks** (`ControlRodBank`, `ControlRods`), addressing rods by

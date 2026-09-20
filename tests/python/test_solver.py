@@ -314,3 +314,66 @@ def test_sweep_runs_every_case(tight):
     assert all(r.converged for r in results)
     # The rodded centre must be worth something.
     assert results[2].k_eff < results[0].k_eff
+
+
+# ------------------------------------------- mutating a finalized library
+def _mutable_model(absorption, tight):
+    library = openndm.XSLibrary(1, 1)
+    library.set_composition(
+        0,
+        D=[1.0],
+        absorption=[absorption],
+        nu_fission=[0.1],
+        kappa_fission=[0.1],
+        chi=[1.0],
+        scatter=[[0.0]],
+    )
+    library.finalize(warn=False)
+    geometry = openndm.Geometry.from_lattice(
+        np.zeros((8, 8, 8), dtype=int),
+        pitch=12.5,
+        boundaries=dict.fromkeys(
+            ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"], "zero_flux"
+        ),
+    )
+    return openndm.Model(geometry, library, tight), library
+
+
+def _rewrite_absorption(library, absorption):
+    library.set_composition(
+        0,
+        D=[1.0],
+        absorption=[absorption],
+        nu_fission=[0.1],
+        kappa_fission=[0.1],
+        chi=[1.0],
+        scatter=[[0.0]],
+    )
+
+
+@pytest.mark.parametrize("call", ["solve", "refresh", "solve_fixed_source"])
+def test_solving_a_mutated_library_is_refused(call, tight):
+    """``removal`` is derived at finalize time and the kernels read it.
+
+    Writing a composition afterwards leaves the cached removal in place, so
+    solving anyway uses the *old* absorption while every accessor reports the
+    new one. That is silent and worth about 39000 pcm on this problem.
+    """
+    model, library = _mutable_model(0.08, tight)
+    model.solve()
+    _rewrite_absorption(library, 0.12)
+    arguments = ([np.zeros((model.geometry.n_nodes, 1))] if "fixed" in call else [])
+    with pytest.raises(openndm.InputError, match="stale"):
+        getattr(model, call)(*arguments)
+
+
+def test_refinalizing_makes_the_change_take_effect(tight):
+    model, library = _mutable_model(0.08, tight)
+    before = model.solve().k_eff
+    _rewrite_absorption(library, 0.12)
+    library.finalize(warn=False)
+    model.refresh()
+    after = model.solve().k_eff
+    assert after < before - 0.1, (
+        f"raising absorption by half must drop k_eff; got {before} -> {after}"
+    )
