@@ -194,6 +194,7 @@ void CmfdSystem::assemble(double inv_k_shift)
       // Within-group scattering never leaves the node, so it is excluded from
       // the removal term and never appears here.
       diag -= chi_[idx] * nu_fission_[idx] * inv_k_shift;
+      if (!time_removal_.empty()) diag += time_removal_[idx];
       A.add_diagonal(i, diag);
     }
     for (int s = 0; s < geom_.n_surfaces(); ++s) {
@@ -272,9 +273,11 @@ int CmfdSystem::solve_groups(const std::vector<double>& fission_src,
           b += scatter_[(base + gp) * G + g] * flux[base + gp];
           fission_other += nu_fission_[base + gp] * flux[base + gp];
         }
-        const double chi = chi_[base + g];
+        const double chi =
+            transient_chi_.empty() ? chi_[base + g] : transient_chi_[base + g];
         b += chi * (inv_k_shift * fission_other +
                        lambda * fission_src[static_cast<std::size_t>(i)]);
+        if (!transient_source_.empty()) b += transient_source_[base + g];
         rhs_[static_cast<std::size_t>(i)] = b;
         group_flux_[static_cast<std::size_t>(i)] = flux[base + g];
       }
@@ -555,6 +558,81 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
   double max_change = 0.0;
   for (double c : change) max_change = std::max(max_change, c);
   return max_change;
+}
+
+void CmfdSystem::set_time_removal(double theta_dt)
+{
+  const int G = n_groups_;
+  const auto& nodes = geom_.nodes();
+  if (!(theta_dt > 0.0)) {
+    time_removal_.clear();
+    return;
+  }
+  time_removal_.assign(static_cast<std::size_t>(geom_.n_nodes()) * G, 0.0);
+  for (int i = 0; i < geom_.n_nodes(); ++i) {
+    const Node& node = nodes[static_cast<std::size_t>(i)];
+    const Composition& c = xs_.composition(node.composition);
+    for (int g = 0; g < G; ++g) {
+      const std::size_t gg = static_cast<std::size_t>(g);
+      const double inv_v =
+          gg < c.inv_velocity.size() ? c.inv_velocity[gg] : 0.0;
+      time_removal_[static_cast<std::size_t>(i) * G + g] =
+          node.volume * inv_v / theta_dt;
+    }
+  }
+}
+
+void CmfdSystem::set_transient_chi(const std::vector<double>& chi)
+{
+  transient_chi_ = chi;
+}
+
+void CmfdSystem::set_transient_source(const std::vector<double>& source)
+{
+  transient_source_ = source;
+}
+
+double CmfdSystem::time_removal(int node, int group) const
+{
+  if (time_removal_.empty()) return 0.0;
+  return time_removal_[static_cast<std::size_t>(node) * n_groups_ + group];
+}
+
+double CmfdSystem::scatter(int node, int from, int to) const
+{
+  const std::size_t base = static_cast<std::size_t>(node) * n_groups_;
+  return scatter_[(base + static_cast<std::size_t>(from)) * n_groups_ + to];
+}
+
+double CmfdSystem::nu_fission(int node, int group) const
+{
+  return nu_fission_[static_cast<std::size_t>(node) * n_groups_ + group];
+}
+
+double CmfdSystem::chi(int node, int group) const
+{
+  return chi_[static_cast<std::size_t>(node) * n_groups_ + group];
+}
+
+void CmfdSystem::apply_operator(
+    const std::vector<double>& flux, std::vector<double>& out) const
+{
+  const int G = n_groups_;
+  const int n = geom_.n_nodes();
+  out.assign(static_cast<std::size_t>(n) * G, 0.0);
+  std::vector<double> in(static_cast<std::size_t>(n));
+  std::vector<double> got(static_cast<std::size_t>(n));
+  for (int g = 0; g < G; ++g) {
+    for (int i = 0; i < n; ++i) {
+      in[static_cast<std::size_t>(i)] =
+          flux[static_cast<std::size_t>(i) * G + g];
+    }
+    matrices_[static_cast<std::size_t>(g)].multiply(in, got);
+    for (int i = 0; i < n; ++i) {
+      out[static_cast<std::size_t>(i) * G + g] =
+          got[static_cast<std::size_t>(i)];
+    }
+  }
 }
 
 }  // namespace openndm

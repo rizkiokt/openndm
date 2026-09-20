@@ -6,6 +6,7 @@
 #include <cstdio>
 
 #include "openndm/error.h"
+#include "openndm/precursors.h"
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -319,6 +320,288 @@ void Solver::compute_power(std::vector<double>& power) const
     const double norm = static_cast<double>(n_fuel) / total;
     for (auto& p : power) p *= norm;
   }
+}
+
+// ---------------------------------------------------------------- transient
+
+double Solver::chi_delayed(int node, int g, int d) const
+{
+  const DelayedData& delayed = xs_.delayed();
+  const int G = xs_.n_groups();
+  if (static_cast<int>(delayed.chi_delayed.size()) ==
+      delayed.n_precursors() * G) {
+    return delayed.chi_delayed[static_cast<std::size_t>(d) * G + g];
+  }
+  // No delayed spectrum supplied: delayed neutrons are born with the same
+  // spectrum as prompt ones. That is exact for a one-group problem and an
+  // approximation for any other, which is why FR-XS-3 stores chi_delayed.
+  return cmfd_.chi(node, g);
+}
+
+double Solver::chi_prompt(int node, int g) const
+{
+  const DelayedData& delayed = xs_.delayed();
+  const double beta = delayed.beta_total();
+  if (!(beta < 1.0)) {
+    throw InputError("total delayed fraction must be below one");
+  }
+  double weighted = 0.0;
+  for (int d = 0; d < delayed.n_precursors(); ++d) {
+    weighted +=
+        delayed.beta[static_cast<std::size_t>(d)] * chi_delayed(node, g, d);
+  }
+  return (cmfd_.chi(node, g) - weighted) / (1.0 - beta);
+}
+
+void Solver::fission_power(
+    const std::vector<double>& flux, std::vector<double>& power) const
+{
+  const int n = geom_.n_nodes();
+  const int G = xs_.n_groups();
+  power.assign(static_cast<std::size_t>(n), 0.0);
+  const auto& nodes = geom_.nodes();
+  for (int i = 0; i < n; ++i) {
+    const Node& node = nodes[static_cast<std::size_t>(i)];
+    const Composition& c = xs_.composition(node.composition);
+    double total = 0.0;
+    for (int g = 0; g < G; ++g) {
+      total += c.kappa_fission[static_cast<std::size_t>(g)] *
+               flux[static_cast<std::size_t>(i) * G + g];
+    }
+    power[static_cast<std::size_t>(i)] = total * node.volume;
+  }
+}
+
+void Solver::time_derivative(const std::vector<double>& flux,
+    const std::vector<double>& fission_norm,
+    const std::vector<double>& delayed_source, std::vector<double>& out) const
+{
+  const int n = geom_.n_nodes();
+  const int G = xs_.n_groups();
+  const DelayedData& delayed = xs_.delayed();
+  const double beta = delayed.beta_total();
+
+  // The assembled operator carries leakage, removal and, during a step, the
+  // time term. Subtracting the time term leaves the static operator.
+  std::vector<double> applied;
+  cmfd_.apply_operator(flux, applied);
+
+  out.assign(static_cast<std::size_t>(n) * G, 0.0);
+  for (int i = 0; i < n; ++i) {
+    const std::size_t base = static_cast<std::size_t>(i) * G;
+    for (int g = 0; g < G; ++g) {
+      double value =
+          -(applied[base + g] - cmfd_.time_removal(i, g) * flux[base + g]);
+      for (int gp = 0; gp < G; ++gp) {
+        if (gp == g) continue;
+        value += cmfd_.scatter(i, gp, g) * flux[base + gp];
+      }
+      value += chi_prompt(i, g) * (1.0 - beta) *
+               fission_norm[static_cast<std::size_t>(i)];
+      value += delayed_source[base + g];
+      out[base + g] = value;
+    }
+  }
+}
+
+void Solver::start_transient(const Settings& settings)
+{
+  const int n = geom_.n_nodes();
+  const int G = xs_.n_groups();
+  if (!has_solution_ || flux_.empty()) {
+    throw InputError(
+        "a transient starts from a converged static solution; call solve() "
+        "first");
+  }
+  for (int c = 0; c < xs_.n_compositions(); ++c) {
+    const Composition& comp = xs_.composition(c);
+    bool any = false;
+    for (double v : comp.inv_velocity) any = any || (v > 0.0);
+    if (!any) {
+      throw InputError("composition " + std::to_string(c) +
+                       " has no inverse velocities; a time-dependent solve "
+                       "cannot be scaled without them");
+    }
+  }
+
+  precursors_ = std::make_unique<PrecursorState>(n, xs_.delayed());
+  k_static_ = k_eff_;
+  time_ = 0.0;
+
+  std::vector<double> source;
+  cmfd_.fission_source(flux_, source);
+  fission_norm_.assign(static_cast<std::size_t>(n), 0.0);
+  for (int i = 0; i < n; ++i) {
+    fission_norm_[static_cast<std::size_t>(i)] =
+        source[static_cast<std::size_t>(i)] / k_static_;
+  }
+  precursors_->set_equilibrium(fission_norm_);
+
+  // The explicit half of the theta scheme needs the derivative as it stands
+  // now. At a converged critical steady state it is zero analytically, and
+  // evaluating it rather than assuming it turns any inconsistency between
+  // the static operator and the transient one into a visible null-transient
+  // drift rather than a silent bias.
+  cmfd_.set_time_removal(0.0);
+  cmfd_.set_transient_chi({});
+  cmfd_.set_transient_source({});
+  cmfd_.assemble(0.0);
+  std::vector<double> delayed_source;
+  precursors_->delayed_source(xs_.delayed(), G, delayed_source);
+  time_derivative(flux_, fission_norm_, delayed_source, derivative_);
+
+  (void)settings;
+  in_transient_ = true;
+}
+
+const std::vector<double>& Solver::precursors() const
+{
+  if (!precursors_) throw InputError("no transient in progress");
+  return precursors_->concentrations();
+}
+
+int Solver::n_precursors() const
+{
+  return precursors_ ? precursors_->n_precursors() : 0;
+}
+
+TransientRecord Solver::step(double dt, const Settings& settings)
+{
+  if (!in_transient_ || !precursors_) {
+    throw InputError("call start_transient() before step()");
+  }
+  if (!(dt > 0.0)) throw InputError("time step must be positive");
+  const double theta = settings.theta;
+  if (!(theta > 0.0) || theta > 1.0) {
+    throw InputError("theta must be in (0, 1]");
+  }
+
+  const int n = geom_.n_nodes();
+  const int G = xs_.n_groups();
+  const DelayedData& delayed = xs_.delayed();
+  const int D = delayed.n_precursors();
+  const double beta = delayed.beta_total();
+
+  cmfd_.refresh_cross_sections();
+
+  if (theta < 1.0) {
+    // Evaluate the explicit half against the cross sections this step runs
+    // with, not the ones the previous step ended with. A perturbation applied
+    // between steps belongs to this interval, and using the stale operator
+    // injects a local O(1) error at the step where it changes -- one step, so
+    // O(dt) overall, which silently drags Crank-Nicolson down to first order
+    // while leaving theta = 1 untouched because it never reads this term.
+    cmfd_.set_time_removal(0.0);
+    cmfd_.set_transient_chi({});
+    cmfd_.set_transient_source({});
+    cmfd_.assemble(0.0);
+    std::vector<double> previous_delayed;
+    precursors_->delayed_source(delayed, G, previous_delayed);
+    time_derivative(flux_, fission_norm_, previous_delayed, derivative_);
+  }
+
+  cmfd_.set_time_removal(theta * dt);
+
+  // The analytic precursor solution is linear in the new fission source, so
+  // its implicit part is an extra fission spectrum rather than an iteration:
+  //   chi_eff = chi_p (1 - beta) + sum_d lambda_d chi_d beta_d I1_d / dt
+  std::vector<double> chi_eff(static_cast<std::size_t>(n) * G, 0.0);
+  std::vector<double> known(static_cast<std::size_t>(n) * G, 0.0);
+  std::vector<double> decay(static_cast<std::size_t>(D));
+  std::vector<double> i0(static_cast<std::size_t>(D));
+  std::vector<double> i1(static_cast<std::size_t>(D));
+  for (int d = 0; d < D; ++d) {
+    const double lambda = delayed.lambda[static_cast<std::size_t>(d)];
+    decay[static_cast<std::size_t>(d)] = std::exp(-lambda * dt);
+    i0[static_cast<std::size_t>(d)] = decay_integral_0(lambda, dt);
+    i1[static_cast<std::size_t>(d)] = decay_integral_1(lambda, dt);
+  }
+
+  for (int i = 0; i < n; ++i) {
+    const std::size_t base = static_cast<std::size_t>(i) * G;
+    const double f_old = fission_norm_[static_cast<std::size_t>(i)];
+    for (int g = 0; g < G; ++g) {
+      double implicit = chi_prompt(i, g) * (1.0 - beta);
+      double explicit_part = 0.0;
+      for (int d = 0; d < D; ++d) {
+        const std::size_t dd = static_cast<std::size_t>(d);
+        const double lambda = delayed.lambda[dd];
+        const double b = delayed.beta[dd];
+        const double chid = chi_delayed(i, g, d);
+        implicit += lambda * chid * b * i1[dd] / dt;
+        explicit_part += lambda * chid *
+                         (precursors_->concentration(i, d) * decay[dd] +
+                             b * f_old * (i0[dd] - i1[dd] / dt));
+      }
+      chi_eff[base + g] = implicit;
+      known[base + g] = explicit_part +
+                        cmfd_.time_removal(i, g) * flux_[base + g] +
+                        ((1.0 - theta) / theta) * derivative_[base + g];
+    }
+  }
+
+  cmfd_.set_transient_chi(chi_eff);
+  cmfd_.set_transient_source(known);
+  cmfd_.assemble(0.0);
+
+  // The nonlinear nodal coupling coefficients are not re-converged inside a
+  // step: Dhat is held at the value the static solve left. The two-node
+  // problem would have to carry the time and delayed terms to be consistent
+  // here, and that is a separate piece of work. For FDM there is nothing to
+  // freeze; for the nodal kernels this is an approximation that grows with
+  // how far the flux shape moves from the static one.
+  std::vector<double> previous = flux_;
+  std::vector<double> source(static_cast<std::size_t>(n));
+  TransientRecord record;
+  record.dt = dt;
+
+  for (int iter = 1; iter <= settings.max_step_iterations; ++iter) {
+    // solve_groups scales the fission source by 1/k_eff, so passing the raw
+    // source with k_eff = k_static applies the criticality normalisation
+    // exactly once.
+    cmfd_.fission_source(flux_, source);
+    record.inner_iterations +=
+        cmfd_.solve_groups(source, k_static_, 0.0, flux_, settings);
+
+    double change = 0.0;
+    double scale = 0.0;
+    for (std::size_t j = 0; j < flux_.size(); ++j) {
+      change += std::abs(flux_[j] - previous[j]);
+      scale += std::abs(flux_[j]);
+    }
+    previous = flux_;
+    record.iterations = iter;
+    if (scale > 0.0 && change / scale < settings.step_tolerance) {
+      record.converged = true;
+      break;
+    }
+  }
+
+  // Advance the precursors across the step with the fission source running
+  // linearly from its old value to the new one, which is the assumption the
+  // effective spectrum above was built on.
+  std::vector<double> fission_new(static_cast<std::size_t>(n));
+  cmfd_.fission_source(flux_, source);
+  for (int i = 0; i < n; ++i) {
+    fission_new[static_cast<std::size_t>(i)] =
+        source[static_cast<std::size_t>(i)] / k_static_;
+  }
+  precursors_->advance(fission_norm_, fission_new, dt);
+  fission_norm_ = fission_new;
+  time_ += dt;
+
+  std::vector<double> power;
+  fission_power(flux_, power);
+  double total = 0.0;
+  double peak = 0.0;
+  for (double value : power) {
+    total += value;
+    peak = std::max(peak, value);
+  }
+  record.time = time_;
+  record.total_power = total;
+  record.peak_power = peak;
+  return record;
 }
 
 }  // namespace openndm

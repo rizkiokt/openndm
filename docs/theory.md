@@ -487,11 +487,6 @@ which makes results comparable between meshes and between runs.
 
 ## 9. Delayed neutron precursors
 
-Only the precursor equation is implemented so far; the flux is still solved
-at steady state, so nothing in this section is reachable from a transient
-yet. It is written out here because the integration scheme is a choice, not a
-detail.
-
 For precursor group $d$ in node $i$,
 
 $$ \frac{dC_{d,i}}{dt} = \beta_d F_i(t) - \lambda_d C_{d,i}, \qquad
@@ -547,6 +542,79 @@ $$ S^{\text{delayed}}_{g,i} = \sum_d \lambda_d C_{d,i}\, \chi^d_g $$
 with $\chi^d$ the delayed spectrum of group $d$ (FR-XS-3). A library without
 one puts every delayed neutron in the top group, which is right for a
 one-group problem and wrong for any real multi-group library.
+
+## 10. Time integration
+
+The flux is advanced by a $\theta$-weighted scheme (FR-KIN-2). Writing the
+time derivative as $R(\phi)$ — leakage, removal, scattering, prompt fission
+and the delayed source — and dividing through by $\theta$,
+
+$$ T\left(\phi^{n+1} - \phi^n\right) = R^{n+1}
+   + \frac{1-\theta}{\theta} R^n, \qquad
+   T_{g,i} = \frac{V_i}{v_g\,\theta\,\Delta t} $$
+
+so each step is a fixed-source solve on the static operator with $T$ added to
+the diagonal. $\theta = 1$ is fully implicit, $\theta = 1/2$ Crank-Nicolson.
+
+### 10.1 Folding the precursors into the fission spectrum
+
+The analytic precursor solution of §9 is *linear* in the new fission source,
+
+$$ C_d^{n+1} = \underbrace{C_d^n e^{-\lambda_d \Delta t}
+   + \beta_d \tilde F^n\!\left(I_0 - \frac{I_1}{\Delta t}\right)}_{\text{known}}
+   + \beta_d \tilde F^{n+1} \frac{I_1}{\Delta t} $$
+
+so the part of the delayed source that depends on the new flux is
+proportional to $\tilde F^{n+1}$ and merges into the fission term:
+
+$$ \chi^{\text{eff}}_g = \chi^p_g (1-\beta)
+   + \sum_d \lambda_d \chi^d_g \beta_d \frac{I_1}{\Delta t} $$
+
+The step is then a single fixed-source solve with an effective emission
+spectrum, rather than an iteration between the flux and the precursors.
+
+### 10.2 Criticality normalisation
+
+A static solve generally returns $k \neq 1$. The fission source is divided by
+that eigenvalue for the whole transient, which makes the initial state
+exactly critical. Without it a core at $k = 1.03$ ramps from the first step,
+and the ramp looks like physics rather than like an inconsistent initial
+condition. The prompt spectrum follows from the total and delayed ones,
+
+$$ \chi^p_g = \frac{\chi_g - \sum_d \beta_d \chi^d_g}{1 - \beta} $$
+
+so that $\chi^p(1-\beta) + \sum_d \beta_d \chi^d = \chi$ exactly and the
+null transient closes.
+
+### 10.3 What is not done
+
+The nonlinear nodal coupling coefficients are **not** re-converged inside a
+step: $\widehat{D}$ is held at the value the static solve left. Making it
+consistent means carrying the time and delayed terms into the two-node
+problem of §3. Adaptive time stepping (FR-KIN-3) and the exponential
+transformation (FR-KIN-2) are not implemented.
+
+## 11. Verification of the time integration
+
+A leakage-free box reduces the spatial solve to exact point kinetics, which
+gives closed-form answers to check against — no other code and no
+transcribed deck.
+
+| Check | Result |
+|---|---|
+| Null transient | Power constant to 1 part in $10^{10}$ over 2 s, both $\theta$ |
+| Prompt jump | $\beta/(\beta-\rho)$ to 0.5% |
+| Asymptotic period | Inhour root to 0.2% |
+| Observed order, $\theta = 1$ | 1.00 |
+| Observed order, $\theta = 1/2$ | 2.00 |
+
+The order has to be measured **inside the prompt layer**. Later on the
+amplitude is set by the precursor equation, which is integrated in closed
+form, and that masks the order of the flux scheme entirely: both weightings
+look second order there. Measuring in the wrong window is how an error of
+this kind stays hidden.
+
+
 
 ## References
 

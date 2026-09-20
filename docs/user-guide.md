@@ -19,9 +19,10 @@ How to drive the solver. For the equations it implements see
 9. [Group constants from OpenMC](#group-constants-from-openmc)
 10. [Branch libraries and feedback](#branch-libraries-and-feedback)
 11. [Control rods](#control-rods)
-12. [Embedding and performance](#embedding-and-performance)
-13. [Files](#files)
-14. [When something goes wrong](#when-something-goes-wrong)
+12. [Transients](#transients)
+13. [Embedding and performance](#embedding-and-performance)
+14. [Files](#files)
+15. [When something goes wrong](#when-something-goes-wrong)
 
 ---
 
@@ -729,6 +730,67 @@ discretisation error: at positions where the tip *does* land on a boundary,
 this core is already 11–42 pcm from the reference, and cusping does not touch
 those. Putting the tip on a plane boundary, as `benchmarks/iaea3d` does,
 remains the most accurate option.
+
+---
+
+## Transients
+
+A transient starts from a converged static solution and is advanced step by
+step:
+
+```python
+model.solve()                       # the initial state
+transient = model.start_transient(theta=0.5)
+
+for _ in range(200):
+    step = transient.step(1.0e-3)
+    print(step.time, step.total_power)
+```
+
+`theta` weights the time integration: 1 is fully implicit and the default,
+0.5 is Crank-Nicolson. The observed order is 1.00 and 2.00 respectively, so
+0.5 is worth using wherever the solution is smooth — on the test case in
+`docs/theory.md` §11 it is about 800× more accurate at the same step size.
+
+**The library needs two things a static solve does not:** inverse velocities
+on every composition, and delayed data.
+
+```python
+lib.set_composition(0, ..., inv_velocity=[1/1.8e7, 1/2.2e5])
+lib.set_delayed(beta=[...], decay_constant=[...], chi_delayed=[...])
+```
+
+Both raise if missing rather than defaulting, because a plausible default
+here is a wrong answer that looks right.
+
+### Driving it
+
+Anything you change between steps belongs to the step that follows. Rod
+banks, cross sections and compositions all work:
+
+```python
+rods.insert(A=0.0)                  # scram
+model.refresh()
+step = transient.step(1.0e-3)
+```
+
+Re-finalize the library after writing a composition, as for any other
+mutation — see [Solving](#solving).
+
+### What a step gives you
+
+`TransientStep` carries `time`, `dt`, `total_power`, `peak_power`,
+`iterations` and `converged`. Power is **not** renormalised, since the point
+of a transient is that it moves. `transient.flux` and `transient.precursors`
+give the current state.
+
+### What is not implemented
+
+No exponential transformation, no adaptive time stepping, no decay heat, and
+no feedback — FR-MODE-7 needs the thermal-hydraulics model, which does not
+exist yet. The nonlinear nodal coupling coefficients are held at their static
+values inside a step, so the nodal kernels drift from consistency as the flux
+shape moves; FDM has nothing to freeze.
 
 ---
 

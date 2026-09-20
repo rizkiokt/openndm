@@ -86,12 +86,19 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 
 | ID | State | Notes |
 |---|---|---|
-| FR-KIN-1 | partial | `PrecursorState` integrates the precursor equations in closed form over a step, for up to 8 groups, with the fission source taken linear across the step. Verified against the analytic solution for a constant source, a ramp, and pure decay, and checked that equilibrium is a fixed point for any step size. C++ only: nothing is exposed to Python, because there is no flux time integration yet for it to drive. |
-| FR-KIN-2 | not started | Theta-weighted integration of the flux. |
-| FR-KIN-3..6 | not started | Adaptive stepping, transient drivers, decay heat, time-series output. |
+| FR-KIN-1 | done | Time-dependent multi-group diffusion with up to 8 precursor groups. Precursors are integrated in closed form over a step; the analytic solution is linear in the new fission source, so its implicit part folds into an effective fission spectrum rather than needing an iteration. |
+| FR-KIN-2 | partial | Theta-weighted integration, 0 < theta <= 1, default fully implicit. Observed order 1.00 at theta=1 and 2.00 at theta=0.5, measured against exact point kinetics. The exponential transformation of the precursor equations is not implemented. The nonlinear nodal coupling coefficients are held at their static values inside a step. |
+| FR-KIN-3 | not started | Adaptive time stepping. |
+| FR-KIN-4 | partial | Any change the caller makes between steps is picked up: cross sections, compositions, rod bank positions. There is no driver that schedules them against time. |
+| FR-KIN-5 | not started | Decay heat. |
+| FR-KIN-6 | partial | Each step returns time, total and peak power and iteration counts; the flux and precursors are readable. No time-series writer. |
 
-The library format does not need to change: delayed data is stored and
-survives a round trip (FR-XS-3).
+Verified against exact point kinetics in a leakage-free box: null transient
+flat to 1 part in 1e10, prompt jump to 0.5%, asymptotic period against the
+inhour equation to 0.2%, and the observed order in time. See
+[`theory.md`](theory.md) §10 and §11.
+
+**FR-MODE-7** (transient with feedback) still needs FR-TH.
 
 ## 4.7 Thermal hydraulics (FR-TH)
 

@@ -276,6 +276,9 @@ PYBIND11_MODULE(_core, m)
       .def_readwrite("nodal_start", &Settings::nodal_start)
       .def_readwrite("two_node_sweeps", &Settings::two_node_sweeps)
       .def_readwrite("dhat_limit", &Settings::dhat_limit)
+      .def_readwrite("theta", &Settings::theta)
+      .def_readwrite("max_step_iterations", &Settings::max_step_iterations)
+      .def_readwrite("step_tolerance", &Settings::step_tolerance)
       .def_readwrite("warm_start", &Settings::warm_start)
       .def_readwrite("verbosity", &Settings::verbosity)
       .def_readwrite("threads", &Settings::threads);
@@ -310,6 +313,15 @@ PYBIND11_MODULE(_core, m)
             r.power, self, {static_cast<py::ssize_t>(r.power.size())});
       });
 
+  py::class_<TransientRecord>(m, "TransientRecord")
+      .def_readonly("time", &TransientRecord::time)
+      .def_readonly("dt", &TransientRecord::dt)
+      .def_readonly("total_power", &TransientRecord::total_power)
+      .def_readonly("peak_power", &TransientRecord::peak_power)
+      .def_readonly("iterations", &TransientRecord::iterations)
+      .def_readonly("inner_iterations", &TransientRecord::inner_iterations)
+      .def_readonly("converged", &TransientRecord::converged);
+
   // ------------------------------------------------------------------ solver
   py::class_<Solver>(m, "Solver")
       .def(py::init<const Geometry&, const XSLibrary&>(), py::arg("geometry"),
@@ -329,6 +341,20 @@ PYBIND11_MODULE(_core, m)
             return s.solve_fixed_source(v, settings);
           },
           py::arg("source"), py::arg("settings"))
+      .def("start_transient", &Solver::start_transient, py::arg("settings"),
+          py::call_guard<py::gil_scoped_release>())
+      .def("step", &Solver::step, py::arg("dt"), py::arg("settings"),
+          py::call_guard<py::gil_scoped_release>())
+      .def_property_readonly("transient_time", &Solver::transient_time)
+      .def_property_readonly("n_precursors", &Solver::n_precursors)
+      .def_property_readonly("precursors",
+          [](const Solver& s) {
+            const auto& data = s.precursors();
+            const py::ssize_t d = s.n_precursors();
+            const py::ssize_t n =
+                d > 0 ? static_cast<py::ssize_t>(data.size()) / d : 0;
+            return py::array_t<double>({n, d}, data.data());
+          })
       .def("reset", &Solver::reset)
       // Surface currents make the node neutron balance checkable from Python,
       // and are what a coupling driver or a pin power reconstruction needs.
