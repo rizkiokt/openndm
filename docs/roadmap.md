@@ -27,8 +27,8 @@ confirmation rather than as the primary evidence.
 
 ## Phase 1 — control rod banks — complete
 
-The one real feature-parity gap against KOMODO that is pure static scope. It
-is also the largest usability gap: rods today are separate compositions
+The last substantial static-scope capability the solver lacked, and its
+largest usability gap: rods today are separate compositions
 assigned per axial plane, which is how `benchmarks/iaea3d/run.py` expresses
 them, and there is no way to ask for a bank at a position.
 
@@ -52,10 +52,9 @@ Position follows KOMODO's convention (`POS0` zero-step position in cm,
 `SSIZE` cm per step, position in steps, zero fully inserted) so existing
 decks translate without arithmetic.
 
-**Cusping puts this ahead of the reference implementation.** KOMODO
-documents no cusping correction — the word does not appear anywhere in its
-22 input cards — and handles a partially inserted bank by declaring a
-separate rodded planar type, which is the same workaround this project's
+**Cusping is the part worth having.** The common workaround for a
+partially inserted bank is to declare a separate rodded planar type, which is
+the same workaround this project's
 IAEA-3D deck uses. It is also a problem the OpenMC coupling is unusually
 well placed to solve: rather than smearing rodded and unrodded constants,
 the partially rodded node's constants can be generated directly.
@@ -66,16 +65,16 @@ The largest capability gap. Delayed neutron data already round-trips through
 the library (FR-XS-3), so the storage format does not change.
 
 1. `feat/kinetics-precursors` — precursor equations integrated analytically
-   over the step, which is KOMODO's choice and more accurate than lagging.
+   over the step, which is more accurate than lagging them.
    **Verified against exact point kinetics** in a leakage-free box: the
    prompt jump on a step insertion, and the asymptotic period from the inhour
    equation. Neither needs a published deck.
 2. `feat/kinetics-theta` — theta-method time integration of the full spatial
    operator, plus the exponential flux transformation. Verified by measuring
    the observed order in Δt: first order at θ=1, second at θ=0.5.
-3. `feat/doppler-sqrt-t` — FR-XS-7, the √T adiabatic Doppler model. Not
-   parity work: KOMODO's `%FTEM` is strictly linear per Kelvin. Needed for
-   LRA.
+3. `feat/doppler-sqrt-t` — FR-XS-7, the √T adiabatic Doppler model. A
+   √T dependence follows the physics of Doppler broadening, where a linear
+   per-Kelvin coefficient is an approximation to it. Needed for LRA.
 4. `feat/kinetics-benchmarks` — LMW (needs Phase 1), TWIGL ramp, LRA.
 
 Steps 1 and 2 stand on their own evidence. Step 4 confirms.
@@ -83,11 +82,10 @@ Steps 1 and 2 stand on their own evidence. Step 4 confirms.
 ## Phase 3 — thermal hydraulics (FR-TH)
 
 A closed-channel mass and energy solve with one-dimensional radial
-conduction through fuel, gap and cladding — the model behind KOMODO's
-`%THER`, whose input set is a reasonable target for parity: percent power,
-thermal power, inlet temperature, mass flow, pin geometry, pins and guide
-tubes per assembly, and the fraction of heat deposited directly in the
-coolant.
+conduction through fuel, gap and cladding. The input set this needs is
+well established: percent power, thermal power, inlet temperature, mass flow,
+pin geometry, pins and guide tubes per assembly, and the fraction of heat
+deposited directly in the coolant.
 
 Unblocks FR-MODE-6 and the NEACRP benchmarks. Nothing in the current solver
 obstructs it: no kernel refers to temperature or density, and cross sections
@@ -98,9 +96,9 @@ temperature axis.
 
 | Item | Why it is worth doing |
 |---|---|
-| `feat/adf-rotation` | FR-OPT-7. Directly coupled-scope: OpenMC gives discontinuity factors in one orientation, and a rotated assembly needs its faces permuted. KOMODO does 90/180/270 over assembly ranges |
+| `feat/adf-rotation` | FR-OPT-7. Directly coupled-scope: OpenMC gives discontinuity factors in one orientation, and a rotated assembly needs its faces permuted. 90/180/270 over assembly ranges |
 | `feat/perf-acceptance` | NFR-PERF-1..7 have **never been measured**. The specification states numeric targets and no acceptance run has ever been made against them |
-| `feat/vtk-export` | FR-OUT-6. KOMODO has it as a bare `%VTK` card |
+| `feat/vtk-export` | FR-OUT-6. Mesh output for external visualisation |
 | Cut the first release | NFR-EXT-3. The release pipeline landed in #7: tag-triggered, trusted publishing, version agreement enforced before it builds. No tag has been cut, so nothing is on PyPI or conda-forge yet |
 | Boundary nodal correction | FR-SOL-4 completeness. See below — small value, listed so the reasoning is not lost |
 
@@ -121,12 +119,12 @@ boundary, and for completeness — but not for core accuracy.
 ## Deferred on purpose
 
 - **FR-IN-2** (XML input, pugixml, the standalone executable) and
-  **FR-IN-4** (KOMODO deck reader). A milestone of plumbing that adds no
+  **FR-IN-4** (external deck reader). A milestone of plumbing that adds no
   physics while the Python API is serving as the primary interface.
 - **NFR-EXT-5**, the public `extern "C"` API. No consumer yet.
 - **FR-OUT-4**, pin power reconstruction. Half built already, since
   `compute_form_functions` extracts and normalises them, but downstream of
-  everything above. KOMODO has no equivalent.
+  everything above.
 
 ## Blocked
 
