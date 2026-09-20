@@ -649,16 +649,54 @@ reflector compositions if the rods travel through an axial reflector. A
 missing key raises rather than passing the node through unchanged, because an
 unsubstituted node is indistinguishable from a correctly withdrawn one.
 
-### The one thing to know about partial insertion
+### Partial insertion, and the cusping correction
 
-A node is rodded when its **centre** lies above the tip. That is exact
-whenever the tip falls on a plane boundary, and rounds to the nearest plane in
-between, so `k_eff` is a staircase in rod position rather than a smooth curve.
-On a ten-plane test core the largest single step is about 1500 pcm.
+A tip that lands between plane boundaries leaves one node partly rodded.
+Without a correction that node is rounded to whichever state covers its
+centre, so `k_eff` is a staircase in rod position: on a ten-plane test core
+the largest single step is about 1561 pcm.
 
-There is no cusping correction yet. Until there is, put the tip on a plane
-boundary wherever the answer matters — which is what `benchmarks/iaea3d` does,
-choosing its axial mesh so the tip always lands on one.
+Give the bank a `cusp` slot and the partial node gets a homogenised mixture
+instead:
+
+```python
+bank = openndm.ControlRodBank(
+    "A", columns=banked, rodded={FUEL: FUEL_RODDED},
+    cusp={FUEL: MIXTURE},          # a spare composition index
+)
+rods = openndm.ControlRods(geometry, [bank], library=lib)
+```
+
+`cusp` maps each unrodded composition to a **spare composition in the
+library**, which the mixture is written into each time the bank moves. Reserve
+those slots when you build the library.
+
+`insert` weights the mixture by volume alone. That is the flat-flux limit and
+it is biased: the flux is depressed on the rodded side, so volume weighting
+over-counts the rodded absorption and puts `k_eff` low. Correcting it needs a
+flux, and a flux needs a solve, so it is an iteration:
+
+```python
+rods.insert(A=32.5)
+model.refresh()
+result = rods.converge_cusping(model)   # solves, re-weights, repeats
+```
+
+Measured against a 0.5 cm reference mesh on which the tip always falls on a
+boundary:
+
+| | largest error | mean bias | largest step |
+|---|---|---|---|
+| no cusping | 784 pcm | +165 pcm | 1561 pcm |
+| volume-weighted (`insert`) | 259 pcm | −103 pcm | 625 pcm |
+| flux-weighted (`converge_cusping`) | **55 pcm** | **−13 pcm** | 466 pcm |
+| the reference itself | — | — | 410 pcm |
+
+Flux weighting brings the error down to the size of the coarse mesh's own
+discretisation error: at positions where the tip *does* land on a boundary,
+this core is already 11–42 pcm from the reference, and cusping does not touch
+those. Putting the tip on a plane boundary, as `benchmarks/iaea3d` does,
+remains the most accurate option.
 
 ---
 

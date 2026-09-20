@@ -15,9 +15,11 @@ from conftest import ONE_GROUP
 
 #: Plain fuel, and the same fuel with a rod in it.
 FUEL, RODDED = 0, 1
+#: Number of axial planes in the small test core.
+NPLANES = 10
 #: Axial mesh of the small test core: ten 10 cm planes, so a plane boundary
 #: falls on every multiple of 10 cm.
-DZ = [10.0] * 10
+DZ = [10.0] * NPLANES
 HEIGHT = sum(DZ)
 
 
@@ -296,3 +298,204 @@ def test_bank_reproduces_the_iaea3d_deck_node_for_node():
     from_bank = openndm.Model(withdrawn, library, settings).solve().k_eff
     from_deck = openndm.Model(by_hand, library, settings).solve().k_eff
     assert from_bank == pytest.approx(from_deck, abs=1.0e-12)
+
+
+# ------------------------------------------------------------------ cusping
+CUSP = 2
+
+
+def cusp_library():
+    library = openndm.XSLibrary(1, 3)
+    for index, extra_absorption in ((FUEL, 0.0), (RODDED, 0.04), (CUSP, 0.0)):
+        library.set_composition(
+            index,
+            D=[ONE_GROUP["D"]],
+            absorption=[ONE_GROUP["absorption"] + extra_absorption],
+            nu_fission=[ONE_GROUP["nu_fission"]],
+            kappa_fission=[ONE_GROUP["nu_fission"]],
+            chi=[1.0],
+            scatter=[[0.0]],
+        )
+    library.finalize(warn=False)
+    return library
+
+
+def cusp_core(planes=NPLANES):
+    """The same core as ``rod_core``, with a spare slot for the mixture."""
+    columns = np.zeros((3, 3), dtype=bool)
+    columns[1, 1] = True
+    library = cusp_library()
+    geometry = openndm.Geometry.from_lattice(
+        np.full((planes, 3, 3), FUEL, dtype=int),
+        pitch=(20.0, 20.0, 20.0),
+        dz=[HEIGHT / planes] * planes,
+        boundaries=dict.fromkeys(
+            ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max"), "zero_flux"
+        ),
+    )
+    bank = openndm.ControlRodBank(
+        "A", columns=columns, rodded={FUEL: RODDED}, cusp={FUEL: CUSP}
+    )
+    return geometry, library, openndm.ControlRods(geometry, [bank], library=library)
+
+
+def _fine_mesh_reference(tips, planes=200):
+    """k_eff with the tip always on a plane boundary, so no node is partial."""
+    columns = np.zeros((3, 3), dtype=bool)
+    columns[1, 1] = True
+    geometry = openndm.Geometry.from_lattice(
+        np.full((planes, 3, 3), FUEL, dtype=int),
+        pitch=(20.0, 20.0, 20.0),
+        dz=[HEIGHT / planes] * planes,
+        boundaries=dict.fromkeys(
+            ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max"), "zero_flux"
+        ),
+    )
+    bank = openndm.ControlRodBank("A", columns=columns, rodded={FUEL: RODDED})
+    rods = openndm.ControlRods(geometry, [bank])
+    model = openndm.Model(geometry, rod_library(), openndm.Settings(verbosity=0))
+    out = []
+    for tip in tips:
+        rods.insert(A=float(tip))
+        model.refresh()
+        out.append(model.solve().k_eff)
+    return np.array(out)
+
+
+def test_insert_leaves_the_library_solvable(tight):
+    """Writing a mixture unfinalizes the library; it must be finalized again."""
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    rods.insert(A=25.0)
+    assert library.finalized, "insert must re-finalize after writing a mixture"
+    model.refresh()
+    assert model.solve().converged
+
+
+def test_cusping_leaves_boundary_positions_alone(tight):
+    """On a plane boundary no node is partial, so nothing may change."""
+    plain_geometry, _, plain_rods = cusp_core()
+    plain_model = openndm.Model(plain_geometry, rod_library(), tight)
+    cusp_geometry, cusp_library_, cusp_rods = cusp_core()
+    cusp_model = openndm.Model(cusp_geometry, cusp_library_, tight)
+
+    # The uncusped bank on the same core, for the reference value.
+    columns = np.zeros((3, 3), dtype=bool)
+    columns[1, 1] = True
+    bare = openndm.ControlRodBank("A", columns=columns, rodded={FUEL: RODDED})
+    plain_rods = openndm.ControlRods(plain_geometry, [bare])
+
+    for tip in (20.0, 30.0, 40.0):
+        plain_rods.insert(A=tip)
+        plain_model.refresh()
+        cusp_rods.insert(A=tip)
+        cusp_model.refresh()
+        assert cusp_model.solve().k_eff == pytest.approx(
+            plain_model.solve().k_eff, abs=1.0e-12
+        ), f"cusping changed the answer at a plane boundary, tip {tip}"
+
+
+@pytest.mark.slow
+def test_cusping_removes_most_of_the_staircase(tight):
+    """The jump between neighbouring positions must collapse."""
+    tips = np.arange(20.0, 40.01, 2.5)
+    reference = _fine_mesh_reference(tips)
+
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    cusped = []
+    for tip in tips:
+        rods.insert(A=float(tip))
+        model.refresh()
+        cusped.append(rods.converge_cusping(model).k_eff)
+
+    jump = np.max(np.abs(np.diff(1.0e5 * np.array(cusped))))
+    reference_jump = np.max(np.abs(np.diff(1.0e5 * reference)))
+    assert jump < 2.0 * reference_jump, (
+        f"largest step {jump:.0f} pcm against a reference that itself moves "
+        f"{reference_jump:.0f} pcm; uncusped is about 1561 pcm"
+    )
+
+
+@pytest.mark.slow
+def test_flux_weighting_beats_volume_weighting(tight):
+    """Volume weighting is the flat-flux limit and biased low.
+
+    The flux is depressed on the rodded side, so weighting by volume alone
+    over-counts the rodded absorption. Measured on this core: -103 pcm mean
+    bias volume-weighted against -13 pcm flux-weighted.
+    """
+    tips = np.array([22.5, 25.0, 27.5, 32.5, 35.0, 37.5])
+    reference = _fine_mesh_reference(tips)
+
+    def curve(converge):
+        geometry, library, rods = cusp_core()
+        model = openndm.Model(geometry, library, tight)
+        out = []
+        for tip in tips:
+            rods.insert(A=float(tip))
+            model.refresh()
+            out.append(
+                rods.converge_cusping(model).k_eff if converge else model.solve().k_eff
+            )
+        return np.array(out)
+
+    volume_bias = np.mean(1.0e5 * (curve(False) - reference))
+    flux_bias = np.mean(1.0e5 * (curve(True) - reference))
+    assert volume_bias < -40.0, (
+        f"expected a low bias from volume weighting, got {volume_bias:+.1f}"
+    )
+    assert abs(flux_bias) < 0.5 * abs(volume_bias), (
+        f"flux weighting left {flux_bias:+.1f} pcm against volume weighting's "
+        f"{volume_bias:+.1f} pcm"
+    )
+
+
+def test_converge_cusping_is_one_solve_without_a_partial_node(tight):
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    rods.insert(A=30.0)
+    model.refresh()
+    assert rods.converge_cusping(model).k_eff == pytest.approx(
+        model.solve().k_eff, abs=1.0e-12
+    )
+
+
+def test_cusping_needs_the_library():
+    columns = np.zeros((3, 3), dtype=bool)
+    columns[1, 1] = True
+    geometry = openndm.Geometry.from_lattice(
+        np.full((len(DZ), 3, 3), FUEL, dtype=int), pitch=20.0, dz=DZ
+    )
+    bank = openndm.ControlRodBank(
+        "A", columns=columns, rodded={FUEL: RODDED}, cusp={FUEL: CUSP}
+    )
+    with pytest.raises(openndm.InputError, match="needs the library"):
+        openndm.ControlRods(geometry, [bank])
+
+
+def test_cusp_must_cover_every_composition_the_bank_reaches():
+    columns = np.zeros((3, 3), dtype=bool)
+    columns[1, 1] = True
+    core = np.full((len(DZ), 3, 3), FUEL, dtype=int)
+    core[-1] = RODDED  # a second composition in the banked column
+    geometry = openndm.Geometry.from_lattice(core, pitch=20.0, dz=DZ)
+    bank = openndm.ControlRodBank(
+        "A",
+        columns=columns,
+        rodded={FUEL: RODDED, RODDED: RODDED},
+        cusp={FUEL: CUSP},
+    )
+    with pytest.raises(openndm.InputError, match="no spare composition"):
+        openndm.ControlRods(geometry, [bank], library=cusp_library())
+
+
+def test_cusp_slots_must_be_distinct():
+    columns = np.ones((3, 3), dtype=bool)
+    with pytest.raises(openndm.InputError, match="not distinct"):
+        openndm.ControlRodBank(
+            "A",
+            columns=columns,
+            rodded={FUEL: RODDED, 3: RODDED},
+            cusp={FUEL: CUSP, 3: CUSP},
+        )

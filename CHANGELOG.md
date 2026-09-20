@@ -6,6 +6,29 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The control rod cusping correction** (`ControlRodBank(cusp=...)`,
+  `ControlRods.converge_cusping`). A rod tip between plane boundaries leaves
+  one node partly rodded; rounding it to whichever state covers its centre
+  made `k_eff` a staircase in rod position, with a largest single step of
+  1561 pcm on a ten-plane test core. The partial node now takes a homogenised
+  mixture, written into a spare library composition each time the bank moves.
+
+  `insert` weights that mixture by volume, which is the flat-flux limit and
+  biased: the flux is depressed on the rodded side, so volume weighting
+  over-counts the rodded absorption and puts `k_eff` low.
+  `converge_cusping` iterates solve and re-weight to get flux-volume weights
+  instead. Against a 0.5 cm reference mesh on which the tip always falls on a
+  boundary, the largest error goes 784 -> 259 -> 55 pcm and the mean bias
+  +165 -> -103 -> -13 pcm across no cusping, volume weighting and flux
+  weighting. The remaining 55 pcm is the size of the coarse mesh's own
+  discretisation error: at tip positions that *do* land on a boundary, where
+  cusping does nothing, this core is already 11-42 pcm from the reference.
+
+  KOMODO documents no cusping correction, so this has no counterpart in the
+  reference implementation.
+
 ### Fixed
 
 - **Writing a composition after `finalize()` was silently ignored by the
