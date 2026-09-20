@@ -234,6 +234,7 @@ class Model:
             If the outer iteration exhausts ``max_outer``. The exception
             carries the iteration count and the last residual.
         """
+        self._require_finalized()
         self._last_result = Result(
             self._solver.solve(self._settings(settings, overrides)._s),
             self.geometry,
@@ -263,6 +264,7 @@ class Model:
             raise InputError(
                 f"source must have shape {expected}, got {arr.shape}"
             )
+        self._require_finalized()
         settings = self._settings(None, overrides)
         return Result(
             self._solver.solve_fixed_source(arr.ravel(order="C"), settings._s),
@@ -501,7 +503,13 @@ class Model:
         Call this after :meth:`swap_assemblies` or after changing cross
         sections, so the cached per-node data and coupling coefficients follow.
         The solver object survives, so buffers stay allocated.
+
+        Writing a composition marks the library unfinalized, because its
+        removal cross sections are derived at finalize time. Re-finalize
+        before calling this, or it raises rather than letting a solve run on
+        stale data.
         """
+        self._require_finalized()
         self._solver.reset()
 
     def swap_assemblies(self, a: int, b: int) -> None:
@@ -529,6 +537,22 @@ class Model:
             self.geometry.set_composition(nb, int(ca))
 
     # ---------------------------------------------------------------- utils
+    def _require_finalized(self) -> None:
+        """Refuse to solve a library that has been mutated since finalizing.
+
+        ``removal`` is derived from absorption and the scattering matrix at
+        finalize time, and the kernels read it rather than recomputing it.
+        Writing a composition afterwards marks the library unfinalized but
+        leaves the cached removal in place, so solving anyway silently uses
+        the *old* absorption while every accessor reports the new one.
+        """
+        if not self.library.finalized:
+            raise InputError(
+                "the library has been modified since it was finalized, so its "
+                "removal cross sections are stale; call library.finalize() "
+                "before solving"
+            )
+
     def _settings(self, settings, overrides) -> Settings:
         base = settings if settings is not None else self.settings
         if not overrides:
