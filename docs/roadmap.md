@@ -25,7 +25,7 @@ fitting. So every phase below leads with a reference that is analytic,
 exact, or independently derived, and treats published benchmark decks as
 confirmation rather than as the primary evidence.
 
-## Phase 1 — control rod banks
+## Phase 1 — control rod banks — complete
 
 The one real feature-parity gap against KOMODO that is pure static scope. It
 is also the largest usability gap: rods today are separate compositions
@@ -36,7 +36,7 @@ them, and there is no way to ask for a bank at a position.
 |---|---|---|---|
 | `feat/rod-banks` | Bank definitions, radial bank map, continuous position | Reproducing the existing IAEA-3D deck exactly whenever the tip lands on a plane boundary | **done** — `ControlRodBank`, `ControlRods` |
 | `feat/rod-cusping` | Flux-weighted homogenisation of the partially rodded node | A continuous position sweep against a fine-mesh reference: exact at every plane boundary, and the staircase gone between them | **done** — `cusp=`, `converge_cusping` |
-| `feat/rod-worth` | FR-MODE-5 proper — differential and integral worth curves | Worth from a sweep against worth from two direct solves | |
+| `feat/rod-worth` | FR-MODE-5 proper — differential and integral worth curves | Worth from a sweep against worth from two direct solves | **done** — `worth_curve` |
 
 Cusping took the largest error against a fine-mesh reference from 784 pcm to
 55 pcm, and the mean bias from +165 pcm to -13 pcm, on a ten-plane test core.

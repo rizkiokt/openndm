@@ -8,6 +8,19 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Rod worth curves** (`ControlRods.worth_curve`, `RodWorth`), completing
+  FR-MODE-5. Integral and differential worth over a sequence of static
+  solves, for one bank or a prepared multi-bank sequence so that overlap can
+  be modelled. Worth is a reactivity difference, `1/k(p) - 1/k_ref`, signed
+  so an inserted bank has positive worth; it agrees with worth computed from
+  two direct solves to 0.01 pcm. Points warm start from each other, which is
+  the case warm starting exists for, and the sweep restores the bank
+  position it started from.
+
+  This waited for cusping deliberately. Sampling worth between plane
+  boundaries without it returned a staircase, so a differential curve would
+  have been a sequence of spikes and flats -- an artefact of the axial mesh
+  rather than a property of the reactor.
 - **The control rod cusping correction** (`ControlRodBank(cusp=...)`,
   `ControlRods.converge_cusping`). A rod tip between plane boundaries leaves
   one node partly rodded; rounding it to whichever state covers its centre

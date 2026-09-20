@@ -36,7 +36,7 @@ from .exceptions import (
 )
 from .geometry import INACTIVE, Geometry
 from .model import BoronSearchResult, Model, Result
-from .rods import ControlRodBank, ControlRods
+from .rods import ControlRodBank, ControlRods, RodWorth
 from .settings import Settings
 from .statepoint import StatePoint, write_statepoint
 from .xslib import XSLibrary
@@ -55,6 +55,7 @@ __all__ = [
     "Model",
     "OpenNDMError",
     "Result",
+    "RodWorth",
     "Settings",
     "StatePoint",
     "XSLibrary",
