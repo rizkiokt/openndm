@@ -139,7 +139,7 @@ temperature or density, and cross sections reach the solver only through
 | FR-IN-1 | partial | The Python API is the primary interface and validates its input. It does not generate XML, because FR-IN-2 does not exist. |
 | FR-IN-2 | not started | XML input, pugixml parsing, the schema, and the standalone `openndm` executable. |
 | FR-IN-3 | done | Versioned `xslib.h5`. |
-| FR-IN-4 | not started | KOMODO input reader. |
+| FR-IN-4 | not started | Reader for an external nodal deck format. |
 | FR-IN-5 | partial | Benchmarks ship a Python script; there is no XML to ship alongside it. |
 
 ## 5 Non-functional

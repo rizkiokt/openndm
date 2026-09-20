@@ -84,7 +84,7 @@ The architectural model to follow is **ENRICO**, the open-source code-agnostic c
 
 **DP-5 — Statistical uncertainty is carried, not discarded.** Group constants from Monte Carlo have error bars. OpenNDM must propagate them rather than silently truncating to a mean value.
 
-**DP-6 — Verifiable against KOMODO.** Every benchmark KOMODO publishes should be runnable in OpenNDM with a documented comparison. KOMODO is the reference implementation for feature parity.
+**DP-6 — Verifiable against published results.** Every capability must be demonstrable against a published benchmark, an analytic solution, or a converged fine-mesh reference, with the comparison documented and rerunnable. A number without a stated reference is not evidence.
 
 ---
 
@@ -206,7 +206,7 @@ Requirements are labelled `FR-<area>-<n>` and are written to be individually tes
 |---|---|---|
 | FR-SOL-1 | Finite difference method kernel, for verification and as the CMFD base. | Must |
 | FR-SOL-2 | Polynomial nodal method (NEM) with fourth-order transverse-integrated flux expansion and quadratic transverse leakage. | Must |
-| FR-SOL-3 | Semi-analytic nodal method (SANM) — the default kernel, matching KOMODO's default. | Must |
+| FR-SOL-3 | Semi-analytic nodal method (SANM) — the default kernel. | Must |
 | FR-SOL-4 | Nonlinear two-node iteration producing corrected coupling coefficients (D̂) folded into the CMFD system. | Must |
 | FR-SOL-5 | Outer eigenvalue iteration via power iteration with Wielandt shift; inner linear solves via BiCGSTAB with ILU or block-Jacobi preconditioning. | Must |
 | FR-SOL-6 | Configurable convergence criteria on k_eff, node-wise fission source, and outer iteration count, with clear non-convergence diagnostics. | Must |
@@ -283,7 +283,7 @@ Driven by DP-4. These requirements are what distinguish OpenNDM from a teaching 
 | FR-IN-1 | Python API is the primary interface; it generates and validates the XML. | Must |
 | FR-IN-2 | XML input files (`model.xml` or split `geometry.xml`/`settings.xml`/`xslib.xml`) readable by the standalone `openndm` executable, parsed with pugixml, with an XSD or RelaxNG schema shipped for validation. | Must |
 | FR-IN-3 | Binary XS library in HDF5 (`xslib.h5`), with a documented and versioned layout. | Must |
-| FR-IN-4 | KOMODO input reader (best-effort) to allow direct migration of existing KOMODO benchmark decks. | Should |
+| FR-IN-4 | Best-effort reader for an external nodal deck format, so users arriving with existing decks can reuse them rather than retype them. | Should |
 | FR-IN-5 | Every published benchmark in `benchmarks/` shall ship both a Python script and the generated XML. | Should |
 
 ---
@@ -409,7 +409,7 @@ M2 is the milestone that makes the project distinctive. Consider it the point at
 |---|---|---|
 | **ADF statistical noise.** ADFs are ratios of surface flux to volume flux; surface tallies converge slowly and the ratio amplifies relative error. Noisy ADFs can degrade the solution below the no-ADF baseline. | High | Use a track-length-estimated thin-slab volume tally in place of a true surface tally; document the tally-count requirement; provide a smoothing/regularization option and a warning when ADF σ exceeds a threshold. |
 | **Negative scattering matrix elements** from MC noise in weakly-coupled group transfers. | Medium | Detect, warn, and offer a documented fix-up (zero-and-renormalize) rather than silently proceeding. |
-| **Definition ambiguity in the leakage correction.** B1 vs. P1 vs. a simple buckling-corrected D produce measurably different results; different lattice codes make different choices, so cross-comparison against KOMODO decks generated with Serpent may not be apples-to-apples. | Medium | Implement more than one, make it explicit in the input and in the statepoint metadata, and document which convention each benchmark uses. |
+| **Definition ambiguity in the leakage correction.** B1 vs. P1 vs. a simple buckling-corrected D produce measurably different results; different lattice codes make different choices, so cross-comparison against another code's decks, whose constants came from a different lattice code, may not be apples-to-apples. | Medium | Implement more than one, make it explicit in the input and in the statepoint metadata, and document which convention each benchmark uses. |
 | **Branch library generation cost.** A 5-axis branch table over 30 compositions is thousands of OpenMC runs. | High | Design `BranchDriver` for HPC job arrays and resume-from-partial from day one; provide a "coarse grid + analytic feedback" mode for development work. |
 | **Spectral history effects** are not captured by instantaneous branch interpolation. | Medium | Out of scope for v1; document as a known limitation. Design the branch axis system so a history axis can be added. |
 | **OpenMC API churn.** `openmc.mgxs` internals may change between releases. | Medium | Pin a minimum OpenMC version, test against both `stable` and `develop` in CI, and keep translation logic in one module. |
@@ -420,7 +420,7 @@ M2 is the milestone that makes the project distinctive. Consider it the point at
 1. Should the primary D source be `TransportXS` with an out-scatter correction, or the newer `DiffusionCoefficient` estimator? Behavior in strongly heterogeneous nodes needs testing before the default is fixed (FR-OMC-5).
 2. Is pybind11 the right call given that OpenMC uses ctypes, or is matching OpenMC exactly worth the maintenance cost for the sake of DP-1?
 3. Should the XS library format be a new HDF5 layout, or an extension of `openmc.MGXSLibrary` with ADF and branch data added as extra groups? The latter is more "native" but risks confusing users about what OpenMC itself can consume.
-4. Is a KOMODO input reader (FR-IN-4) worth the effort, or is a one-time manual conversion of the benchmark decks sufficient?
+4. Is an external deck reader (FR-IN-4) worth the effort, or is a one-time manual conversion of the benchmark decks sufficient?
 
 ---
 
