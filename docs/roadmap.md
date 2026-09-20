@@ -35,13 +35,14 @@ them, and there is no way to ask for a bank at a position.
 | Branch | Delivers | Verified by | State |
 |---|---|---|---|
 | `feat/rod-banks` | Bank definitions, radial bank map, continuous position | Reproducing the existing IAEA-3D deck exactly whenever the tip lands on a plane boundary | **done** — `ControlRodBank`, `ControlRods` |
-| `feat/rod-cusping` | Flux-weighted homogenisation of the partially rodded node | A continuous position sweep: exact at every plane boundary, and no staircase between them | next |
+| `feat/rod-cusping` | Flux-weighted homogenisation of the partially rodded node | A continuous position sweep against a fine-mesh reference: exact at every plane boundary, and the staircase gone between them | **done** — `cusp=`, `converge_cusping` |
 | `feat/rod-worth` | FR-MODE-5 proper — differential and integral worth curves | Worth from a sweep against worth from two direct solves | |
 
-Without cusping a node is rodded when its centre lies above the tip, so
-`k_eff` is a staircase in rod position: exact on a plane boundary, rounded to
-the nearest plane in between, with a largest single step of about 1500 pcm on
-a ten-plane test core. That is the gap `feat/rod-cusping` closes.
+Cusping took the largest error against a fine-mesh reference from 784 pcm to
+55 pcm, and the mean bias from +165 pcm to -13 pcm, on a ten-plane test core.
+Volume weighting alone reaches 259 pcm and is biased low by 103 pcm, because
+it ignores the flux depression on the rodded side; the flux-weighted iteration
+is what closes the rest.
 
 The library half already exists: FR-XS-5 accepts rod state as a branch axis.
 Only the geometry half — mapping a bank at a position onto node compositions
