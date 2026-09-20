@@ -485,6 +485,69 @@ which makes results comparable between meshes and between runs.
 
 ---
 
+## 9. Delayed neutron precursors
+
+Only the precursor equation is implemented so far; the flux is still solved
+at steady state, so nothing in this section is reachable from a transient
+yet. It is written out here because the integration scheme is a choice, not a
+detail.
+
+For precursor group $d$ in node $i$,
+
+$$ \frac{dC_{d,i}}{dt} = \beta_d F_i(t) - \lambda_d C_{d,i}, \qquad
+   F_i = \sum_g \nu\Sigma_{f,g,i}\,\phi_{g,i} $$
+
+This is linear in $C$ once $F$ is known, so it is integrated in **closed
+form** across a step rather than with the scheme used for the flux. Taking
+$F$ linear across the step, $F(s) = F_0 + (F_1-F_0)s/\Delta t$, the integrating
+factor gives exactly
+
+$$ C_d(\Delta t) = C_d(0)\,e^{-\lambda_d \Delta t}
+   + \beta_d\left[F_0 I_0 + \frac{F_1-F_0}{\Delta t} I_1\right] $$
+
+$$ I_0 = \int_0^{\Delta t}\! e^{-\lambda(\Delta t-s)}\,ds
+      = \frac{1-e^{-\lambda \Delta t}}{\lambda}, \qquad
+   I_1 = \int_0^{\Delta t}\! s\,e^{-\lambda(\Delta t-s)}\,ds
+      = \frac{\Delta t - I_0}{\lambda} $$
+
+Two consequences are worth stating because they are what the tests check.
+
+**A linear fission source is reproduced exactly**, for any step size. The
+scheme's only approximation is the shape of $F$ within the step, so its error
+is entirely the error in that assumption — there is no separate time
+discretisation error in the precursor equation itself.
+
+**Equilibrium is a fixed point.** Setting $F_0 = F_1 = F$ and
+$C_d(0) = \beta_d F/\lambda_d$ returns the same value, again for any step
+size, since $e^{-x} + (1-e^{-x}) = 1$. A reactor at steady state therefore
+stays there. A scheme that misses this starts every transient with a jump
+that looks like physics.
+
+### 9.1 Evaluating the integrals
+
+Both closed forms are catastrophic cancellations as $\lambda \Delta t \to 0$:
+$I_0$ loses digits, and $I_1$, being a difference of two nearly equal
+quantities divided by a small number, loses all of them well before
+$\lambda\Delta t$ underflows. Their limits are $\Delta t$ and
+$\Delta t^2/2$, and below $\lambda\Delta t = 10^{-4}$ they are evaluated by
+series
+
+$$ I_0 \simeq \Delta t\left(1 - \frac{x}{2} + \frac{x^2}{6}
+     - \frac{x^3}{24}\right), \qquad
+   I_1 \simeq \Delta t^2\left(\frac{1}{2} - \frac{x}{3} + \frac{x^2}{8}
+     - \frac{x^3}{30}\right), \qquad x = \lambda\Delta t $$
+
+which is why a precursor group with a very long half-life and a short step
+does not quietly poison the delayed source.
+
+### 9.2 The delayed source
+
+$$ S^{\text{delayed}}_{g,i} = \sum_d \lambda_d C_{d,i}\, \chi^d_g $$
+
+with $\chi^d$ the delayed spectrum of group $d$ (FR-XS-3). A library without
+one puts every delayed neutron in the top group, which is right for a
+one-group problem and wrong for any real multi-group library.
+
 ## References
 
 The formulations above follow the standard nodal literature:

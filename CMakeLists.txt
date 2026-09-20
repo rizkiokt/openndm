@@ -22,6 +22,7 @@ add_library(openndm_core
   src/matrix.cpp
   src/cmfd.cpp
   src/kernel.cpp
+  src/precursors.cpp
   src/kernel_fdm.cpp
   src/kernel_nem.cpp
   src/kernel_sanm.cpp
