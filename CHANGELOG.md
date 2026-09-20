@@ -8,6 +8,39 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Time-dependent solves** (`Model.start_transient`, `Transient.step`),
+  completing FR-KIN-1 and most of FR-KIN-2. Theta-weighted integration with
+  `0 < theta <= 1`, defaulting to fully implicit, on KOMODO's `%THET`
+  convention.
+
+  The analytic precursor solution is linear in the new fission source, so its
+  implicit part folds into an effective fission spectrum and a step is a
+  single fixed-source solve rather than an iteration between flux and
+  precursors.
+
+  The static eigenvalue is generally not one, so the fission source is
+  divided by it for the whole transient. Without that criticality
+  normalisation a core at k = 1.03 ramps from the first step and the ramp
+  looks like physics.
+
+  Verified against exact point kinetics in a leakage-free box, which needs no
+  other code and no transcribed deck: the null transient is flat to 1 part in
+  1e10, the prompt jump matches `beta/(beta - rho)` to 0.5%, the asymptotic
+  period matches the inhour root to 0.2%, and the observed order in time is
+  1.00 at theta=1 and 2.00 at theta=0.5.
+
+  The order test found a defect worth recording. The explicit half of the
+  scheme was evaluated against the *previous* step's cross sections, which
+  puts an O(1) error into the one step where a perturbation lands -- O(dt)
+  overall. It dragged Crank-Nicolson down to first order and left theta=1
+  untouched, because theta=1 never reads that term. It also has to be
+  measured inside the prompt layer: later the amplitude is set by the
+  precursor equation, which is integrated exactly, and that masks the flux
+  scheme's order entirely.
+
+  Not implemented: the exponential transformation, adaptive time stepping,
+  decay heat, and feedback (FR-MODE-7, which needs FR-TH). The nonlinear
+  nodal coupling coefficients are held at their static values inside a step.
 - **Delayed neutron precursor integration** (C++ `PrecursorState`), the first
   part of FR-KIN-1. The precursor equation is linear in the concentration
   once the fission source is known, so it is integrated in closed form across

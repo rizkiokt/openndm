@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -157,6 +158,84 @@ class BoronSearchResult:
         )
 
 
+@dataclass(frozen=True)
+class TransientStep:
+    """One completed time step (FR-KIN-6)."""
+
+    time: float
+    dt: float
+    total_power: float
+    peak_power: float
+    iterations: int
+    inner_iterations: int
+    converged: bool
+
+    def __repr__(self) -> str:
+        return (
+            f"<TransientStep t={self.time:.6g}s power={self.total_power:.6g} "
+            f"iterations={self.iterations}>"
+        )
+
+
+class Transient:
+    """A time-dependent solve in progress (FR-KIN-1, FR-KIN-2).
+
+    Created by :meth:`Model.start_transient`. The model is advanced in place,
+    so its flux is the transient flux from the first step onward.
+
+    Cross sections, rod positions and geometry may be changed between steps;
+    a change made before a step belongs to that step's interval. Re-finalize
+    the library after writing a composition, as for any other mutation.
+    """
+
+    def __init__(self, model: Model, settings: Settings):
+        self._model = model
+        self._settings_ = settings
+
+    @property
+    def time(self) -> float:
+        """Seconds since the transient started."""
+        return self._model._solver.transient_time
+
+    @property
+    def precursors(self) -> np.ndarray:
+        """Precursor concentrations, shape ``(n_nodes, n_precursors)``."""
+        return self._model._solver.precursors
+
+    @property
+    def flux(self) -> np.ndarray:
+        """Current flux, shape ``(n_nodes, n_groups)``, matching `Result.flux`."""
+        flux = np.asarray(self._model._solver.flux)
+        return flux.reshape(self._model.geometry.n_nodes, self._model.library.n_groups)
+
+    def step(self, dt: float, settings: Settings | None = None, **overrides):
+        """Advance by ``dt`` seconds.
+
+        Returns
+        -------
+        TransientStep
+        """
+        self._model._require_finalized()
+        resolved = (
+            self._settings_
+            if settings is None and not overrides
+            else self._model._settings(settings, overrides)
+        )
+        record = self._model._solver.step(float(dt), resolved._s)
+        return TransientStep(
+            time=record.time,
+            dt=record.dt,
+            total_power=record.total_power,
+            peak_power=record.peak_power,
+            iterations=record.iterations,
+            inner_iterations=record.inner_iterations,
+            converged=record.converged,
+        )
+
+    def __repr__(self) -> str:
+        return f"<Transient t={self.time:.6g}s>"
+
+
 class Model:
     """A geometry, a cross section library and the settings that solve them.
 
@@ -261,9 +340,7 @@ class Model:
         arr = np.asarray(source, dtype=float)
         expected = (self.geometry.n_nodes, self.library.n_groups)
         if arr.shape != expected:
-            raise InputError(
-                f"source must have shape {expected}, got {arr.shape}"
-            )
+            raise InputError(f"source must have shape {expected}, got {arr.shape}")
         self._require_finalized()
         settings = self._settings(None, overrides)
         return Result(
@@ -416,9 +493,7 @@ class Model:
         for i, case in enumerate(cases):
             mutate(self, case)
             self.refresh()
-            results.append(
-                self.solve(warm_start=warm_start and i > 0, **overrides)
-            )
+            results.append(self.solve(warm_start=warm_start and i > 0, **overrides))
         return results
 
     def surface_currents(self) -> np.ndarray:
@@ -497,6 +572,27 @@ class Model:
         return residual / scale
 
     # --------------------------------------------------------- manipulation
+    # ------------------------------------------------------------- transient
+    def start_transient(self, settings: Settings | None = None, **overrides):
+        """Begin a time-dependent solve from the converged static solution.
+
+        The static eigenvalue is generally not one, so the fission source is
+        divided by it for the whole transient. That criticality normalisation
+        is what makes a null transient null: without it a core at k = 1.03
+        would ramp from the first step, and the ramp would look like physics.
+
+        Precursors start at the equilibrium of the initial fission source.
+
+        Returns
+        -------
+        Transient
+            Driver with a :meth:`Transient.step` method.
+        """
+        self._require_finalized()
+        resolved = self._settings(settings, overrides)
+        self._solver.start_transient(resolved._s)
+        return Transient(self, resolved)
+
     def refresh(self) -> None:
         """Re-read the geometry and library after mutating them in place.
 

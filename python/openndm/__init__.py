@@ -35,7 +35,7 @@ from .exceptions import (
     OpenNDMError,
 )
 from .geometry import INACTIVE, Geometry
-from .model import BoronSearchResult, Model, Result
+from .model import BoronSearchResult, Model, Result, Transient, TransientStep
 from .rods import ControlRodBank, ControlRods, RodWorth
 from .settings import Settings
 from .statepoint import StatePoint, write_statepoint
@@ -58,6 +58,8 @@ __all__ = [
     "RodWorth",
     "Settings",
     "StatePoint",
+    "Transient",
+    "TransientStep",
     "XSLibrary",
     "__version__",
     "write_statepoint",

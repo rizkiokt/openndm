@@ -57,6 +57,15 @@ struct Settings {
   //! coefficients destabilise the CMFD system; PARCS and KOMODO both clamp.
   double dhat_limit = 10.0;
 
+  //! Time integration weighting (FR-KIN-2): 1 is fully implicit, 0.5 is
+  //! Crank-Nicolson. KOMODO allows 0.01 to 1 and defaults to 1; matching
+  //! that makes its decks portable.
+  double theta = 1.0;
+  //! Iterations within one time step, over the implicit fission source.
+  int max_step_iterations = 50;
+  //! Relative flux change between step iterations below which a step stops.
+  double step_tolerance = 1.0e-9;
+
   //! Reuse the incoming flux and Dhat as the initial guess (FR-OPT-3).
   bool warm_start = false;
 

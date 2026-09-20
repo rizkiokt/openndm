@@ -459,3 +459,187 @@ def test_global_balance_relates_leakage_absorption_and_production(tight):
     assert leakage > 0.0, "a core with vacuum and zero-flux faces must leak"
     balance = leakage + total_absorption - production / result.k_eff
     assert abs(balance) / production < 1.0e-9, balance / production
+
+
+# --------------------------------------------------------- V-5: point kinetics
+#: A leakage-free box reduces the spatial solve to exact point kinetics, so
+#: the transient can be checked against closed-form answers rather than
+#: against another code or a transcribed deck.
+PK = {
+    "velocity": 2.2e5,
+    "absorption": 0.08,
+    "nu_fission": 0.1,
+    "beta": 0.0065,
+    "lambda": 0.0785,
+}
+#: Prompt neutron generation time. With the criticality normalisation the
+#: effective production is nuSf/k = absorption, so Lambda = 1/(v * Sigma_a).
+PK_GENERATION = 1.0 / (PK["velocity"] * PK["absorption"])
+REFLECTIVE = dict.fromkeys(
+    ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max"), "reflective"
+)
+
+
+def _point_kinetics_model(theta, absorption=None):
+    library = openndm.XSLibrary(1, 1)
+    library.set_composition(
+        0,
+        D=[1.0],
+        absorption=[absorption if absorption is not None else PK["absorption"]],
+        nu_fission=[PK["nu_fission"]],
+        kappa_fission=[PK["nu_fission"]],
+        chi=[1.0],
+        scatter=[[0.0]],
+        inv_velocity=[1.0 / PK["velocity"]],
+    )
+    library.set_delayed(beta=[PK["beta"]], decay_constant=[PK["lambda"]])
+    library.finalize(warn=False)
+    geometry = openndm.Geometry.from_lattice(
+        np.zeros((1, 1, 1), dtype=int), pitch=20.0, boundaries=REFLECTIVE
+    )
+    settings = openndm.Settings(
+        verbosity=0,
+        k_tolerance=1.0e-13,
+        fission_source_tolerance=1.0e-12,
+        inner_tolerance=1.0e-13,
+        theta=theta,
+        max_step_iterations=500,
+        step_tolerance=1.0e-14,
+    )
+    return openndm.Model(geometry, library, settings), library
+
+
+def _insert_reactivity(library, rho):
+    """Change absorption so the normalised multiplication gives this rho."""
+    library.set_composition(
+        0,
+        D=[1.0],
+        absorption=[PK["absorption"] * (1.0 - rho)],
+        nu_fission=[PK["nu_fission"]],
+        kappa_fission=[PK["nu_fission"]],
+        chi=[1.0],
+        scatter=[[0.0]],
+        inv_velocity=[1.0 / PK["velocity"]],
+    )
+    library.finalize(warn=False)
+
+
+def _inhour_omega(rho):
+    """Stable root of rho = Lambda*w + beta*w/(w+lambda), by bisection."""
+
+    def residual(w):
+        return PK_GENERATION * w + PK["beta"] * w / (w + PK["lambda"]) - rho
+
+    low, high = 1.0e-9, PK["lambda"] * (1.0 - 1.0e-9)
+    for _ in range(200):
+        mid = 0.5 * (low + high)
+        if residual(mid) < 0.0:
+            low = mid
+        else:
+            high = mid
+    return 0.5 * (low + high)
+
+
+@pytest.mark.parametrize("theta", [1.0, 0.5])
+def test_v5_null_transient_does_not_move(theta):
+    """A critical steady state integrated forward must stay put.
+
+    This is the check that the criticality normalisation, the precursor
+    equilibrium and the operator all agree. If any one of them is
+    inconsistent the power drifts, and the drift looks like physics.
+    """
+    model, _ = _point_kinetics_model(theta)
+    model.solve()
+    transient = model.start_transient()
+    first = transient.step(0.05).total_power
+    for _ in range(40):
+        record = transient.step(0.05)
+        assert record.total_power == pytest.approx(first, rel=1.0e-10), (
+            f"null transient drifted to {record.total_power / first:.12f} "
+            f"of its initial power by t = {record.time:.2f} s"
+        )
+
+
+def test_v5_prompt_jump_matches_the_closed_form():
+    """After the prompt layer, power sits at beta/(beta - rho).
+
+    The layer decays with time constant Lambda/(beta - rho), about 17 ms
+    here, so it has to be resolved and then waited out.
+    """
+    rho = 0.5 * PK["beta"]
+    model, library = _point_kinetics_model(0.5)
+    model.solve()
+    transient = model.start_transient()
+    base = transient.step(1.0e-12).total_power
+    _insert_reactivity(library, rho)
+
+    for _ in range(2000):
+        record = transient.step(1.0e-4)
+
+    # Strip the slow delayed growth that has accumulated over the 0.2 s.
+    decayed = record.total_power / base / np.exp(_inhour_omega(rho) * record.time)
+    assert decayed == pytest.approx(PK["beta"] / (PK["beta"] - rho), rel=5.0e-3)
+
+
+@pytest.mark.slow
+def test_v5_asymptotic_period_matches_the_inhour_equation():
+    rho = 0.5 * PK["beta"]
+    model, library = _point_kinetics_model(0.5)
+    model.solve()
+    transient = model.start_transient()
+    transient.step(1.0e-12)
+    _insert_reactivity(library, rho)
+
+    times, powers = [], []
+    for _ in range(300):
+        record = transient.step(2.0e-4)
+    for _ in range(1200):
+        record = transient.step(0.05)
+        times.append(record.time)
+        powers.append(record.total_power)
+
+    times, powers = np.array(times), np.array(powers)
+    late = times > 30.0
+    slope = np.polyfit(times[late], np.log(powers[late]), 1)[0]
+    exact = _inhour_omega(rho)
+    assert slope == pytest.approx(exact, rel=2.0e-3), (
+        f"asymptotic period {1.0 / slope:.3f} s against the inhour value "
+        f"{1.0 / exact:.3f} s"
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(("theta", "expected"), [(1.0, 1.0), (0.5, 2.0)])
+def test_v5_observed_order_in_time(theta, expected):
+    """Theta = 1 is first order, theta = 0.5 second (FR-KIN-2).
+
+    Measured inside the prompt layer, where the flux equation dominates.
+    Later on the amplitude is set by the precursor equation, which is
+    integrated in closed form, and that masks the order of the flux scheme
+    entirely -- both weightings look second order there.
+
+    This test found a real defect: the explicit half of the scheme was
+    evaluated against the previous step's cross sections, which put an O(1)
+    error into the one step where a perturbation lands. That is O(dt)
+    overall, and it dragged Crank-Nicolson to first order while leaving
+    theta = 1 untouched, since theta = 1 never reads that term.
+    """
+    rho = 0.5 * PK["beta"]
+    end = 0.004
+
+    def power_at_end(dt):
+        model, library = _point_kinetics_model(theta)
+        model.solve()
+        transient = model.start_transient()
+        base = transient.step(1.0e-12).total_power
+        _insert_reactivity(library, rho)
+        for _ in range(round(end / dt)):
+            record = transient.step(dt)
+        return record.total_power / base
+
+    reference = power_at_end(end / 4096)
+    errors = [abs(power_at_end(end / n) - reference) for n in (32, 64, 128)]
+    orders = [np.log2(a / b) for a, b in itertools.pairwise(errors)]
+    assert min(orders) > expected - 0.25, (
+        f"theta={theta} observed order {orders}, expected about {expected}"
+    )

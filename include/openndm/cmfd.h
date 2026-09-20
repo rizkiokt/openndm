@@ -73,6 +73,44 @@ public:
   //! factor.
   double max_reciprocal_shift() const { return max_inv_shift_; }
 
+  //! Add \f$V/(v_g\,\theta\,\Delta t)\f$ to every diagonal, for a
+  //! time-dependent solve (FR-KIN-2).
+  //!
+  //! Pass a non-positive \c theta_dt to clear it and return to the static
+  //! operator. The term is applied by the next assemble().
+  void set_time_removal(double theta_dt);
+
+  //! Emission spectrum used in place of chi while a step is being solved.
+  //!
+  //! The analytic precursor solution makes the delayed source linear in the
+  //! new fission source, so its implicit part folds into the fission
+  //! spectrum rather than needing an inner iteration over the delayed
+  //! source. Empty restores the library spectrum.
+  void set_transient_chi(const std::vector<double>& chi);
+
+  //! Source added to every group's right hand side, node*G + g. Empty clears
+  //! it. Used for the terms of a time step that are known from the previous
+  //! one.
+  void set_transient_source(const std::vector<double>& source);
+
+  //! Apply the assembled within-group operators to \c flux, writing
+  //! node*G + g. Excludes scattering and fission, which the group sweep
+  //! carries on the right hand side.
+  void apply_operator(
+      const std::vector<double>& flux, std::vector<double>& out) const;
+
+  //! Time removal term for one node and group, or zero when not set.
+  double time_removal(int node, int group) const;
+
+  //! Scattering out of \c from into \c to for \c node, volume weighted.
+  double scatter(int node, int from, int to) const;
+
+  //! \f$\nu\Sigma_f V\f$ for one node and group.
+  double nu_fission(int node, int group) const;
+
+  //! Library emission spectrum for one node and group.
+  double chi(int node, int group) const;
+
   //! Transpose the operator in place for the adjoint solve (FR-MODE-2).
   void set_adjoint(bool adjoint);
   bool adjoint() const { return adjoint_; }
@@ -110,6 +148,13 @@ private:
   std::vector<double> diffusion_;
   //! Scattering, node*G*G + from*G + to, already multiplied by volume.
   std::vector<double> scatter_;
+
+  //! Time-dependent diagonal, node*G + g. Empty for a static solve.
+  std::vector<double> time_removal_;
+  //! Emission spectrum overriding chi_ for a transient step. Empty when off.
+  std::vector<double> transient_chi_;
+  //! Extra right hand side for a transient step, node*G + g. Empty when off.
+  std::vector<double> transient_source_;
 
   //! Coupling coefficients, surface*G + g.
   std::vector<double> dtilde_;
