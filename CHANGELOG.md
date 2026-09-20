@@ -8,6 +8,24 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Delayed neutron precursor integration** (C++ `PrecursorState`), the first
+  part of FR-KIN-1. The precursor equation is linear in the concentration
+  once the fission source is known, so it is integrated in closed form across
+  a step with the fission source taken linear, rather than with whatever
+  scheme the flux uses. Two properties follow and are asserted: a genuinely
+  linear fission source is reproduced exactly for any step size, and
+  equilibrium is a fixed point for any step size -- a scheme that misses the
+  second starts every transient with a jump that looks like physics.
+
+  The decay integrals are evaluated by series below `lambda*dt = 1e-4`. Both
+  closed forms are catastrophic cancellations there, and the second loses
+  every significant digit long before the argument underflows, which would
+  quietly corrupt the delayed source for a long-lived precursor group on a
+  short step.
+
+  Nothing is exposed to Python yet: there is no flux time integration for it
+  to drive, and a public API for a component that cannot be used alone is one
+  that has to change when it can. The equations are in `docs/theory.md` §9.
 - **Rod worth curves** (`ControlRods.worth_curve`, `RodWorth`), completing
   FR-MODE-5. Integral and differential worth over a sequence of static
   solves, for one bank or a prepared multi-bank sequence so that overlap can

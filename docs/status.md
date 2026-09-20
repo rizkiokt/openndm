@@ -84,9 +84,14 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 
 ## 4.6 Kinetics (FR-KIN)
 
-**Not started.** FR-KIN-1 through FR-KIN-6. Delayed neutron data is stored and
-survives a round trip, so the library format will not need to change, but
-there is no time integration.
+| ID | State | Notes |
+|---|---|---|
+| FR-KIN-1 | partial | `PrecursorState` integrates the precursor equations in closed form over a step, for up to 8 groups, with the fission source taken linear across the step. Verified against the analytic solution for a constant source, a ramp, and pure decay, and checked that equilibrium is a fixed point for any step size. C++ only: nothing is exposed to Python, because there is no flux time integration yet for it to drive. |
+| FR-KIN-2 | not started | Theta-weighted integration of the flux. |
+| FR-KIN-3..6 | not started | Adaptive stepping, transient drivers, decay heat, time-series output. |
+
+The library format does not need to change: delayed data is stored and
+survives a round trip (FR-XS-3).
 
 ## 4.7 Thermal hydraulics (FR-TH)
 

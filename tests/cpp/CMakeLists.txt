@@ -14,6 +14,7 @@ add_executable(openndm_tests
   test_geometry.cpp
   test_xslib.cpp
   test_kernels.cpp
+  test_precursors.cpp
 )
 target_link_libraries(openndm_tests PRIVATE openndm_core Catch2::Catch2WithMain)
 target_include_directories(openndm_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
