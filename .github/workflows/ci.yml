@@ -128,7 +128,9 @@ jobs:
                --ignore-errors mismatch,gcov,source,empty
           lcov --remove coverage.info '/usr/*' '*/_deps/*' '*/tests/*' \
                --ignore-errors unused --output-file coverage.info
-          lcov --list coverage.info
+          # Baseline from the main-branch run on 2026-09-20: 34.9% (2404/6889).
+          # Keep a small margin for line-count changes; raise this as coverage improves.
+          lcov --list coverage.info --fail-under-lines 34
 
       - uses: actions/upload-artifact@v7
         with:
