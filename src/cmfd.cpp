@@ -12,6 +12,15 @@
 
 namespace openndm {
 
+namespace {
+
+//! Fraction of the removal term a Wielandt shift is never allowed to consume.
+//!
+//! The cap it produces is derived in docs/theory.md section 4.1.
+constexpr double kShiftMargin = 0.25;
+
+}  // namespace
+
 CmfdSystem::CmfdSystem(const Geometry& geom, const XSLibrary& xs)
     : geom_(geom),
       xs_(xs),
@@ -63,8 +72,6 @@ void CmfdSystem::refresh_cross_sections()
   const int G = n_groups_;
   const auto& nodes = geom_.nodes();
   has_upscatter_ = false;
-  // Fraction of the removal term the shift is never allowed to consume.
-  constexpr double SHIFT_MARGIN = 0.25;
   double limit = std::numeric_limits<double>::infinity();
   for (int i = 0; i < geom_.n_nodes(); ++i) {
     const Node& node = nodes[static_cast<std::size_t>(i)];
@@ -75,10 +82,6 @@ void CmfdSystem::refresh_cross_sections()
       const std::size_t gg = static_cast<std::size_t>(g);
       diffusion_[idx] = c.D[gg];
       removal_[idx] = c.removal[gg] * V;
-      // The adjoint operator is the transpose of the forward one, so the
-      // emission spectrum and the production cross section exchange roles and
-      // the scattering matrix is transposed. Everything downstream, including
-      // the power iteration, is then identical to the forward case.
       if (adjoint_) {
         nu_fission_[idx] = c.chi[gg] * V;
         chi_[idx] = c.nu_fission[gg];
@@ -89,16 +92,15 @@ void CmfdSystem::refresh_cross_sections()
       const double production = chi_[idx] * nu_fission_[idx];
       if (production > 0.0) {
         limit =
-            std::min(limit, (1.0 - SHIFT_MARGIN) * removal_[idx] / production);
+            std::min(limit, (1.0 - kShiftMargin) * removal_[idx] / production);
       }
       for (int gp = 0; gp < G; ++gp) {
-        // scatter_[i][from][to]; transposed for the adjoint.
         const std::size_t src = adjoint_ ? static_cast<std::size_t>(gp) * G + g
                                          : static_cast<std::size_t>(g) * G + gp;
         const double value = c.scatter[src] * V;
         scatter_[(static_cast<std::size_t>(i) * G + g) * G + gp] = value;
-        // scatter_[i][g][gp] transfers g -> gp, so gp < g is upscattering.
-        if (gp < g && value != 0.0) has_upscatter_ = true;
+        const bool is_upscattering = gp < g;
+        if (is_upscattering && value != 0.0) has_upscatter_ = true;
       }
     }
   }
@@ -109,10 +111,6 @@ void CmfdSystem::set_adjoint(bool adjoint)
 {
   if (adjoint == adjoint_) return;
   adjoint_ = adjoint;
-  // Dtilde depends only on the diffusion coefficients and the discontinuity
-  // factors, and Dhat carries the nonlinear correction from a preceding
-  // forward solve. Neither is rebuilt here: the adjoint of the corrected
-  // operator is exactly the transpose of the corrected forward operator.
   refresh_cross_sections();
 }
 
@@ -124,10 +122,8 @@ double CmfdSystem::boundary_coupling(
     case BoundaryType::reflective:
       return 0.0;
     case BoundaryType::zero_flux:
-      // phi_s = 0 makes the discontinuity factor irrelevant.
       return 2.0 * D / h;
     case BoundaryType::vacuum: {
-      // Marshak: J = phi_s / 4 outgoing with no incoming partial current.
       const double gamma = 0.5 * adf;
       return 2.0 * D * gamma / (2.0 * D + gamma * h);
     }
@@ -165,10 +161,6 @@ void CmfdSystem::build_coupling()
         const double fR = xs_.adf_value(comp_r, 2 * axis + 0, g);
         const double denom = fL * surf.h_lo * DR + fR * surf.h_hi * DL;
         const double base = 2.0 * DL * DR / denom;
-        // J = base * (fL*phi_L - fR*phi_R), written in the canonical
-        // J = -Dtilde (phi_R - phi_L) - Dhat (phi_R + phi_L) form so that the
-        // discontinuity factors are already folded into the coupling before
-        // any nonlinear correction is applied.
         dtilde_[static_cast<std::size_t>(s) * G + g] = base * 0.5 * (fL + fR);
         dhat_[static_cast<std::size_t>(s) * G + g] = base * 0.5 * (fR - fL);
       }
@@ -198,8 +190,6 @@ void CmfdSystem::assemble(double inv_k_shift)
     for (int i = 0; i < geom_.n_nodes(); ++i) {
       const std::size_t idx = static_cast<std::size_t>(i) * G + g;
       double diag = removal_[idx];
-      // Within-group scattering never leaves the node, so it is excluded from
-      // the removal term and never appears here.
       diag -= chi_[idx] * nu_fission_[idx] * inv_k_shift;
       if (!time_removal_.empty()) diag += time_removal_[idx];
       A.add_diagonal(i, diag);
@@ -212,8 +202,6 @@ void CmfdSystem::assemble(double inv_k_shift)
       if (surf.bc == BoundaryType::interior) {
         const int L = surf.lo;
         const int R = surf.hi;
-        // Row L gains +J*A, row R gains -J*A. Transposing the two
-        // off-diagonal entries turns the leakage operator into its adjoint.
         A.add_diagonal(L, area * (dt - dh));
         A.add_diagonal(R, area * (dt + dh));
         A.add(L, R, area * (adjoint_ ? (-dt + dh) : (-dt - dh)));
@@ -257,10 +245,6 @@ int CmfdSystem::solve_groups(const std::vector<double>& fission_src,
   group_flux_.resize(static_cast<std::size_t>(n));
   int total_inner = 0;
 
-  // A single lagged sweep is exact only when neither upscattering nor the
-  // Wielandt shift couples the groups. Otherwise the sweep repeats until the
-  // flux settles, because the shift enters entirely through the source of one
-  // group formed from the fluxes of the others.
   const bool needs_repeats = (inv_k_shift > 0.0) || has_upscatter_;
   const int max_sweeps =
       needs_repeats ? std::max(2, s.group_sweeps) : std::max(1, s.group_sweeps);
@@ -319,8 +303,6 @@ int CmfdSystem::solve_fixed_source(const std::vector<double>& external,
   group_flux_.resize(static_cast<std::size_t>(n));
   int total_inner = 0;
 
-  // The in-group fission term sits on the matrix diagonal here, so a single
-  // sweep is exact unless the library upscatters.
   const int max_sweeps = has_upscatter_ ? std::max(2, s.group_sweeps)
                                         : std::max(1, s.group_sweeps);
 
@@ -339,8 +321,6 @@ int CmfdSystem::solve_fixed_source(const std::vector<double>& external,
           if (gp != g) b += scatter_[(base + gp) * G + g] * flux[base + gp];
           fission += nu_fission_[base + gp] * flux[base + gp];
         }
-        // Subcritical multiplication: the fission source is treated as a
-        // lagged source at k = 1 rather than as an eigenvalue problem.
         b += chi_[base + g] * fission;
         b -= chi_[base + g] * nu_fission_[base + g] * flux[base + g];
         rhs_[static_cast<std::size_t>(i)] = b;
@@ -388,8 +368,6 @@ void CmfdSystem::compute_currents(
       } else {
         const double p =
             flux[static_cast<std::size_t>(surf.boundary_node()) * G + g];
-        // The outward normal of a low-side boundary points along -axis, so the
-        // current expressed along +axis changes sign.
         const double sign = surf.boundary_is_lo_side() ? -1.0 : 1.0;
         current[si] = sign * dtilde_[si] * p;
       }
@@ -409,7 +387,6 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
   const auto& surfaces = geom_.surfaces();
   const auto& nodes = geom_.nodes();
 
-  // Node-average transverse leakage per axis, from the coarse-mesh currents.
   leakage_.assign(static_cast<std::size_t>(geom_.n_nodes()) * n_axes * G, 0.0);
   const int nn = geom_.n_nodes();
 #ifdef _OPENMP
@@ -466,9 +443,6 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
       const Node& nl = nodes[static_cast<std::size_t>(L)];
       const Node& nr = nodes[static_cast<std::size_t>(R)];
 
-      // Neighbours used only for the quadratic transverse leakage fit. A
-      // missing neighbour is replaced by a copy of the node itself, which is
-      // the usual flat extrapolation at a core boundary.
       const Surface& s_prev =
           surfaces[static_cast<std::size_t>(nl.face[2 * a + 0])];
       const Surface& s_next =
@@ -550,8 +524,6 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
         double dh =
             -(current[static_cast<std::size_t>(g)] + dtilde_[idx] * (ph - pl)) /
             sum;
-        // An unbounded correction makes the coarse-mesh matrix lose diagonal
-        // dominance; both PARCS and KOMODO clamp for the same reason.
         const double limit = s.dhat_limit * dtilde_[idx];
         dh = std::max(-limit, std::min(limit, dh));
         local_change =

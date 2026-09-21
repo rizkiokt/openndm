@@ -64,6 +64,10 @@ public:
 
   //! One Gauss-Seidel pass over energy groups, solving each within-group
   //! system with preconditioned BiCGSTAB.
+  //!
+  //! The fission source is scaled by \c 1/k_eff, so a caller applying a
+  //! criticality normalisation passes the raw source with its static
+  //! eigenvalue and the normalisation lands exactly once.
   int solve_groups(const std::vector<double>& fission_src, double k_eff,
       double inv_k_shift, std::vector<double>& flux, const Settings& s);
 
@@ -127,6 +131,10 @@ public:
 
   //! Net current per surface per group from the current flux, evaluated with
   //! the present coupling coefficients.
+  //!
+  //! Always expressed along \c +axis. The outward normal of a low-side
+  //! boundary points the other way, so its current carries the opposite sign
+  //! to the boundary coupling that produced it.
   void compute_currents(
       const std::vector<double>& flux, std::vector<double>& current) const;
 
@@ -152,7 +160,9 @@ private:
   double max_inv_shift_ = 0.0;
 
   //! Cached per node/group data, flattened as node*G + g.
-  std::vector<double> removal_;     //!< \f$\Sigma_r V\f$
+  //! \f$\Sigma_r V\f$. Within-group scattering never leaves the node, so it
+  //! is excluded here and never reaches the matrix diagonal.
+  std::vector<double> removal_;
   std::vector<double> nu_fission_;  //!< \f$\nu\Sigma_f V\f$
   std::vector<double> chi_;
   std::vector<double> diffusion_;
@@ -179,6 +189,8 @@ private:
   mutable std::vector<double> rhs_;
   mutable std::vector<double> group_flux_;
   mutable std::vector<double> current_;
+  //! Node-average transverse leakage per axis, from the coarse-mesh
+  //! currents: node*n_axes*G + axis*G + g.
   mutable std::vector<double> leakage_;
   mutable std::vector<double> prev_flux_;
 };

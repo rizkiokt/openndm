@@ -67,6 +67,11 @@ struct Settings {
   double step_tolerance = 1.0e-9;
 
   //! Reuse the incoming flux and Dhat as the initial guess (FR-OPT-3).
+  //!
+  //! A cold solve discards the nonlinear correction along with the flux, so
+  //! that solving the same model twice always retraces the same iteration
+  //! path. An adjoint run is the exception: it needs the Dhat the forward
+  //! solve converged.
   bool warm_start = false;
 
   //! Verbosity: 0 silent, 1 summary, 2 per-outer iteration history (FR-OUT-7).

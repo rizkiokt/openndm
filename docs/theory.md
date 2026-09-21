@@ -355,6 +355,12 @@ identical for any thread count, and results are bit-identical on 1, 2, 4 and 8
 threads (FR-OPT-4). Floating-point addition is not associative, so a naive
 `omp reduction` would not have this property.
 
+A cold solve discards the nonlinear correction along with the flux, so the
+same model solved twice retraces the same iteration path rather than
+depending on what the object happened to hold. Warm starting (FR-OPT-3) opts
+out of that deliberately, and an adjoint run is the one case that must keep
+the `D̂` a forward solve converged.
+
 ---
 
 ## 5. Adjoint
@@ -389,6 +395,11 @@ assembled by taking the shifted operator at `1/k_s = 1`, which puts the
 in-group fission term on the diagonal, and leaving the off-group fission on the
 right-hand side. In a leakage-free box with a uniform source this reproduces
 `φ = S / (Σ_a − νΣ_f)` exactly.
+
+Because the in-group fission term sits on the diagonal here rather than in
+the source, one Gauss-Seidel sweep over groups is exact unless the library
+upscatters -- the opposite of the shifted eigenvalue case in §4.1, where the
+shift is entirely off the group diagonal and the sweep has to repeat.
 
 The kernels see `S_ext` through the same quadratic expansion as the transverse
 leakage. For NEM only its first and second moments reach the unknowns: a flat
@@ -564,6 +575,16 @@ $$ T\left(\phi^{n+1} - \phi^n\right) = R^{n+1}
 so each step is a fixed-source solve on the static operator with $T$ added to
 the diagonal. $\theta = 1$ is fully implicit, $\theta = 1/2$ Crank-Nicolson.
 
+**$R^n$ is evaluated against the cross sections this step runs with, not the
+ones the previous step ended with.** A perturbation applied between steps
+belongs to the interval that follows it, so the operator either half of the
+scheme sees is the new one; only the flux and the precursors come from the
+previous step. Using the stale operator instead injects a local $O(1)$ error
+at the step where the perturbation lands — one step, so $O(\Delta t)$
+overall, which drags Crank-Nicolson down to first order while leaving
+$\theta = 1$ untouched, because it never reads this term. Half the scheme
+then looks correct, which is what makes the error worth stating here.
+
 ### 10.1 Folding the precursors into the fission spectrum
 
 The analytic precursor solution of §9 is *linear* in the new fission source,
@@ -597,9 +618,10 @@ null transient closes.
 ### 10.3 What is not done
 
 The nonlinear nodal coupling coefficients are **not** re-converged inside a
-step: $\widehat{D}$ is held at the value the static solve left. Making it
-consistent means carrying the time and delayed terms into the two-node
-problem of §3. Adaptive time stepping (FR-KIN-3) and the exponential
+step: $\widehat{D}$ is held at the value the static solve left. For FDM there
+is nothing to freeze; for the nodal kernels it is an approximation that grows
+with how far the flux shape moves from the static one. Making it consistent
+means carrying the time and delayed terms into the two-node problem of §3. Adaptive time stepping (FR-KIN-3) and the exponential
 transformation (FR-KIN-2) are not implemented.
 
 ## 10.4 Square-root temperature feedback

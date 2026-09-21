@@ -56,6 +56,9 @@ public:
 
   //! Forward or adjoint static eigenvalue (FR-MODE-1, FR-MODE-2).
   //!
+  //! An adjoint run reuses the nonlinear coupling a forward solve converged,
+  //! so a cold adjoint request runs the forward problem first.
+  //!
   //! Ends any transient in progress, since it overwrites the flux and the
   //! eigenvalue the transient was advancing. A later step() then reports that
   //! no transient is running rather than quietly continuing from a static
@@ -78,6 +81,12 @@ public:
   //! Starting them at zero instead produces a prompt drop that is entirely
   //! an artefact.
   //!
+  //! The initial time derivative is evaluated rather than assumed to be
+  //! zero. It is zero analytically at a converged critical steady state, so
+  //! computing it turns any inconsistency between the static operator and
+  //! the transient one into a visible null-transient drift rather than a
+  //! silent bias.
+  //!
   //! \throws InputError without a converged static solution, or if the
   //!         library carries no delayed data or no inverse velocities.
   void start_transient(const Settings& settings);
@@ -85,9 +94,12 @@ public:
   //! Advance one step of \c dt seconds (FR-KIN-2).
   //!
   //! Cross sections and geometry may be changed between steps; the operator
-  //! is reassembled here. The explicit half of the theta scheme is evaluated
-  //! against the state as it stood at the end of the previous step, so a
-  //! change made just before this call belongs to the new step.
+  //! is reassembled here, and a change made just before this call belongs to
+  //! the interval this step covers. The explicit half of the theta scheme
+  //! therefore takes the flux and precursors the previous step ended with,
+  //! but the cross sections this step runs with -- not the ones the previous
+  //! step ended with. See docs/theory.md section 10 for why the other
+  //! reading costs an order.
   TransientRecord step(double dt, const Settings& settings);
 
   //! Precursor concentrations, node*n_precursors + d.
@@ -97,6 +109,11 @@ public:
 
   //! Discard the retained flux and coupling coefficients so the next solve
   //! starts cold.
+  //!
+  //! Call this after mutating the library or the geometry in place, as a
+  //! boron search does. The cached per-node cross sections are refreshed
+  //! before the coupling is rebuilt, because the coupling is derived from
+  //! them.
   //!
   //! Throws while a transient is in progress: the retained flux is that
   //! transient's state rather than a cache, so discarding it would leave the
@@ -122,7 +139,15 @@ public:
   CmfdSystem& system() { return cmfd_; }
 
 private:
-  //! Normalised node power from the retained flux.
+  //! Scale the retained flux so its volume-averaged total is one.
+  //!
+  //! An eigenvector has no natural scale, so fixing one makes a flux
+  //! comparable between meshes and between runs.
+  void normalise_to_unit_mean_flux();
+
+  //! Relative node power from the retained flux, normalised to a mean of one
+  //! over the powered nodes, which is the convention peaking factors are
+  //! quoted against (FR-OUT-3).
   void compute_power(std::vector<double>& power) const;
 
   //! Un-normalised fission power per node, sum_g kappa_f phi V.
@@ -131,12 +156,19 @@ private:
 
   //! Delayed spectrum of precursor group \c d in \c node, falling back to
   //! the library emission spectrum when none is supplied.
+  //!
+  //! The fallback makes delayed neutrons born with the prompt spectrum. That
+  //! is exact for a one-group problem and an approximation for any other,
+  //! which is why FR-XS-3 stores a delayed spectrum at all.
   double chi_delayed(int node, int g, int d) const;
   //! Prompt spectrum, (chi - sum_d beta_d chi_d)/(1 - beta).
   double chi_prompt(int node, int g) const;
 
   //! Right hand side of the time derivative, (V/v) dphi/dt, for the given
   //! state. Zero at a converged critical steady state, by construction.
+  //!
+  //! The assembled operator carries leakage, removal and, during a step, the
+  //! time term; subtracting the time term leaves the static operator.
   void time_derivative(const std::vector<double>& flux,
       const std::vector<double>& fission_norm,
       const std::vector<double>& delayed_source,
