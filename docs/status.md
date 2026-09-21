@@ -87,9 +87,9 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | ID | State | Notes |
 |---|---|---|
 | FR-KIN-1 | done | Time-dependent multi-group diffusion with up to 8 precursor groups. Precursors are integrated in closed form over a step; the analytic solution is linear in the new fission source, so its implicit part folds into an effective fission spectrum rather than needing an iteration. |
-| FR-KIN-2 | partial | Theta-weighted integration, 0 < theta <= 1, default fully implicit. Observed order 1.00 at theta=1 and 2.00 at theta=0.5, measured against exact point kinetics. The exponential transformation of the precursor equations is not implemented. The nonlinear nodal coupling coefficients are held at their static values inside a step. |
+| FR-KIN-2 | partial | Theta-weighted integration, 0 < theta <= 1, default fully implicit. Observed order 1.00 at theta=1 and 2.00 at theta=0.5, measured against exact point kinetics inside the prompt layer. Those orders are asymptotic: at the quarter-second steps an operational transient uses, two hundred times the prompt time constant, both weightings converge first order, which on `benchmarks/lmw` leaves the deck's own step about 3.4% from the extrapolated peak power. The exponential transformation, which is the standard remedy, is not implemented. The nonlinear nodal coupling coefficients are held at their static values inside a step. |
 | FR-KIN-3 | not started | Adaptive time stepping. |
-| FR-KIN-4 | partial | Any change the caller makes between steps is picked up: cross sections, compositions, rod bank positions. There is no driver that schedules them against time. |
+| FR-KIN-4 | partial | Any change the caller makes between steps is picked up: cross sections, compositions, rod bank positions. `ControlRods.reweight` re-weights a partially rodded node against a flux already in hand, which is how cusping works in a transient, where the static solve `converge_cusping` runs would discard the time-dependent flux. `benchmarks/lmw` schedules two banks against time; there is no driver in the library that does. |
 | FR-KIN-5 | not started | Decay heat. |
 | FR-KIN-6 | partial | Each step returns time, total and peak power and iteration counts; the flux and precursors are readable. No time-series writer. |
 
@@ -148,7 +148,7 @@ temperature or density, and cross sections reach the solver only through
 |---|---|---|
 | NFR-PERF-1..7 | not measured | No performance acceptance runs have been done on the reference hardware. The IAEA-2D quarter core at one node per assembly solves in about 15 ms and the IAEA-3D core with 19 axial planes in about 150 ms, both single-threaded, which suggests the targets are reachable, but that is an observation and not an acceptance test. |
 | NFR-QA-1 | partial | Catch2 for C++ and pytest for Python. Coverage is collected in CI but the 80% line coverage gate is not enforced. |
-| NFR-QA-2 | done | Every deck runs in CI against its published reference with an explicit tolerance. All four meet the 100 pcm acceptance criterion for static benchmarks: IAEA-2D, IAEA-3D, BIBLIS-2D and the analytic cuboid. |
+| NFR-QA-2 | done | Every deck runs in CI. The four static decks meet the 100 pcm acceptance criterion: IAEA-2D, IAEA-3D, BIBLIS-2D and the analytic cuboid, the last against exact algebra rather than a published reference. `benchmarks/lmw` is a transient whose specification states the scenario and not the answer, so it is tested for the conventions it depends on and the shape it produces, and its power history is reported rather than scored. |
 | NFR-QA-3 | done | Linux gcc and clang, macOS clang, Python 3.10 to 3.13, all green. Windows is not built and is not documented as WSL-only. The OpenMC coupling job runs on manual dispatch only, because no stable public nuclear data URL exists to hard-code; see `tests/validation/README.md`. |
 | NFR-QA-4 | done | clang-format and ruff, both enforced. |
 | NFR-QA-5 | done | Semantic versioning and a changelog. |
@@ -195,6 +195,13 @@ per assembly lands 2.6 pcm from the mesh-converged eigenvalue, and SANM and
 NEM — which close their two-node problems by entirely different routes —
 agree with each other to 0.08 pcm. Both IAEA decks reproduce their published
 eigenvalues inside the 100 pcm acceptance criterion.
+
+The LMW deck establishes something different, because it has no reference to
+reproduce: it is the first problem to run rod banks, cusping, precursors and
+theta integration together, and the first measurement of what the missing
+exponential transformation costs. Its mesh is converged — eight times the
+nodes moves the peak power by 0.06% — while its time step is not, and the
+gap between those two is the finding. See `benchmarks/README.md`.
 
 ## The one physics limitation worth knowing
 

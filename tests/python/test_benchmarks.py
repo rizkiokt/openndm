@@ -240,3 +240,116 @@ def test_biblis_symmetry_faces_carry_the_half_width_assemblies():
     assert core[-1, 0] == 1
     # The south-east corner is outside the core entirely.
     assert core[0, -1] == 0
+
+# ---------------------------------------------------------------------- LMW
+def _lmw():
+    return _deck("lmw")
+
+
+def test_lmw_map_puts_fuel_on_the_symmetry_corner():
+    """The map is printed north row first, so reading it in order inverts it.
+
+    Getting this backwards puts the reflector where the core centre belongs
+    and leaves the half-width assemblies on the vacuum faces instead of the
+    symmetry cuts. It is the same convention the BIBLIS deck needed, and it
+    is asserted rather than assumed because a flipped core still runs.
+    """
+    lmw = _lmw()
+    core = lmw.node_map()
+    middle = core[len(core) // 2]
+    assert middle[0, 0] == 1, "inner core belongs on the south-west corner"
+    assert middle[-1, -1] == 0, "the north-east corner is outside the core"
+    assert (core[0] == core[-1]).all(), "both axial ends are reflector planes"
+
+
+def test_lmw_symmetry_cuts_are_the_reflective_faces():
+    lmw = _lmw()
+    assert lmw.BOUNDARIES["x_min"] == "reflective"
+    assert lmw.BOUNDARIES["y_min"] == "reflective"
+    assert lmw.BOUNDARIES["x_max"] == "vacuum"
+    assert lmw.BOUNDARIES["y_max"] == "vacuum"
+
+
+def test_lmw_banks_reach_only_the_inner_core_and_the_reflector():
+    """Every rodded column is inner core, which is why only it has increments.
+
+    A bank that reached the outer core would need a rodded counterpart for it,
+    and the deck gives none; an unsubstituted node looks exactly like a
+    correctly withdrawn one, so this is checked rather than discovered.
+    """
+    lmw = _lmw()
+    assert lmw.rod_bases() == [0, 2]
+    nonzero = [
+        index
+        for index, delta in enumerate(lmw.ROD_DELTA)
+        if any(any(v) for v in delta.values())
+    ]
+    assert nonzero == [0]
+
+
+def test_lmw_bank_columns_match_the_deck():
+    lmw = _lmw()
+    assert int((lmw.BANK_MAP == 1).sum()) == 5
+    assert int((lmw.BANK_MAP == 2).sum()) == 4
+
+
+def test_lmw_rod_schedule_follows_the_deck():
+    lmw = _lmw()
+    assert lmw.position("bank_2", 0.0) == 100.0
+    assert lmw.position("bank_2", 80.0 / 3.0) == pytest.approx(180.0)
+    assert lmw.position("bank_2", 60.0) == 180.0
+    assert lmw.position("bank_1", 7.5) == 180.0
+    assert lmw.position("bank_1", 47.5) == pytest.approx(60.0)
+    assert lmw.position("bank_1", 60.0) == 60.0
+
+
+def test_lmw_steady_state_is_near_critical():
+    """An operating core, so the initial state has to be close to critical."""
+    lmw = _lmw()
+    geometry, library, rods = lmw.build()
+    model = openndm.Model(geometry, library, openndm.Settings(verbosity=0))
+    rods.insert(lmw.positions_at(0.0))
+    model.refresh()
+    k_eff = rods.converge_cusping(model).k_eff
+    assert abs(pcm(k_eff, 1.0)) < 500.0, k_eff
+
+
+def test_lmw_withdrawing_adds_reactivity_and_inserting_removes_it():
+    """The sign of every bank, which a flipped axis would silently invert."""
+    lmw = _lmw()
+    geometry, library, rods = lmw.build()
+    model = openndm.Model(geometry, library, openndm.Settings(verbosity=0))
+
+    def k_at(bank_1, bank_2):
+        rods.insert({"bank_1": bank_1, "bank_2": bank_2})
+        model.refresh()
+        return rods.converge_cusping(model).k_eff
+
+    initial = k_at(180.0, 100.0)
+    withdrawn = k_at(180.0, 180.0)
+    inserted = k_at(60.0, 180.0)
+    assert withdrawn > initial, (withdrawn, initial)
+    assert inserted < withdrawn, (inserted, withdrawn)
+
+
+@pytest.mark.slow
+def test_lmw_power_rises_then_falls():
+    """The shape of the transient, which is what the scenario is designed for.
+
+    Bank 2 withdraws from the start and bank 1 only begins inserting at
+    7.5 s, so the power rises first; bank 1 overtakes it and the power ends
+    below where it started. The peak height is step-size dependent and is not
+    asserted -- see ``benchmarks/README.md`` for how far from converged it is.
+    """
+    lmw = _lmw()
+    geometry, library, rods = lmw.build()
+    model = openndm.Model(geometry, library, openndm.Settings(verbosity=0))
+    _, history = lmw.run(model, rods, dt=0.5, total=40.0)
+    time, power = history[:, 0], history[:, 1]
+
+    peak = int(np.argmax(power))
+    assert 10.0 < time[peak] < 30.0, time[peak]
+    assert power[peak] > 1.2, power[peak]
+    assert power[-1] < 1.0, power[-1]
+    rising = power[: peak + 1]
+    assert np.all(np.diff(rising) > 0.0), "power should rise monotonically first"

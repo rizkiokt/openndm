@@ -9,9 +9,12 @@ own directory.
 | `iaea2d/` | 2-group PWR, quarter core, 2D | Published `k_eff = 1.02959` | SANM −3.7 pcm at one node per assembly | **Verified** |
 | `iaea3d/` | 2-group PWR, quarter core, 3D | Published `k_eff = 1.02903` | SANM +44.7 pcm at 20 cm axial mesh | **Verified** |
 | `biblis2d/` | 2-group PWR, quarter core, 2D, 8 compositions | Published `k_eff = 1.02511` | SANM −2.1 pcm at one node per assembly | **Verified** |
+| `lmw/` | 2-group PWR rod transient, 3D | None in the specification | Power history, converged in mesh, not in time step | **Reported, not compared** |
 
 The specification's acceptance criterion is 100 pcm on `k_eff` for a static
-benchmark with a published solution. All four decks meet it.
+benchmark with a published solution. All four static decks meet it. LMW is a
+transient and has no reference in the specification the deck was parsed from;
+what it is good for, and what it is not, is set out below.
 
 ## analytic — exact reference
 
@@ -173,7 +176,7 @@ first run with nothing tuned.
 
 ### Provenance
 
-`data.py` is generated, not hand-written, from the KOMODO sample deck:
+`biblis_data.py` is generated, not hand-written, from the KOMODO sample deck:
 
 | | |
 |---|---|
@@ -197,6 +200,73 @@ The deck's `1 2 2 1 2 2` makes east and south the outer faces, west and
 north the symmetry cuts, and both axial faces reflective, which is what
 makes the problem two-dimensional.
 
+## lmw — a scenario without an answer
+
+The LMW operational transient is the first deck that runs rod banks, the
+cusping correction, delayed precursors and θ-weighted integration at once.
+Two banks move against each other over 60 seconds: bank 2 withdraws from 100
+steps at t = 0, bank 1 inserts from 180 steps at t = 7.5 s, both at 3 steps
+per second. One step is 1 cm against a 5 cm axial mesh, so a rod tip sits
+inside a node four steps out of five and cusping is active almost throughout.
+
+The data is parsed from the KOMODO sample deck; see `lmw/lmw_data.py` for the
+provenance. **The deck states the scenario in full and does not state its
+answer.** The published LMW reference is a power-versus-time curve, and that
+is not in the file. So this deck is not a comparison, and the numbers below
+are reported rather than scored. The temptation is to write the reference
+curve down from memory and call the agreement verification; the BIBLIS record
+below is what that looks like when it goes wrong.
+
+Steady state at the initial bank positions, SANM, one node per 10 cm:
+`k_eff = 0.999553`, which is 45 pcm from critical — an operating core, as the
+scenario requires.
+
+Power relative to the steady state, SANM, θ = 0.5, banks placed at each
+interval's midpoint:
+
+```
+      dt         5s        10s        20s        26s        30s        45s        60s
+  1.0000   1.069233   1.212338   1.519106   1.504421   1.371651   0.676743   0.411153
+  0.5000   1.091074   1.263382   1.608773   1.555924   1.385818   0.652353   0.401617
+  0.2500   1.106658   1.297768   1.662396   1.581240   1.389587   0.641001   0.397705
+  0.1250   1.116069   1.317963   1.691344   1.593226   1.390426   0.635640   0.396002
+  0.0625   1.121255   1.328937   1.706300   1.598944   1.390572   0.633043   0.395213
+```
+
+The shape is the one the scenario is built to produce: the power rises while
+only bank 2 is moving, peaks near 20 s as bank 1 overtakes it, and ends below
+where it started, with the banks worth −299 pcm net.
+
+### The time step is the error, and the mesh is not
+
+Eight times the nodes — 4 680 to 37 440 — moves `k_eff` by 1 pcm and the peak
+by 0.06%:
+
+```
+ sub   nodes     k_eff        5s       10s       20s       30s       45s       60s
+   1    4680  0.999553  1.106658  1.297768  1.662396  1.389587  0.641001  0.397705
+   2   37440  0.999563  1.107148  1.299033  1.663423  1.385590  0.635054  0.392932
+```
+
+The time step is a different matter. The successive differences at the peak
+are 0.0897, 0.0536, 0.0289, 0.0150 — halving, which is **first order** — so
+the extrapolated peak is about 1.721 and the deck's own 0.25 s step sits
+about 3.4% below it.
+
+This is not a defect in the scheme. θ = 1/2 is second order, and measured at
+2.05 on this core when the step resolves the prompt time constant of about a
+millisecond. An operational transient runs two hundred times coarser than
+that, which is the stiff regime where the θ method loses an order; §11.1 of
+`docs/theory.md` has the measurement. It is the quantitative case for the
+exponential flux transformation, which is the piece of FR-KIN-2 that is not
+implemented, and this is the first number that says what its absence costs.
+
+Two approximations sit underneath and are smaller than the above: the
+nonlinear coupling coefficient D-hat is frozen at its static value for the whole
+transient, and the cusping mixture is re-weighted against the previous step's
+flux rather than the current one. Turning the flux weighting off entirely, or
+switching from SANM to FDM, changes the observed convergence not at all.
+
 ## Adding a deck
 
 A deck is a directory with a `run.py` that imports shared data from
@@ -206,3 +276,11 @@ regression test in `tests/python/test_benchmarks.py` asserting against that
 reference with an explicit tolerance. If a deck does not reproduce its
 reference, say so in the table above with the number you actually get, rather
 than quietly loosening the tolerance.
+
+**Give any generated data module a name of its own** -- `biblis_data.py`,
+`lmw_data.py` -- rather than `data.py`. Each deck puts its own directory on
+`sys.path`, so two decks sharing a module name means the second one silently
+imports the first one's data. Both of these were called `data.py` until they
+existed at the same time, at which point the second deck to be imported got
+the first deck's core map. `tests/python/test_benchmarks.py` already loads
+each `run.py` under a unique name for the same reason.

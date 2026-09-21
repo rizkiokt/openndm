@@ -631,6 +631,35 @@ form, and that masks the order of the flux scheme entirely: both weightings
 look second order there. Measuring in the wrong window is how an error of
 this kind stays hidden.
 
+### 11.1 The order an operational transient actually sees
+
+The orders above are asymptotic, and a reactor transient is not run in the
+regime where they hold. The prompt time constant is
+$\Lambda / (\beta - \rho)$, of order a millisecond; an operational transient
+runs at a quarter of a second, some two hundred times larger. That is the
+stiff regime, and the $\theta$ method loses an order in it.
+
+Measured on the LMW core with a smooth cross section ramp, so that nothing
+but the time discretisation is in play:
+
+| $\Delta t$ | Relative to $\Lambda/(\beta-\rho)$ | $\theta = 1/2$ | $\theta = 1$ |
+|---|---|---|---|
+| $5\times10^{-5}$ – $8\times10^{-4}$ s | order 1 | **2.05** | 1.03 |
+| $0.0625$ – $1$ s | order $10^{2}$ | **1.0** | 1.0 |
+
+Both weightings converge, and at a quarter of a second Crank-Nicolson is
+still the more accurate of the two, but it converges first order and not
+second. It does not ring: the scheme is not L-stable, so the prompt mode is
+damped only weakly, yet on this problem the power history stays monotone
+under refinement.
+
+The cost is quantified in `benchmarks/README.md`: on LMW the mesh is
+converged to 0.06% at the peak while the deck's own time step is about 3%
+away from the extrapolated answer. This is the argument for the exponential
+transformation of §10.3 — factoring the fast exponential out of the flux is
+what lets a large step stay accurate, and it is the piece that would move
+this table.
+
 
 
 ## References
