@@ -132,7 +132,16 @@ boundary, and for completeness — but not for core accuracy.
 
 ## Blocked
 
-Further static benchmarks — BIBLIS, LRA static, TWIGL static — need
-reference specifications. They are not blocked on solver capability. See the
-BIBLIS record in `benchmarks/README.md` for why a transcribed map cannot be
-closed by searching for one that reproduces the published eigenvalue.
+**BIBLIS is done.** It was blocked on a reference specification and the
+specification existed all along: KOMODO ships it, and NEACRP, KOEBERG, MOX
+and the LMW transient, as runnable sample decks under an MIT licence. The
+underlying data is the published OECD/NEA and ANL benchmark material; KOMODO
+is a machine-readable transcription of it.
+
+Parsed rather than transcribed, BIBLIS landed 2.1 pcm from its published
+eigenvalue on the first run. The deck written from memory had been wrong in
+both the map and the reference — see `benchmarks/README.md`.
+
+Still open: LRA static and TWIGL static, which KOMODO does not ship. The
+same lesson applies — look for a specification before writing a deck from
+recollection.

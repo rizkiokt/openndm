@@ -187,3 +187,56 @@ def test_iaea_3d_axial_profile_is_bottom_peaked():
 # ----------------------------------------------------------------- analytic
 def test_analytic_deck_reports_the_exact_reference():
     assert _deck("analytic").analytic() == pytest.approx(1.205387388, abs=1.0e-8)
+
+
+# ------------------------------------------------------------------- biblis
+def test_biblis_2d_sanm_reproduces_the_reference():
+    """The deck is parsed from its source, not transcribed.
+
+    An earlier attempt at this benchmark was written from memory and not
+    shipped: the map used five of the eight compositions and put fuel where
+    the reflector belongs, and the reference it was written against was
+    1.02513 rather than the 1.02511 the source deck states. Both wrong, and
+    tuning the first to reproduce the second would have looked like a pass.
+    """
+    deck = _deck("biblis2d")
+    geometry, library = deck.build()
+    error = pcm(_solve(geometry, library).k_eff, deck.PUBLISHED_K_EFF)
+    assert abs(error) < ACCEPTANCE_PCM, f"SANM is {error:+.1f} pcm from the reference"
+
+
+@pytest.mark.parametrize("kernel", ["fdm", "nem", "sanm"])
+def test_biblis_2d_all_kernels_reproduce_the_reference_when_refined(kernel):
+    deck = _deck("biblis2d")
+    geometry, library = deck.build(subdivide=2)
+    error = pcm(_solve(geometry, library, kernel).k_eff, deck.PUBLISHED_K_EFF)
+    assert abs(error) < ACCEPTANCE_PCM, f"{kernel} is {error:+.1f} pcm"
+
+
+def test_biblis_map_uses_every_composition():
+    """The failure mode of the transcribed deck, asserted against directly.
+
+    Eight compositions are defined and eight must appear. The map written
+    from memory used five, which is the kind of thing that survives every
+    check except comparing against the source.
+    """
+    deck = _deck("biblis2d")
+    present = {int(v) for v in np.unique(deck.NODE_MAP) if v != 0}
+    assert present == set(range(1, len(deck.COMPOSITIONS) + 1)), (
+        f"map uses compositions {sorted(present)} of {len(deck.COMPOSITIONS)} defined"
+    )
+
+
+def test_biblis_symmetry_faces_carry_the_half_width_assemblies():
+    """West and north are the symmetry cuts, so the map must be oriented.
+
+    If the map were flipped the half-width assemblies would sit on the outer
+    faces instead, which changes the core size without changing the node
+    count.
+    """
+    deck = _deck("biblis2d")
+    core = deck.NODE_MAP
+    # The north-west corner is the core centre: fuel, never reflector.
+    assert core[-1, 0] == 1
+    # The south-east corner is outside the core entirely.
+    assert core[0, -1] == 0
