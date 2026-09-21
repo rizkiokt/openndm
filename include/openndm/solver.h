@@ -140,7 +140,6 @@ private:
   double k_eff_ = 1.0;
   bool has_solution_ = false;
 
-  // ------------------------------------------------------------- transient
   std::unique_ptr<PrecursorState> precursors_;
   //! Fission source divided by the static eigenvalue: the criticality
   //! normalisation, held for the whole transient.

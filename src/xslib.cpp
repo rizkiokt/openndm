@@ -136,8 +136,6 @@ void XSLibrary::finalize(std::vector<std::string>* warnings)
         for (int gp = 0; gp < G; ++gp) {
           const double s = comp.scatter[static_cast<std::size_t>(g) * G + gp];
           if (s < 0.0) {
-            // Monte Carlo noise routinely produces small negative transfers;
-            // FR-XS-8 requires a warning rather than a failure.
             if (warnings) {
               warnings->push_back(where + ": negative scattering transfer " +
                                   std::to_string(g) + "->" +
@@ -164,7 +162,6 @@ void XSLibrary::finalize(std::vector<std::string>* warnings)
                              std::to_string(chi_sum) + ", expected 1");
         }
       } else if (chi_sum > 0.0) {
-        // Harmless but almost always a mistake worth surfacing.
         if (warnings) {
           warnings->push_back(
               where + " has a fission spectrum but no fission source");
@@ -175,9 +172,6 @@ void XSLibrary::finalize(std::vector<std::string>* warnings)
         const bool heating = std::any_of(comp.kappa_fission.begin(),
             comp.kappa_fission.end(), [](double v) { return v > 0.0; });
         if (!heating) {
-          // Power is formed from kappa-fission, so a fissile composition
-          // without it contributes to the eigenvalue and to nothing else. The
-          // symptom is a silently zero power distribution.
           warnings->push_back(
               where +
               " produces neutrons but has no kappa-fission, so it "

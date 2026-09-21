@@ -10,6 +10,34 @@ namespace openndm {
 
 namespace {
 
+//! Row of the two-node system carrying factor-weighted flux continuity at the
+//! shared interface.
+constexpr int kFluxContinuity = 0;
+
+//! Row carrying current continuity at the shared interface.
+constexpr int kCurrentContinuity = 1;
+
+//! Row carrying the coarse-mesh net current at the outer face of node lo.
+constexpr int kOuterCurrentLo = 2;
+
+//! Row carrying the coarse-mesh net current at the outer face of node hi.
+constexpr int kOuterCurrentHi = 3;
+
+//! Unknowns of the two-node system: the cubic and quartic coefficients of
+//! each node, which the columns of the system and its solution share.
+constexpr int kA3Lo = 0;
+constexpr int kA4Lo = 1;
+constexpr int kA3Hi = 2;
+constexpr int kA4Hi = 3;
+
+//! Keep an effective removal away from zero, since the moment equations
+//! divide by it; see \c docs/theory.md 3.5.
+double floored_removal(double sr)
+{
+  if (std::abs(sr) < 1.0e-10) return sr < 0.0 ? -1.0e-10 : 1.0e-10;
+  return sr;
+}
+
 //! Quartic polynomial nodal expansion, NEM (FR-SOL-2).
 //!
 //! \f[
@@ -46,6 +74,15 @@ struct NodeExpansion {
   }
 };
 
+//! Nodal expansion method (FR-SOL-2).
+//!
+//! The transverse leakage and any external source are expanded on the same
+//! quadratic basis; only the source's first and second moments reach the
+//! unknowns, because the coarse-mesh solution has already fixed the node
+//! average. The four free coefficients of a two-node problem are closed by
+//! continuity at the shared interface and by the coarse-mesh net currents at
+//! the two outer faces, a 4x4 solve per surface and group. See
+//! \c docs/theory.md 3.5.
 class NemKernel : public Kernel {
 public:
   const char* name() const override { return "nem"; }
@@ -64,9 +101,6 @@ public:
     std::vector<double> l0(static_cast<std::size_t>(2 * G));
     std::vector<double> l1(static_cast<std::size_t>(2 * G));
     std::vector<double> l2(static_cast<std::size_t>(2 * G));
-    // External source on the same quadratic basis. Only its first and second
-    // moments reach the NEM unknowns: a flat source cannot change a shape
-    // whose node average is already fixed by the coarse-mesh solution.
     std::vector<double> q_ext1(static_cast<std::size_t>(2 * G), 0.0);
     std::vector<double> q_ext2(static_cast<std::size_t>(2 * G), 0.0);
     std::vector<double> sr_eff(static_cast<std::size_t>(2 * G));
@@ -82,10 +116,8 @@ public:
         const std::size_t gg = static_cast<std::size_t>(g);
         ex[e].phibar = (side == 0 ? p.flux_lo : p.flux_hi)[gg];
         ex[e].D_over_h = c.D[gg] / h;
-        double sr = c.removal[gg] - c.chi[gg] * c.nu_fission[gg] * inv_k;
-        // The moment equations divide by the removal term, so a vanishing
-        // effective removal is floored rather than allowed to blow up.
-        if (std::abs(sr) < 1.0e-10) sr = (sr < 0.0 ? -1.0e-10 : 1.0e-10);
+        const double sr = floored_removal(detail::effective_removal(
+            c.removal[gg], c.chi[gg], c.nu_fission[gg], inv_k));
         sr_eff[e] = sr;
         const double dh2 = c.D[gg] / (h * h);
         ex[e].beta1 = 3.0 * dh2 / sr + 1.0 / 20.0;
@@ -141,36 +173,33 @@ public:
 
         double a[16] = {0.0};
         double rhs[4] = {0.0};
-        // Row 0: ADF weighted flux continuity at the shared interface.
-        a[0] = fL * L.beta1;
-        a[1] = fL * L.beta2;
-        a[2] = fR * R.beta1;
-        a[3] = -fR * R.beta2;
-        rhs[0] = -fL * (L.phibar + L.alpha1 + L.alpha2) +
-                 fR * (R.phibar - R.alpha1 + R.alpha2);
-        // Row 1: current continuity at the shared interface.
-        a[4] = -L.D_over_h * cL3;
-        a[5] = -L.D_over_h * cL4;
-        a[6] = R.D_over_h * cR3;
-        a[7] = -R.D_over_h * cR4;
-        rhs[1] = L.D_over_h * (2.0 * L.alpha1 + 6.0 * L.alpha2) -
-                 R.D_over_h * (2.0 * R.alpha1 - 6.0 * R.alpha2);
-        // Row 2: the coarse-mesh net current at the outer face of node lo.
-        a[8] = -L.D_over_h * cL3;
-        a[9] = L.D_over_h * cL4;
-        rhs[2] = p.cmfd_current_lo[static_cast<std::size_t>(g)] +
-                 L.D_over_h * (2.0 * L.alpha1 - 6.0 * L.alpha2);
-        // Row 3: the coarse-mesh net current at the outer face of node hi.
-        a[14] = -R.D_over_h * cR3;
-        a[15] = -R.D_over_h * cR4;
-        rhs[3] = p.cmfd_current_hi[static_cast<std::size_t>(g)] +
-                 R.D_over_h * (2.0 * R.alpha1 + 6.0 * R.alpha2);
+        a[4 * kFluxContinuity + kA3Lo] = fL * L.beta1;
+        a[4 * kFluxContinuity + kA4Lo] = fL * L.beta2;
+        a[4 * kFluxContinuity + kA3Hi] = fR * R.beta1;
+        a[4 * kFluxContinuity + kA4Hi] = -fR * R.beta2;
+        rhs[kFluxContinuity] = -fL * (L.phibar + L.alpha1 + L.alpha2) +
+                               fR * (R.phibar - R.alpha1 + R.alpha2);
+        a[4 * kCurrentContinuity + kA3Lo] = -L.D_over_h * cL3;
+        a[4 * kCurrentContinuity + kA4Lo] = -L.D_over_h * cL4;
+        a[4 * kCurrentContinuity + kA3Hi] = R.D_over_h * cR3;
+        a[4 * kCurrentContinuity + kA4Hi] = -R.D_over_h * cR4;
+        rhs[kCurrentContinuity] =
+            L.D_over_h * (2.0 * L.alpha1 + 6.0 * L.alpha2) -
+            R.D_over_h * (2.0 * R.alpha1 - 6.0 * R.alpha2);
+        a[4 * kOuterCurrentLo + kA3Lo] = -L.D_over_h * cL3;
+        a[4 * kOuterCurrentLo + kA4Lo] = L.D_over_h * cL4;
+        rhs[kOuterCurrentLo] = p.cmfd_current_lo[static_cast<std::size_t>(g)] +
+                               L.D_over_h * (2.0 * L.alpha1 - 6.0 * L.alpha2);
+        a[4 * kOuterCurrentHi + kA3Hi] = -R.D_over_h * cR3;
+        a[4 * kOuterCurrentHi + kA4Hi] = -R.D_over_h * cR4;
+        rhs[kOuterCurrentHi] = p.cmfd_current_hi[static_cast<std::size_t>(g)] +
+                               R.D_over_h * (2.0 * R.alpha1 + 6.0 * R.alpha2);
 
         if (detail::solve_dense(a, rhs, 4)) {
-          L.a3 = rhs[0];
-          L.a4 = rhs[1];
-          R.a3 = rhs[2];
-          R.a4 = rhs[3];
+          L.a3 = rhs[kA3Lo];
+          L.a4 = rhs[kA4Lo];
+          R.a3 = rhs[kA3Hi];
+          R.a4 = rhs[kA4Hi];
         } else {
           L.a3 = L.a4 = R.a3 = R.a4 = 0.0;
         }

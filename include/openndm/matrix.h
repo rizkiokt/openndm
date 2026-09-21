@@ -33,6 +33,10 @@ class SparsePattern {
 public:
   SparsePattern() = default;
 
+  //! Columns are stored in ascending order within a row, which keeps the
+  //! ILU0 sweep and the matrix-vector product cache friendly and makes the
+  //! factorisation order well defined.
+  //!
   //! \param n_rows number of nodes
   //! \param neighbours neighbour node index list per node (diagonal excluded)
   SparsePattern(int n_rows, const std::vector<std::vector<int>>& neighbours);
@@ -82,13 +86,21 @@ private:
 //!
 //! Reuses the matrix pattern, so the factors cost no extra memory beyond one
 //! value array. Falls back to plain Jacobi on a zero pivot rather than
-//! failing, which keeps a badly scaled problem solvable if slower.
+//! failing, which keeps a badly scaled problem solvable if slower. A zero
+//! pivot means a decoupled node, which is a modelling problem the solver
+//! reports through non-convergence rather than through a crash.
 class Ilu0 {
 public:
   Ilu0() = default;
+
+  //! Factorise \c A in the IKJ order with no fill-in.
+  //!
+  //! Row positions are looked up through a scatter array, which makes the
+  //! whole factorisation O(nnz) for this pattern.
   void factor(const GroupMatrix& A);
 
-  //! Solve (LU) x = b in place-safe fashion.
+  //! Solve (LU) x = b in place-safe fashion, by forward substitution through
+  //! the unit lower triangle followed by backward substitution.
   void apply(const std::vector<double>& b, std::vector<double>& x) const;
 
   bool valid() const { return valid_; }
@@ -110,6 +122,10 @@ struct LinearResult {
 //! Preconditioned BiCGSTAB (FR-SOL-5).
 //!
 //! \param x is used as the initial guess and holds the solution on return.
+//!
+//! A breakdown -- a vanishing \f$\rho\f$, \f$r_0 \cdot v\f$ or
+//! \f$\omega\f$ -- returns an unconverged result holding the best iterate
+//! reached, which the outer iteration is free to continue from.
 LinearResult bicgstab(const GroupMatrix& A, const std::vector<double>& b,
     std::vector<double>& x, const Ilu0& precond, double tol, int max_iter);
 

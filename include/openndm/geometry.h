@@ -86,6 +86,11 @@ public:
   //! Build a Cartesian grid, dropping COMP_INACTIVE positions and applying
   //! the requested face boundary conditions to every exposed surface.
   //!
+  //! Built in two passes: one node per active lattice position, then one
+  //! surface per node face, sweeping each axis from the low side so that
+  //! every interior interface is visited exactly once. A face whose
+  //! neighbour is missing or inactive becomes a boundary.
+  //!
   //! \throws InputError on an empty mesh, a size mismatch, a non-positive
   //!         node width, or a fully inactive core map.
   static Geometry from_cartesian(const CartesianSpec& spec);

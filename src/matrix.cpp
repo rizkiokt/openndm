@@ -64,8 +64,6 @@ SparsePattern::SparsePattern(
     rowptr_[static_cast<std::size_t>(r)] = static_cast<int>(colind_.size());
     row = neighbours[r];
     row.push_back(r);
-    // Ascending column order keeps the ILU0 sweep and the matrix-vector
-    // product cache friendly and makes the factorisation order well defined.
     std::sort(row.begin(), row.end());
     row.erase(std::unique(row.begin(), row.end()), row.end());
     for (int c : row) {
@@ -152,8 +150,6 @@ void Ilu0::factor(const GroupMatrix& A)
   diag_inv_.assign(static_cast<std::size_t>(n), 0.0);
   valid_ = true;
 
-  // Standard IKJ incomplete LU with no fill-in. Row positions are looked up
-  // through a scatter array, which is O(nnz) overall for this pattern.
   std::vector<int> position(static_cast<std::size_t>(n), -1);
   for (int i = 0; i < n; ++i) {
     for (int p = rp[static_cast<std::size_t>(i)];
@@ -180,9 +176,6 @@ void Ilu0::factor(const GroupMatrix& A)
     const double d =
         lu_[static_cast<std::size_t>(dp[static_cast<std::size_t>(i)])];
     if (std::abs(d) < 1.0e-300) {
-      // Rather than fail, degrade to Jacobi on this row. A zero pivot here
-      // means a decoupled node, which is a modelling problem the solver
-      // reports through non-convergence, not a crash.
       diag_inv_[static_cast<std::size_t>(i)] = 0.0;
       valid_ = false;
     } else {
@@ -203,7 +196,6 @@ void Ilu0::apply(const std::vector<double>& b, std::vector<double>& x) const
   const auto& dp = pattern_->diag_pos();
   x.resize(static_cast<std::size_t>(n));
 
-  // Forward substitution with a unit lower triangle.
   for (int i = 0; i < n; ++i) {
     double s = b[static_cast<std::size_t>(i)];
     for (int p = rp[static_cast<std::size_t>(i)];
@@ -213,7 +205,6 @@ void Ilu0::apply(const std::vector<double>& b, std::vector<double>& x) const
     }
     x[static_cast<std::size_t>(i)] = s;
   }
-  // Backward substitution.
   for (int i = n - 1; i >= 0; --i) {
     double s = x[static_cast<std::size_t>(i)];
     for (int p = dp[static_cast<std::size_t>(i)] + 1;
@@ -251,7 +242,7 @@ LinearResult bicgstab(const GroupMatrix& A, const std::vector<double>& b,
 
   for (int it = 1; it <= max_iter; ++it) {
     const double rho_new = deterministic_dot(r0, r);
-    if (std::abs(rho_new) < 1.0e-300) break;  // breakdown; take what we have
+    if (std::abs(rho_new) < 1.0e-300) break;
     const double beta = (rho_new / rho) * (alpha / omega);
     for (std::size_t i = 0; i < n; ++i) {
       p[i] = r[i] + beta * (p[i] - omega * v[i]);

@@ -20,7 +20,6 @@ double decay_integral_0(double lambda, double dt)
 {
   const double x = lambda * dt;
   if (std::abs(x) < kSmall) {
-    // dt * (1 - x/2 + x^2/6 - x^3/24)
     return dt * (1.0 - x / 2.0 + x * x / 6.0 - x * x * x / 24.0);
   }
   return -std::expm1(-x) / lambda;
@@ -30,7 +29,6 @@ double decay_integral_1(double lambda, double dt)
 {
   const double x = lambda * dt;
   if (std::abs(x) < kSmall) {
-    // dt^2 * (1/2 - x/3 + x^2/8 - x^3/30)
     return dt * dt * (0.5 - x / 3.0 + x * x / 8.0 - x * x * x / 30.0);
   }
   return (dt - decay_integral_0(lambda, dt)) / lambda;
@@ -93,8 +91,6 @@ void PrecursorState::advance(
     throw InputError("fission source must have one value per node");
   }
 
-  // The integrals depend only on lambda and dt, so they are shared by every
-  // node rather than recomputed n_nodes times.
   std::vector<double> decay(static_cast<std::size_t>(n_precursors_));
   std::vector<double> i0(static_cast<std::size_t>(n_precursors_));
   std::vector<double> i1(static_cast<std::size_t>(n_precursors_));
@@ -129,10 +125,6 @@ void PrecursorState::delayed_source(
       const double rate = lambda_[dd] * concentration(i, d);
       if (rate == 0.0) continue;
       for (int g = 0; g < n_groups; ++g) {
-        // With no delayed spectrum supplied every delayed neutron is born in
-        // the top group, which is the convention a one-group problem needs
-        // and is wrong for any real multi-group library -- hence FR-XS-3
-        // storing chi_delayed.
         const double chi =
             has_spectrum
                 ? delayed
