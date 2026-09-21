@@ -12,6 +12,7 @@ OpenMC-dependent group constant generation path and is imported explicitly.
    geometry
    rods
    xslib
+   feedback
    settings
    statepoint
    plots

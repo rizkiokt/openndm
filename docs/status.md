@@ -33,7 +33,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | FR-XS-4 | done | Per node face per group, defaulting to 1.0. Verified against the equivalence theorem: with flux-volume homogenised cross sections and the factors implied by a reference solution, the coarse solve reproduces the reference eigenvalue and node-average fluxes exactly, for any homogenised diffusion coefficient. On the test problem the factors are worth 3000 pcm. |
 | FR-XS-5 | partial | Arbitrary branch axes with arbitrary names, so fuel temperature, moderator density and temperature, boron and rod state all work. Burnup as a *history* axis, distinct from an instantaneous axis, is not modelled. |
 | FR-XS-6 | done | Multilinear interpolation; `clamp`, `linear` and `error` extrapolation. |
-| FR-XS-7 | not started | Analytic √T Doppler feedback model. |
+| FR-XS-7 | done | `DopplerFeedback` applies Sigma(T) = Sigma_0 [1 + gamma(sqrt(T) - sqrt(T_0))] to a chosen field, groups and compositions. Base data is snapshotted, so temperatures are absolute and the reference temperature restores the library exactly. Verified against the analytic bare cuboid at temperature. Cross sections live per composition, so a temperature distribution needs one composition per region that can differ. |
 | FR-XS-8 | done | Fails on unphysical data, warns on negative scattering. |
 | FR-XS-9 | done | Standard deviations stored and carried through ingestion. |
 
