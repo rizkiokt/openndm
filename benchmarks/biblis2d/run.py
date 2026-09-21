@@ -6,7 +6,7 @@ half-width assemblies on the two symmetry faces. The deck's assembly
 divisions make the node mesh uniform at 11.5613 cm, so it runs at 17x17.
 
 The data is parsed from the KOMODO sample deck rather than transcribed; see
-``data.py`` for the provenance. An earlier attempt at this benchmark was
+``biblis_data.py`` for the provenance. An earlier attempt at this benchmark was
 written from memory and **not shipped**, because the map it produced used
 five of the eight compositions and put fuel where the reflector belongs.
 The reference it was written against was wrong too: 1.02513 against the
@@ -27,8 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np
+from biblis_data import COMPOSITIONS, DZ, NODE_MAP, NODE_WIDTH, PUBLISHED_K_EFF
 from common import benchmark_settings, report
-from data import COMPOSITIONS, DZ, NODE_MAP, NODE_WIDTH, PUBLISHED_K_EFF
 
 import openndm
 

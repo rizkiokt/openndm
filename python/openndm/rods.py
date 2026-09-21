@@ -339,12 +339,36 @@ class ControlRods:
         """
         result = model.solve(**overrides)
         for _ in range(max_sweeps):
-            change = self._reweight_from_flux(np.asarray(result.flux))
+            change = self.reweight(result.flux)
             if change is None or change < tolerance:
                 break
             model.refresh()
             result = model.solve(**overrides)
         return result
+
+    def reweight(self, flux) -> float | None:
+        """Re-weight every partially rodded node against a flux already in hand.
+
+        :meth:`insert` weights the tip node by volume, which is the flat-flux
+        limit and biased. :meth:`converge_cusping` corrects that by iterating
+        static solves, which a transient cannot do: a static solve would
+        discard the time-dependent flux and the precursors with it. Passing
+        the previous step's flux here instead lags the correction by one step
+        rather than dropping it.
+
+        Parameters
+        ----------
+        flux : array_like, shape (n_nodes, n_groups)
+            Flux to weight with, for instance
+            :attr:`~openndm.Transient.flux`.
+
+        Returns
+        -------
+        float or None
+            Largest relative change in a mixed cross section, or ``None`` when
+            no bank has a partially rodded node to correct.
+        """
+        return self._reweight_from_flux(np.asarray(flux))
 
     def worth_curve(
         self,

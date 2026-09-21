@@ -639,3 +639,39 @@ def test_worth_curve_validates_its_arguments(tight):
         rods.worth_curve(model, "B", [0.0])
     with pytest.raises(openndm.InputError, match="reference given as a mapping"):
         rods.worth_curve(model, positions=[{"A": 0.0}], reference=0.0)
+
+
+# ------------------------------------------------------- reweighting by hand
+def test_reweight_reaches_what_converge_cusping_reaches(tight):
+    """Driving the sweep by hand converges on the same mixture.
+
+    A transient cannot call :meth:`converge_cusping`, because the static solve
+    inside it would discard the time-dependent flux. It re-weights against the
+    flux it already has instead, so the two routes have to agree.
+    """
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    rods.insert(A=25.5)
+    model.refresh()
+    converged = rods.converge_cusping(model).k_eff
+
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    rods.insert(A=25.5)
+    model.refresh()
+    result = model.solve()
+    for _ in range(8):
+        change = rods.reweight(result.flux)
+        if change is None or change < 1.0e-6:
+            break
+        model.refresh()
+        result = model.solve()
+    assert result.k_eff == pytest.approx(converged, abs=1.0e-12)
+
+
+def test_reweight_reports_nothing_to_do_on_a_plane_boundary(tight):
+    geometry, library, rods = cusp_core()
+    model = openndm.Model(geometry, library, tight)
+    rods.insert(A=30.0)
+    model.refresh()
+    assert rods.reweight(model.solve().flux) is None

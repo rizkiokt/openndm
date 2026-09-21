@@ -78,10 +78,25 @@ the library (FR-XS-3), so the storage format does not change.
    per-Kelvin coefficient is an approximation to it. Needed for LRA, whose
    specification defines its feedback in exactly this form. The adiabatic
    heat-up that drives it belongs with the LRA deck.
-4. `feat/kinetics-benchmarks` — LMW (needs Phase 1), TWIGL ramp, LRA.
+4. **done** — `feat/lmw-transient` — the LMW operational transient, parsed
+   from its specification. Two banks moving against each other for 60
+   seconds: the first problem to run rod banks, cusping, precursors and theta
+   integration at once. Its specification states the scenario and **not** the
+   answer, so it is reported rather than scored; the verification is internal
+   and is what produced the measurement below. TWIGL and LRA remain.
 
 Steps 1 and 2 stand on their own evidence: null transient flat to 1 part in
-1e10, prompt jump to 0.5%, inhour period to 0.2%. Step 4 confirms.
+1e10, prompt jump to 0.5%, inhour period to 0.2%.
+
+**What LMW changed about the ordering.** The measured second order at
+theta = 1/2 is asymptotic and only visible for steps that resolve the prompt
+time constant. At the quarter-second an operational transient runs at, both
+weightings converge first order, and the deck's own step sits about 3.4% from
+the extrapolated peak while the mesh is converged to 0.06%. That promotes the
+exponential flux transformation from a line in "what is not done" to the
+single change that would most improve transient accuracy — it is the standard
+remedy for exactly this, and nothing else on this list competes with a 3%
+error at the step size the problem is meant to be run at.
 
 ## Phase 3 — thermal hydraulics (FR-TH)
 
@@ -132,16 +147,24 @@ boundary, and for completeness — but not for core accuracy.
 
 ## Blocked
 
-**BIBLIS is done.** It was blocked on a reference specification and the
-specification existed all along: KOMODO ships it, and NEACRP, KOEBERG, MOX
-and the LMW transient, as runnable sample decks under an MIT licence. The
+**BIBLIS is done, and LMW with it.** Both were blocked on a reference
+specification and the specification existed all along: KOMODO ships them, and
+NEACRP, KOEBERG and MOX, as runnable sample decks under an MIT licence. The
 underlying data is the published OECD/NEA and ANL benchmark material; KOMODO
 is a machine-readable transcription of it.
 
 Parsed rather than transcribed, BIBLIS landed 2.1 pcm from its published
 eigenvalue on the first run. The deck written from memory had been wrong in
-both the map and the reference — see `benchmarks/README.md`.
+both the map and the reference -- see `benchmarks/README.md`.
 
-Still open: LRA static and TWIGL static, which KOMODO does not ship. The
-same lesson applies — look for a specification before writing a deck from
-recollection.
+LMW came with a caveat BIBLIS did not, and it is worth stating on its own: a
+specification can unblock the *deck* without supplying the *answer*. LMW
+gives the scenario exactly and leaves the published power curve outside the
+file. It ships anyway, labelled as reported rather than compared, because a
+scenario that runs is worth having while the comparison stays open. Closing
+that comparison needs the published curve from a citable source, not one
+written down from recollection.
+
+Still open: LRA and TWIGL, static and transient, which KOMODO does not ship.
+The same lesson applies -- look for a specification before writing a deck
+from recollection.
