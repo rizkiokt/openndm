@@ -8,9 +8,10 @@ own directory.
 | `analytic/` | 1-group bare cuboid, 3D | Exact: `k = νΣf / (Σa + D B²)` | 0.05 pcm at 64 nodes/side | **Verified** |
 | `iaea2d/` | 2-group PWR, quarter core, 2D | Published `k_eff = 1.02959` | SANM −3.7 pcm at one node per assembly | **Verified** |
 | `iaea3d/` | 2-group PWR, quarter core, 3D | Published `k_eff = 1.02903` | SANM +44.7 pcm at 20 cm axial mesh | **Verified** |
+| `biblis2d/` | 2-group PWR, quarter core, 2D, 8 compositions | Published `k_eff = 1.02511` | SANM −2.1 pcm at one node per assembly | **Verified** |
 
 The specification's acceptance criterion is 100 pcm on `k_eff` for a static
-benchmark with a published solution. All three decks meet it.
+benchmark with a published solution. All four decks meet it.
 
 ## analytic — exact reference
 
@@ -128,31 +129,73 @@ published reference to 6 pcm below it. A single assembly is worth roughly
 100 pcm in a core this size, which is exactly the scale of a dropped cell —
 and exactly small enough to be mistaken for a solver problem.
 
-## Benchmarks attempted but not shipped
+## BIBLIS-2D — published reference 1.02511
 
-**BIBLIS-2D.** The eight-composition cross section set is transcribed and
-looks internally consistent: one composition has no fission and is clearly the
-reflector, and the rest are plausible PWR fuels. The quarter-core map could
-not be verified and so the deck is not shipped.
+A 9x9 quarter core of 23.1226 cm assemblies over eight compositions, with
+half-width assemblies on the two symmetry faces. The deck's assembly
+divisions make the node mesh uniform at 11.5613 cm, so it runs at 17x17.
 
-Two things say the map is wrong. It uses only five of the eight defined
-compositions, and a benchmark that bothers to define eight would use them.
-And its peripheral band is composition 4, which the cross section data says is
-fuel, rather than the non-fissile composition 3. Relabelling the band to 3
-moves the eigenvalue from +253 pcm to −194 pcm against the published 1.02513
-without fixing the unused compositions, so neither reading is right.
+```
+nodes/asm  nodes                       FDM                     NEM                    SANM
+        1    514   1.028516 ( +340.6 pcm) 1.024987 (  -12.3 pcm) 1.025089 (   -2.1 pcm)
+        2   2056   1.025826 (  +71.6 pcm) 1.025104 (   -0.6 pcm) 1.025107 (   -0.3 pcm)
+        4   8224   1.025243 (  +13.3 pcm) 1.025109 (   -0.1 pcm) 1.025109 (   -0.1 pcm)
+```
 
-The solver is not implicated: all three kernels converge to the same value,
-1.027551 at eight nodes per assembly, so whatever is wrong is in the deck.
+All three kernels converge on the published eigenvalue to 0.1 pcm, and FDM
+gets there at second order — the error falls by roughly a factor of five per
+refinement. SANM is 2.1 pcm out at one node per assembly.
 
-Reconstructing the map by searching for whatever reproduces 1.02513 is not an
-option here in the way it was for IAEA-2D. There the candidate was a single
-cell, the alternatives were physically incoherent, and the winner restored a
-visible structural regularity. An eight-by-eight map over eight compositions
-has no such handle: any number of maps would hit the published eigenvalue, and
-matching it by search would be fitting rather than verification.
+### This deck was attempted once before and not shipped
 
-Closing this needs the reference specification.
+The first attempt was written from memory. It was wrong twice over, and the
+record is worth keeping because it is the case for not fitting.
+
+The map used five of the eight defined compositions, and put fuel where the
+reflector belongs. Relabelling the peripheral band moved the eigenvalue from
++253 pcm to -194 pcm without fixing the unused compositions, so neither
+reading was right. All three kernels agreed with each other throughout, so
+the solver was never implicated — the deck was wrong.
+
+**And the reference was wrong too.** It was written against 1.02513. The
+source deck states 1.02511.
+
+So searching for a map that reproduced 1.02513 would have fitted a wrong
+core to a wrong number, and the result would have been indistinguishable
+from a pass. An 8x8 map over eight compositions has far too many degrees of
+freedom for that search to mean anything — unlike IAEA-2D, where the
+candidate was a single cell, the alternatives were physically incoherent,
+and the fix restored a visible structural regularity.
+
+What closed it was the specification, not more effort: the deck is now
+parsed from its source rather than transcribed, and lands 2.1 pcm out on the
+first run with nothing tuned.
+
+### Provenance
+
+`data.py` is generated, not hand-written, from the KOMODO sample deck:
+
+| | |
+|---|---|
+| Source | `smpl/static/BIBLIS` in [imronuke/KOMODO](https://github.com/imronuke/KOMODO) |
+| Commit | `b70d4ee262dcbd2547993302f6f86bef6d4dca00` |
+| sha256 | `0f1e275579fd13a22b944fd33207e3fe0bf442696715bc0260d3b8ac11442c6f` |
+| Licence | MIT |
+
+KOMODO is a machine-readable transcription; the underlying data is the
+published BIBLIS PWR benchmark. Two conventions had to be resolved when
+reading it, both checked by tests rather than assumed:
+
+**The map is printed north row first.** Its y indices run south to north and
+the half-width assembly is the last y entry, so the printed order is
+reversed on the way in. Getting this wrong puts the half-width assemblies on
+the outer faces instead of the symmetry cuts, which changes the core size
+without changing the node count.
+
+**Boundary codes are 0 zero flux, 1 zero incoming current, 2 reflective.**
+The deck's `1 2 2 1 2 2` makes east and south the outer faces, west and
+north the symmetry cuts, and both axial faces reflective, which is what
+makes the problem two-dimensional.
 
 ## Adding a deck
 
