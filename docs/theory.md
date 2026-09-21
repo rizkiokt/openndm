@@ -594,6 +594,23 @@ consistent means carrying the time and delayed terms into the two-node
 problem of §3. Adaptive time stepping (FR-KIN-3) and the exponential
 transformation (FR-KIN-2) are not implemented.
 
+## 10.4 Square-root temperature feedback
+
+Doppler broadening of a capture resonance widens it as the square root of the
+fuel temperature, so the resonance-integral change follows
+
+$$ \Sigma(T) = \Sigma_0\left[1 + \gamma\left(\sqrt{T} -
+   \sqrt{T_0}\right)\right] $$
+
+A per-Kelvin coefficient is a linearisation of this about $T_0$, and over the
+hundreds of Kelvin a transient covers the two part company. The LRA BWR
+specification defines its feedback in exactly the form above, so running it
+as specified requires the law rather than the linearisation.
+
+Cross sections live per composition rather than per node, so a temperature
+*distribution* needs one composition per region that can hold its own
+temperature.
+
 ## 11. Verification of the time integration
 
 A leakage-free box reduces the spatial solve to exact point kinetics, which

@@ -8,6 +8,23 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Square-root temperature feedback** (`DopplerFeedback`), completing
+  FR-XS-7. `Sigma(T) = Sigma_0 [1 + gamma (sqrt(T) - sqrt(T_0))]`, applied to
+  a chosen field, group set and composition set. Doppler broadening widens a
+  capture resonance as the square root of temperature, so a per-Kelvin
+  coefficient is a linearisation of this that parts company with it over the
+  hundreds of Kelvin a transient covers. The LRA BWR specification defines
+  its feedback in exactly this form.
+
+  Base cross sections are snapshotted, so temperatures are absolute rather
+  than incremental and the reference temperature restores the library
+  bit-for-bit. A temperature that would drive a cross section negative raises
+  rather than writing a physically impossible library. Verified against the
+  analytic bare cuboid at temperature.
+
+  A branch library generated from OpenMC carries the real temperature
+  dependence and is strictly better where it exists; this is for the case
+  where there is none.
 - **Time-dependent solves** (`Model.start_transient`, `Transient.step`),
   completing FR-KIN-1 and most of FR-KIN-2. Theta-weighted integration with
   `0 < theta <= 1`, defaulting to fully implicit, on KOMODO's `%THET`

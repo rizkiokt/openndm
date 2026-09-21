@@ -25,15 +25,16 @@ the only part of the package that needs OpenMC installed (FR-OMC-14).
 from __future__ import annotations
 
 from . import _core
-
-# The exception module must be importable before the extension loads, because
-# the extension resolves ConvergenceError out of it.
 from .exceptions import (
     ConvergenceError,
     InputError,
     LibraryError,
     OpenNDMError,
 )
+
+# The exception module must be importable before the extension loads, because
+# the extension resolves ConvergenceError out of it.
+from .feedback import DopplerFeedback
 from .geometry import INACTIVE, Geometry
 from .model import BoronSearchResult, Model, Result, Transient, TransientStep
 from .rods import ControlRodBank, ControlRods, RodWorth
@@ -49,6 +50,7 @@ __all__ = [
     "ControlRodBank",
     "ControlRods",
     "ConvergenceError",
+    "DopplerFeedback",
     "Geometry",
     "InputError",
     "LibraryError",

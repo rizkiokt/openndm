@@ -64,20 +64,24 @@ the partially rodded node's constants can be generated directly.
 The largest capability gap. Delayed neutron data already round-trips through
 the library (FR-XS-3), so the storage format does not change.
 
-1. `feat/kinetics-precursors` — precursor equations integrated analytically
+1. **done** — `feat/kinetics-precursors` — precursor equations integrated analytically
    over the step, which is more accurate than lagging them.
    **Verified against exact point kinetics** in a leakage-free box: the
    prompt jump on a step insertion, and the asymptotic period from the inhour
    equation. Neither needs a published deck.
-2. `feat/kinetics-theta` — theta-method time integration of the full spatial
-   operator, plus the exponential flux transformation. Verified by measuring
-   the observed order in Δt: first order at θ=1, second at θ=0.5.
-3. `feat/doppler-sqrt-t` — FR-XS-7, the √T adiabatic Doppler model. A
-   √T dependence follows the physics of Doppler broadening, where a linear
-   per-Kelvin coefficient is an approximation to it. Needed for LRA.
+2. **done** — `feat/kinetics-theta` — theta-method time integration of the
+   full spatial operator. Observed order in Δt measured: 1.00 at θ=1, 2.00 at
+   θ=0.5. The exponential flux transformation is *not* done and remains open.
+   Nor is the nonlinear nodal coupling re-converged inside a step.
+3. **done** — `feat/doppler-sqrt-t` — FR-XS-7, `DopplerFeedback`. A √T
+   dependence follows the physics of Doppler broadening, where a linear
+   per-Kelvin coefficient is an approximation to it. Needed for LRA, whose
+   specification defines its feedback in exactly this form. The adiabatic
+   heat-up that drives it belongs with the LRA deck.
 4. `feat/kinetics-benchmarks` — LMW (needs Phase 1), TWIGL ramp, LRA.
 
-Steps 1 and 2 stand on their own evidence. Step 4 confirms.
+Steps 1 and 2 stand on their own evidence: null transient flat to 1 part in
+1e10, prompt jump to 0.5%, inhour period to 0.2%. Step 4 confirms.
 
 ## Phase 3 — thermal hydraulics (FR-TH)
 

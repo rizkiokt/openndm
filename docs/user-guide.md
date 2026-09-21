@@ -784,6 +784,37 @@ mutation — see [Solving](#solving).
 of a transient is that it moves. `transient.flux` and `transient.precursors`
 give the current state.
 
+### Temperature feedback
+
+`DopplerFeedback` applies a square-root law to a set of compositions:
+
+```python
+doppler = openndm.DopplerFeedback(
+    lib, compositions=[FUEL_1, FUEL_2],
+    gamma=3.034e-3, reference_temperature=300.0,
+    groups=[1],                 # thermal group only, as LRA specifies
+)
+doppler.apply([900.0, 1100.0])  # one temperature per composition
+model.refresh()
+```
+
+`Sigma(T) = Sigma_0 [1 + gamma (sqrt(T) - sqrt(T_0))]`. Doppler broadening
+widens a capture resonance as the square root of temperature, so a per-Kelvin
+coefficient is a linearisation of this — fine near `T_0`, less so across the
+hundreds of Kelvin a transient covers.
+
+Base data is snapshotted, so temperatures are absolute: applying twice
+matches applying once, and `apply(T_0)` restores the library bit-for-bit.
+`apply` re-finalizes, so you only need `model.refresh()`.
+
+**Cross sections live per composition, not per node.** A temperature
+*distribution* therefore needs one composition per region that can hold its
+own temperature — give each such region its own index in the core map.
+
+A branch library from OpenMC carries the real temperature dependence of every
+cross section and is strictly better where you have one. This is for when you
+do not.
+
 ### What is not implemented
 
 No exponential transformation, no adaptive time stepping, no decay heat, and
