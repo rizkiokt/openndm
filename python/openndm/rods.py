@@ -15,7 +15,9 @@ above the tip.
 
 Mutating the geometry does not by itself update a solver that is already
 holding it, exactly as for :meth:`~openndm.Model.swap_assemblies`. Call
-:meth:`~openndm.Model.refresh` after moving a bank.
+:meth:`~openndm.Model.refresh` after moving a bank -- except inside a
+transient, where :meth:`~openndm.Transient.step` re-reads the geometry itself
+and ``refresh`` would discard the time-dependent flux.
 """
 
 from __future__ import annotations

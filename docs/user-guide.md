@@ -770,12 +770,22 @@ banks, cross sections and compositions all work:
 
 ```python
 rods.insert(A=0.0)                  # scram
-model.refresh()
 step = transient.step(1.0e-3)
 ```
 
+**Do not call `model.refresh()` between steps.** A step re-reads the cross
+sections, the node compositions and the coupling coefficients by itself, and
+`refresh()` discards the retained flux — which is the transient's state, not a
+cache. It raises during a transient rather than letting the next step run on
+an empty one.
+
 Re-finalize the library after writing a composition, as for any other
-mutation — see [Solving](#solving).
+mutation — see [Solving](#solving). That is still required; it is `refresh`
+that is not.
+
+A static `model.solve()` ends the transient, because it overwrites the flux
+and the eigenvalue. Stepping the old `Transient` afterwards raises rather than
+continuing from a static solution.
 
 ### What a step gives you
 

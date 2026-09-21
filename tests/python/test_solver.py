@@ -377,3 +377,96 @@ def test_refinalizing_makes_the_change_take_effect(tight):
     assert after < before - 0.1, (
         f"raising absorption by half must drop k_eff; got {before} -> {after}"
     )
+
+
+# ------------------------------------------- changing the model mid-transient
+def _kinetic_model(tight):
+    """A leaky cuboid with kinetics data, so the leakage operator matters."""
+    library = openndm.XSLibrary(1, 1)
+    library.set_composition(
+        0,
+        D=[1.0],
+        absorption=[0.08],
+        nu_fission=[0.1],
+        kappa_fission=[0.1],
+        chi=[1.0],
+        scatter=[[0.0]],
+        inv_velocity=[1.0e-6],
+    )
+    library.set_delayed(beta=[0.0065], decay_constant=[0.08])
+    library.finalize(warn=False)
+    geometry = openndm.Geometry.from_lattice(
+        np.zeros((8, 8, 8), dtype=int),
+        pitch=12.5,
+        boundaries=dict.fromkeys(
+            ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"], "zero_flux"
+        ),
+    )
+    return openndm.Model(geometry, library, tight), library
+
+
+def _powers(model, steps=4, change=None):
+    transient = model.start_transient(theta=1.0)
+    history = []
+    for index in range(steps):
+        if change is not None and index == 1:
+            change()
+        history.append(transient.step(0.05).total_power)
+    return np.array(history)
+
+
+def test_a_change_in_diffusion_reaches_the_next_step(tight):
+    """Dtilde is derived from D, and a step that refreshed only the cached
+    cross sections left the leakage operator reading the old one.
+
+    Nothing else in the operator reads D, so halving it across the whole core
+    used to change the power history by exactly nothing -- bit for bit, which
+    is the one symptom that cannot be mistaken for physics.
+    """
+    model, library = _kinetic_model(tight)
+    model.solve()
+    unchanged = _powers(model)
+
+    model, library = _kinetic_model(tight)
+    model.solve()
+
+    def halve_diffusion():
+        library.set_composition(0, D=[0.5])
+        library.finalize(warn=False)
+
+    changed = _powers(model, change=halve_diffusion)
+
+    assert not np.array_equal(unchanged, changed)
+    assert changed[-1] > 1.5 * unchanged[-1], (unchanged, changed)
+
+
+def test_refreshing_during_a_transient_is_refused(tight):
+    """``refresh`` clears the flux, and the next step would run on an empty one.
+
+    It returned plausible-looking power instead of failing, because the step
+    read past the end of the emptied vector.
+    """
+    model, _ = _kinetic_model(tight)
+    model.solve()
+    model.start_transient()
+    with pytest.raises(openndm.InputError, match="transient is in progress"):
+        model.refresh()
+
+
+def test_a_static_solve_ends_the_transient_and_frees_refresh(tight):
+    model, _ = _kinetic_model(tight)
+    model.solve()
+    transient = model.start_transient()
+    transient.step(0.05)
+    model.solve()
+    model.refresh()
+    with pytest.raises(openndm.InputError, match="start_transient"):
+        transient.step(0.05)
+
+
+def test_a_transient_that_changes_nothing_is_unaffected_by_the_refresh(tight):
+    """Rebuilding Dtilde every step must not perturb a step that needs it not."""
+    model, _ = _kinetic_model(tight)
+    model.solve()
+    first = _powers(model, steps=6)
+    assert np.allclose(first, first[0], rtol=1.0e-10), first

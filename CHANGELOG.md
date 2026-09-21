@@ -6,6 +6,23 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A transient now sees a change in the diffusion coefficient.** A step
+  refreshed the cached cross sections but not the coupling coefficients
+  derived from them, and `Dtilde` is derived from `D`. Nothing else in the
+  operator reads `D`, so changing it mid-transient had *no effect at all*:
+  halving it across a whole core reproduced the unchanged power history bit
+  for bit. `Dhat` is preserved across the rebuild, so the nodal correction
+  stays frozen at its static value as documented.
+- **`Model.refresh()` during a transient is refused** rather than emptying the
+  flux the transient is advancing. The next step then read past the end of the
+  emptied vector and returned plausible-looking power. The user guide
+  documented that exact sequence; it does not any more. A step re-reads the
+  cross sections, the compositions and the coupling by itself, so nothing
+  needs refreshing between steps. A static `solve()` ends the transient and
+  makes `refresh()` available again.
+
 ### Added
 
 - **The BIBLIS-2D benchmark deck** (`benchmarks/biblis2d/`). A 9x9 quarter

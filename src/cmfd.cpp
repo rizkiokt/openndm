@@ -51,6 +51,13 @@ void CmfdSystem::build_pattern()
   pattern_ = SparsePattern(n, neighbours);
 }
 
+void CmfdSystem::refresh_coupling()
+{
+  std::vector<double> converged = dhat_;
+  build_coupling();
+  dhat_ = std::move(converged);
+}
+
 void CmfdSystem::refresh_cross_sections()
 {
   const int G = n_groups_;

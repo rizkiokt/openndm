@@ -47,6 +47,13 @@ Solver::~Solver() = default;
 
 void Solver::reset()
 {
+  if (in_transient_) {
+    throw InputError(
+        "a transient is in progress: resetting would discard the "
+        "time-dependent flux, and the next step would run on an empty one. "
+        "step() already re-reads the cross sections, the node compositions "
+        "and the coupling, so nothing needs refreshing between steps");
+  }
   has_solution_ = false;
   flux_.clear();
   k_eff_ = 1.0;
@@ -59,6 +66,7 @@ void Solver::reset()
 
 Result Solver::solve(const Settings& settings)
 {
+  in_transient_ = false;
   const auto t0 = std::chrono::steady_clock::now();
 #ifdef _OPENMP
   if (settings.threads > 0) omp_set_num_threads(settings.threads);
@@ -483,6 +491,7 @@ TransientRecord Solver::step(double dt, const Settings& settings)
   const double beta = delayed.beta_total();
 
   cmfd_.refresh_cross_sections();
+  cmfd_.refresh_coupling();
 
   if (theta < 1.0) {
     // Evaluate the explicit half against the cross sections this step runs

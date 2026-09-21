@@ -31,6 +31,16 @@ public:
   //! the value implied by the discontinuity factors alone.
   void build_coupling();
 
+  //! Recompute Dtilde from the current diffusion coefficients, keeping the
+  //! nonlinear Dhat a kernel has already converged.
+  //!
+  //! Dtilde is derived from D, so refreshing the cross sections alone leaves
+  //! the leakage operator reading the D it was built with while the removal
+  //! operator reads the new one. Inside a time step there is no nonlinear
+  //! update to rebuild Dhat, so \c build_coupling() cannot be used there: it
+  //! would discard the correction the static solve converged.
+  void refresh_coupling();
+
   //! Refresh cached per-node cross sections after a composition change.
   void refresh_cross_sections();
 
