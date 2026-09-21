@@ -269,6 +269,9 @@ SANM the node-average constraint is already built into the basis, so the two
 interface conditions are not enough; the two outer faces are closed with the
 coarse-mesh net currents. That is a 4×4 solve per surface per group.
 
+The moment equations divide by `Σ_r,eff`, so it is floored at `1e-10` in
+magnitude rather than allowed to blow the coefficients up.
+
 ### 3.6 The nonlinear update
 
 Whichever kernel is used, the two-node problem returns the interface current
@@ -386,6 +389,11 @@ assembled by taking the shifted operator at `1/k_s = 1`, which puts the
 in-group fission term on the diagonal, and leaving the off-group fission on the
 right-hand side. In a leakage-free box with a uniform source this reproduces
 `φ = S / (Σ_a − νΣ_f)` exactly.
+
+The kernels see `S_ext` through the same quadratic expansion as the transverse
+leakage. For NEM only its first and second moments reach the unknowns: a flat
+source cannot change a shape whose node average the coarse-mesh solution has
+already fixed.
 
 A single-node delta source is a different matter. The two-node closure
 overshoots against a discontinuity that steep, and SANM can undershoot

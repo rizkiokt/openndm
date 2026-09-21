@@ -10,6 +10,18 @@ namespace openndm {
 
 namespace {
 
+//! Row of the two-node system carrying factor-weighted flux continuity,
+//! \f$f_{lo}\phi_{lo}(+1/2) = f_{hi}\phi_{hi}(-1/2)\f$.
+constexpr int kFluxContinuity = 0;
+
+//! Row carrying current continuity, with \f$J = -(D/h)\,d\phi/d\xi\f$.
+constexpr int kCurrentContinuity = 1;
+
+//! Unknowns of the two-node system: the odd coefficient of each node, which
+//! the columns of the system and its solution share.
+constexpr int kALo = 0;
+constexpr int kAHi = 1;
+
 //! Expansion of one node/group flux on the SANM basis.
 //!
 //! \f[
@@ -31,6 +43,10 @@ struct NodeExpansion {
   double moment1() const { return 3.0 * (A * basis.odd_m1) + b1; }
   double moment2() const { return 5.0 * (C * basis.even_m2) + b2; }
 
+  //! Set the even coefficient from the node-average constraint, which fixes
+  //! it outright and leaves \c A as the only free coefficient.
+  void apply_average_constraint() { C = (phibar - b0) / basis.even_avg; }
+
   double face_flux(double sign) const
   {
     return sign * A * basis.odd_face + C * basis.even_face + b0 + sign * b1 +
@@ -45,6 +61,12 @@ struct NodeExpansion {
 };
 
 //! Semi-analytic nodal method (FR-SOL-3), the default kernel.
+//!
+//! The transverse leakage and any external source are expanded on the same
+//! quadratic basis, and the one free coefficient left per node is closed by
+//! discontinuity-factor weighted flux continuity and by current continuity at
+//! the shared interface, a 2x2 solve per surface and group. See
+//! \c docs/theory.md 3.4.
 class SanmKernel : public Kernel {
 public:
   const char* name() const override { return "sanm"; }
@@ -63,12 +85,10 @@ public:
     std::vector<double> l1(static_cast<std::size_t>(2 * G));
     std::vector<double> l2(static_cast<std::size_t>(2 * G));
     std::vector<double> l0(static_cast<std::size_t>(2 * G));
-    // External source, expanded on the same quadratic basis as the leakage.
     std::vector<double> q_ext0(static_cast<std::size_t>(2 * G), 0.0);
     std::vector<double> q_ext1(static_cast<std::size_t>(2 * G), 0.0);
     std::vector<double> q_ext2(static_cast<std::size_t>(2 * G), 0.0);
 
-    // Fixed per-node data: the analytic basis and the transverse leakage fit.
     for (int side = 0; side < 2; ++side) {
       const Composition& c = side == 0 ? cl : cr;
       const double h = side == 0 ? p.h_lo : p.h_hi;
@@ -79,9 +99,8 @@ public:
         const std::size_t e = static_cast<std::size_t>(side) * G + g;
         const std::size_t gg = static_cast<std::size_t>(g);
         const double D = c.D[gg];
-        // Moving the in-group fission production onto the left-hand side
-        // makes the analytic basis exact for the whole in-group operator.
-        const double sr = c.removal[gg] - c.chi[gg] * c.nu_fission[gg] * inv_k;
+        const double sr = detail::effective_removal(
+            c.removal[gg], c.chi[gg], c.nu_fission[gg], inv_k);
         ex[e].basis = detail::AnalyticBasis::make(sr * h * h / D);
         ex[e].D_over_h = D / h;
         ex[e].phibar = (side == 0 ? p.flux_lo : p.flux_hi)[gg];
@@ -100,15 +119,13 @@ public:
           q_ext1[e] = sfit[0];
           q_ext2[e] = sfit[1];
         }
-        // A flat first guess for every group; the sweeps below refine it.
-        ex[e].C = ex[e].phibar / ex[e].basis.even_avg;
+        ex[e].apply_average_constraint();
       }
     }
 
     const int n_sweeps = sweeps > 0 ? sweeps : 1;
     for (int sweep = 0; sweep < n_sweeps; ++sweep) {
       for (int g = 0; g < G; ++g) {
-        // Particular solution for each node from the current source moments.
         for (int side = 0; side < 2; ++side) {
           const Composition& c = side == 0 ? cl : cr;
           const double h = side == 0 ? p.h_lo : p.h_hi;
@@ -132,12 +149,9 @@ public:
           ex[e].b2 = scale * q2 / k2;
           ex[e].b1 = scale * q1 / k2;
           ex[e].b0 = (scale * q0 + 12.0 * ex[e].b2) / k2;
-          // The node-average constraint fixes the even coefficient.
-          ex[e].C = (ex[e].phibar - ex[e].b0) / ex[e].basis.even_avg;
+          ex[e].apply_average_constraint();
         }
 
-        // Two unknowns, A on each side, closed by flux continuity weighted by
-        // the discontinuity factors and by current continuity.
         NodeExpansion& L = ex[static_cast<std::size_t>(g)];
         NodeExpansion& R = ex[static_cast<std::size_t>(G) + g];
         const double fL = p.adf_lo[static_cast<std::size_t>(g)];
@@ -145,21 +159,20 @@ public:
 
         double a[4];
         double rhs[2];
-        // Row 0: fL * phi_L(+1/2) - fR * phi_R(-1/2) = 0
-        a[0] = fL * L.basis.odd_face;
-        a[1] = fR * R.basis.odd_face;
-        rhs[0] = fR * (R.C * R.basis.even_face + R.b0 - R.b1 + R.b2) -
-                 fL * (L.C * L.basis.even_face + L.b0 + L.b1 + L.b2);
-        // Row 1: J_L(+1/2) - J_R(-1/2) = 0, with J = -(D/h) dphi/dxi.
-        a[2] = L.D_over_h * L.basis.odd_dface;
-        a[3] = -R.D_over_h * R.basis.odd_dface;
-        rhs[1] =
+        a[2 * kFluxContinuity + kALo] = fL * L.basis.odd_face;
+        a[2 * kFluxContinuity + kAHi] = fR * R.basis.odd_face;
+        rhs[kFluxContinuity] =
+            fR * (R.C * R.basis.even_face + R.b0 - R.b1 + R.b2) -
+            fL * (L.C * L.basis.even_face + L.b0 + L.b1 + L.b2);
+        a[2 * kCurrentContinuity + kALo] = L.D_over_h * L.basis.odd_dface;
+        a[2 * kCurrentContinuity + kAHi] = -R.D_over_h * R.basis.odd_dface;
+        rhs[kCurrentContinuity] =
             R.D_over_h * (-R.C * R.basis.even_dface + 2.0 * R.b1 - 6.0 * R.b2) -
             L.D_over_h * (L.C * L.basis.even_dface + 2.0 * L.b1 + 6.0 * L.b2);
 
         if (detail::solve_dense(a, rhs, 2)) {
-          L.A = rhs[0];
-          R.A = rhs[1];
+          L.A = rhs[kALo];
+          R.A = rhs[kAHi];
         } else {
           L.A = 0.0;
           R.A = 0.0;

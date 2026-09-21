@@ -21,6 +21,18 @@ int intern_albedo(
   return static_cast<int>(table.size()) - 1;
 }
 
+//! Index of an axis's low face in the -x, +x, -y, +y, -z, +z face order.
+constexpr int lo_face(int axis)
+{
+  return 2 * axis;
+}
+
+//! Index of an axis's high face in the same order.
+constexpr int hi_face(int axis)
+{
+  return 2 * axis + 1;
+}
+
 }  // namespace
 
 Geometry Geometry::from_cartesian(const CartesianSpec& spec)
@@ -49,7 +61,6 @@ Geometry Geometry::from_cartesian(const CartesianSpec& spec)
   g.shape_ = {nz, ny, nx};
   g.lattice_to_node_.assign(expected, NO_NODE);
 
-  // Pass 1: create a node for every active lattice position.
   for (int k = 0; k < nz; ++k) {
     for (int j = 0; j < ny; ++j) {
       for (int i = 0; i < nx; ++i) {
@@ -76,9 +87,6 @@ Geometry Geometry::from_cartesian(const CartesianSpec& spec)
     throw InputError("core map contains no active positions");
   }
 
-  // Pass 2: walk every axis and create one surface per node face. Sweeping
-  // from the low side means each interior interface is visited exactly once,
-  // and a face whose neighbour is missing or inactive becomes a boundary.
   const std::array<int, 3> extent{nx, ny, nz};
   for (int axis = 0; axis < 3; ++axis) {
     const int stride_i = (axis == 0) ? 1 : 0;
@@ -95,8 +103,6 @@ Geometry Geometry::from_cartesian(const CartesianSpec& spec)
 
           const std::array<int, 3> ijk{i, j, k};
 
-          // Low face: a surface is created only when the low neighbour is
-          // absent, otherwise it was already created by that neighbour.
           int lo_neighbour = NO_NODE;
           if (ijk[axis] > 0) {
             const std::size_t nb =
@@ -112,7 +118,7 @@ Geometry Geometry::from_cartesian(const CartesianSpec& spec)
             s.axis = axis;
             s.h_hi = g.nodes_[node].width[axis];
             s.area = g.nodes_[node].volume / s.h_hi;
-            const int face = 2 * axis;  // -x, -y, -z
+            const int face = lo_face(axis);
             const bool mesh_edge = (ijk[axis] == 0);
             s.bc = mesh_edge ? spec.bc[face] : spec.inactive_bc;
             if (s.bc == BoundaryType::albedo) {
@@ -130,7 +136,6 @@ Geometry Geometry::from_cartesian(const CartesianSpec& spec)
             g.surfaces_.push_back(s);
           }
 
-          // High face: interior when the high neighbour exists.
           int hi_neighbour = NO_NODE;
           if (ijk[axis] + 1 < extent[axis]) {
             const std::size_t nb =
@@ -149,7 +154,7 @@ Geometry Geometry::from_cartesian(const CartesianSpec& spec)
             s.bc = BoundaryType::interior;
             s.h_hi = g.nodes_[hi_neighbour].width[axis];
           } else {
-            const int face = 2 * axis + 1;  // +x, +y, +z
+            const int face = hi_face(axis);
             const bool mesh_edge = (ijk[axis] + 1 == extent[axis]);
             s.bc = mesh_edge ? spec.bc[face] : spec.inactive_bc;
             if (s.bc == BoundaryType::albedo) {

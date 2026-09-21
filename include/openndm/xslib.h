@@ -104,9 +104,11 @@ public:
 
   //! Cache derived data and run the FR-XS-8 checks.
   //!
-  //! \param warnings collects non-fatal findings, e.g. negative scattering
-  //!        elements produced by Monte Carlo noise, which are reported but
-  //!        never treated as errors.
+  //! \param warnings collects non-fatal findings, never errors: negative
+  //!        scattering elements produced by Monte Carlo noise, a fission
+  //!        spectrum with no fission source, and a composition that produces
+  //!        neutrons but carries no kappa-fission and so will carry no power,
+  //!        whose only symptom is a silently zero power distribution.
   //! \throws LibraryError on a negative total cross section, a fission
   //!         spectrum that does not sum to one, or a non-monotonic branch axis.
   void finalize(std::vector<std::string>* warnings = nullptr);

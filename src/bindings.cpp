@@ -53,13 +53,6 @@ PYBIND11_MODULE(_core, m)
   m.attr("__version__") = "0.0.0";
 #endif
 
-  // ------------------------------------------------------------- exceptions
-  //
-  // Every C++ error surfaces as the matching class from openndm.exceptions
-  // rather than as a separate extension-local type, so that
-  // `except openndm.InputError` catches what the core raises and users can
-  // subclass the hierarchy. The lookup is lazy because the package is still
-  // importing this module when it loads.
   py::register_exception_translator([](std::exception_ptr p) {
     static const auto raise_as = [](const char* name, const py::object& exc) {
       py::object module = py::module_::import("openndm.exceptions");
@@ -90,7 +83,6 @@ PYBIND11_MODULE(_core, m)
     }
   });
 
-  // ------------------------------------------------------------- enumerations
   py::enum_<BoundaryType>(m, "BoundaryType")
       .value("interior", BoundaryType::interior)
       .value("zero_flux", BoundaryType::zero_flux)
@@ -113,7 +105,6 @@ PYBIND11_MODULE(_core, m)
       .value("linear", Extrapolation::linear)
       .value("error", Extrapolation::error);
 
-  // ---------------------------------------------------------------- geometry
   py::class_<CartesianSpec>(m, "CartesianSpec")
       .def(py::init<>())
       .def_readwrite("dx", &CartesianSpec::dx)
@@ -178,7 +169,6 @@ PYBIND11_MODULE(_core, m)
       .def("set_composition", &Geometry::set_composition, py::arg("node"),
           py::arg("composition"));
 
-  // -------------------------------------------------------------- xs library
   py::class_<Composition>(m, "Composition")
       .def_readwrite("D", &Composition::D)
       .def_readwrite("absorption", &Composition::absorption)
@@ -218,8 +208,6 @@ PYBIND11_MODULE(_core, m)
       .def("set_axes", &XSLibrary::set_axes, py::arg("axes"))
       .def_property("extrapolation", &XSLibrary::extrapolation,
           &XSLibrary::set_extrapolation)
-      // Reading returns a snapshot, so inspecting a library can never
-      // invalidate it; mutation goes through the explicitly named accessor.
       .def("composition",
           py::overload_cast<int, int>(&XSLibrary::composition, py::const_),
           py::arg("composition"), py::arg("state") = 0,
@@ -256,7 +244,6 @@ PYBIND11_MODULE(_core, m)
           })
       .def("interpolate", &XSLibrary::interpolate, py::arg("state"));
 
-  // ---------------------------------------------------------------- settings
   py::class_<Settings>(m, "Settings")
       .def(py::init<>())
       .def_readwrite("kernel", &Settings::kernel)
@@ -290,7 +277,6 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("source_change", &IterationRecord::source_change)
       .def_readonly("inner_iterations", &IterationRecord::inner_iterations);
 
-  // ------------------------------------------------------------------ result
   py::class_<Result>(m, "Result")
       .def_readonly("k_eff", &Result::k_eff)
       .def_readonly("converged", &Result::converged)
@@ -322,12 +308,9 @@ PYBIND11_MODULE(_core, m)
       .def_readonly("inner_iterations", &TransientRecord::inner_iterations)
       .def_readonly("converged", &TransientRecord::converged);
 
-  // ------------------------------------------------------------------ solver
   py::class_<Solver>(m, "Solver")
       .def(py::init<const Geometry&, const XSLibrary&>(), py::arg("geometry"),
           py::arg("library"), py::keep_alive<1, 2>(), py::keep_alive<1, 3>())
-      // The GIL is released for the whole solve so that several models can be
-      // driven from Python threads (FR-OPT-2).
       .def("solve", &Solver::solve, py::arg("settings"),
           py::call_guard<py::gil_scoped_release>())
       .def(
@@ -356,8 +339,6 @@ PYBIND11_MODULE(_core, m)
             return py::array_t<double>({n, d}, data.data());
           })
       .def("reset", &Solver::reset)
-      // Surface currents make the node neutron balance checkable from Python,
-      // and are what a coupling driver or a pin power reconstruction needs.
       .def("surface_currents",
           [](const Solver& s) {
             const auto data = s.surface_currents();

@@ -47,6 +47,20 @@ inline std::array<double, 2> leakage_fit(double l_prev, double l_self,
   return {(r1 * B2 - r2 * B1) / det, (A1 * r2 - A2 * r1) / det};
 }
 
+//! In-group removal with the group's own fission production moved onto the
+//! left-hand side, \f$\Sigma_{r,g} - \chi_g \nu\Sigma_{f,g}/k\f$.
+//!
+//! Both kernels solve the in-group operator exactly, so the production a
+//! group makes from its own flux belongs on the left rather than in the
+//! source; see \c docs/theory.md 3.3. The result is negative in a strongly
+//! multiplying group, which AnalyticBasis handles by switching to the
+//! trigonometric branch.
+inline double effective_removal(
+    double removal, double chi, double nu_fission, double inv_k)
+{
+  return removal - chi * nu_fission * inv_k;
+}
+
 //! Analytic basis pair for one node and group in the SANM kernel.
 //!
 //! Holds \f$\kappa^2 = \Sigma_r h^2 / D\f$ and the handful of face values,

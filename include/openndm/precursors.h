@@ -68,6 +68,11 @@ public:
   //! Delayed neutron source per node and group,
   //! \f$\sum_d \lambda_d C_d \chi^d_g\f$, written into \c out sized
   //! \c n_nodes*n_groups.
+  //!
+  //! With no delayed spectrum in the library every delayed neutron is born in
+  //! the top group. That is the convention a one-group problem needs and is
+  //! wrong for any real multi-group library, which is why FR-XS-3 stores
+  //! \c chi_delayed.
   void delayed_source(
       const DelayedData& delayed, int n_groups, std::vector<double>& out) const;
 
