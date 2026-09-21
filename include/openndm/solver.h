@@ -55,6 +55,11 @@ public:
   ~Solver();
 
   //! Forward or adjoint static eigenvalue (FR-MODE-1, FR-MODE-2).
+  //!
+  //! Ends any transient in progress, since it overwrites the flux and the
+  //! eigenvalue the transient was advancing. A later step() then reports that
+  //! no transient is running rather than quietly continuing from a static
+  //! solution.
   Result solve(const Settings& settings);
 
   //! Fixed external source, node*G + g (FR-MODE-3).
@@ -92,6 +97,11 @@ public:
 
   //! Discard the retained flux and coupling coefficients so the next solve
   //! starts cold.
+  //!
+  //! Throws while a transient is in progress: the retained flux is that
+  //! transient's state rather than a cache, so discarding it would leave the
+  //! next step with nothing to advance. step() re-reads the cross sections,
+  //! the node compositions and the coupling on its own.
   void reset();
 
   //! Access the retained solution, for warm starting or for inspection.

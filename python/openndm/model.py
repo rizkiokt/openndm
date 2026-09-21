@@ -604,6 +604,15 @@ class Model:
         removal cross sections are derived at finalize time. Re-finalize
         before calling this, or it raises rather than letting a solve run on
         stale data.
+
+        Raises
+        ------
+        InputError
+            If a transient is in progress. The retained flux is that
+            transient's state rather than a cache, so discarding it would
+            leave the next step with nothing to advance. A step re-reads the
+            cross sections, the compositions and the coupling on its own, so
+            there is nothing to refresh between steps.
         """
         self._require_finalized()
         self._solver.reset()
