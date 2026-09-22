@@ -48,7 +48,8 @@ Implemented and tested:
 - `openndm.gc` ingestion of `openmc.mgxs.Library`, `mgxs.h5` files and
   statepoints, with OpenMC as an optional dependency, validated end to end
   against a real OpenMC run (C-1)
-- HDF5 statepoint output and an `openndm.StatePoint` reader
+- HDF5 statepoint output and an `openndm.StatePoint` reader, and VTK export
+  for ParaView
 
 ## Installation
 

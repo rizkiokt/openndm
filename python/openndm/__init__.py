@@ -44,6 +44,7 @@ from .thermal import (
     PicardCoupling,
     ThermalSolver,
 )
+from .vtk import write_vtk
 from .xslib import XSLibrary, rotate_adf, rotated_face
 
 __version__ = _core.__version__
@@ -76,6 +77,7 @@ __all__ = [
     "rotate_adf",
     "rotated_face",
     "write_statepoint",
+    "write_vtk",
 ]
 
 

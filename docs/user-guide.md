@@ -1000,6 +1000,36 @@ The layout follows OpenMC's conventions. Use `extra` for the conventions a
 downstream comparison needs — which leakage correction produced the group
 constants, which data library, which branch state.
 
+### VTK, for ParaView
+
+```python
+openndm.write_vtk("core.vtu", result, model)
+```
+
+One hexahedral cell per node, on the real mesh including non-uniform widths
+and whatever `subdivide` produced. Cell data is `power`, `flux_g1` to
+`flux_gG` and `composition`; the eigenvalue rides along as field data. Groups
+are numbered from one in the file, the way you read them off a legend, though
+the arrays they come from are indexed from zero.
+
+**An out-of-core position gets no cell at all**, rather than a cell carrying
+zero. In a plot those two are indistinguishable, and the first is how a wrong
+core map goes unnoticed. A reflector node is *not* out of core: it makes no
+power but it is there, and it is written.
+
+`composition` is what makes a loading pattern or a rod position visible, so a
+dump before solving and one after a bank moves are worth comparing.
+
+Use `extra` for a per-node field the solver does not produce:
+
+```python
+openndm.write_vtk("core.vtu", result, model,
+                  extra={"fuel_temperature": temperatures})
+```
+
+The writer has no dependency — the format is XML and is written directly, so
+nothing needs VTK installed.
+
 ---
 
 ## When something goes wrong

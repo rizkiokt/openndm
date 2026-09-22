@@ -139,7 +139,7 @@ like it.
 | FR-OUT-3 | done | k, node power, radial and axial profiles, `F_q`, `F_ΔH`. |
 | FR-OUT-4 | not started | Pin power reconstruction. |
 | FR-OUT-5 | done | Radial map, axial profile and convergence history. |
-| FR-OUT-6 | not started | VTK export. |
+| FR-OUT-6 | done | `write_vtk` writes the serial XML unstructured grid, one hexahedral cell per active node on the real mesh, with `power`, `flux_g1..G` and `composition` as cell data and `k_eff` as field data. An out-of-core position gets no cell rather than a cell carrying zero. No dependency: the format is XML and is written directly. |
 | FR-OUT-7 | done | Verbosity-controlled iteration history to stdout, and the history array on every result. |
 
 ## 4.10 Input (FR-IN)
