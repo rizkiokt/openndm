@@ -6,6 +6,26 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Assembly rotation for discontinuity factors** (FR-OPT-7).
+  `Geometry.from_lattice(rotation=...)` and `Geometry.set_rotation` turn a
+  core position 0 to 3 quarter turns counter-clockwise, following KOMODO's
+  `%ADF` `ROT` convention so a deck translates without re-deriving anything.
+
+  Rotation belongs to the position rather than to the composition, because one
+  assembly type is loaded at many positions in different orientations --
+  KOMODO's own example rotates a checkerboard of positions through all four
+  orientations of a single diagonally symmetric assembly. Every ADF lookup
+  follows it, in the coupling coefficients and in the two-node problem alike,
+  so all three kernels see it.
+
+  `rotate_adf` and `rotated_face` expose the permutation for callers who would
+  rather build a pre-rotated composition. `rotated_face` is the binding of the
+  function the solver itself uses, not a second copy that could drift from it.
+
+  An unrotated core is bit-identical to before.
+
 ### Fixed
 
 - **A transient now sees a change in the diffusion coefficient.** A step

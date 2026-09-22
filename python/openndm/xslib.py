@@ -10,7 +10,7 @@ import numpy as np
 from . import _core
 from .exceptions import InputError
 
-__all__ = ["BranchAxis", "XSLibrary"]
+__all__ = ["BranchAxis", "XSLibrary", "rotate_adf", "rotated_face"]
 
 #: Layout version of the ``xslib.h5`` file this module reads and writes.
 XSLIB_FORMAT_VERSION = 1
@@ -22,6 +22,77 @@ _EXTRAPOLATION = {
     "linear": _core.Extrapolation.linear,
     "error": _core.Extrapolation.error,
 }
+
+
+def rotated_face(face: int, quarter_turns: int) -> int:
+    """Face of an unrotated assembly that a turned one presents as ``face``.
+
+    A quarter turn counter-clockwise about +z carries the assembly's +x face
+    onto +y, +y onto -x, -x onto -y and -y onto +x, so the factor the lattice
+    sees on a face is the one the unrotated assembly carried on the face
+    returned here.
+
+    Parameters
+    ----------
+    face : int
+        Lattice face index in the order ``-x, +x, -y, +y, -z, +z``.
+    quarter_turns : int
+        Counter-clockwise turns about +z; reduced modulo 4.
+
+    Returns
+    -------
+    int
+        The axial faces are returned unchanged, since they do not move.
+
+    Notes
+    -----
+    This is the same function the solver applies when it reads a rotated
+    node's factors, rather than a second copy of the permutation that could
+    drift from it.
+    """
+    return _core.rotated_face(int(face), int(quarter_turns))
+
+
+def rotate_adf(values, quarter_turns: int) -> np.ndarray:
+    """Permute a set of discontinuity factors onto a turned assembly.
+
+    Parameters
+    ----------
+    values : array_like, shape (2 * n_axes, G)
+        Per-face, per-group factors in the order ``-x, +x, -y, +y, -z, +z``.
+    quarter_turns : int
+        0 to 3, counter-clockwise about +z.
+
+    Returns
+    -------
+    ndarray
+        A new array; the input is not modified.
+
+    Notes
+    -----
+    Rotation is a permutation and nothing else, so it is exactly invertible:
+    four quarter turns are the identity, and two are the swap of each radial
+    pair. A fully symmetric set is unchanged by any of them.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> adf = np.array([[1.0], [2.0], [3.0], [4.0], [5.0], [6.0]])
+    >>> rotate_adf(adf, 1).ravel().tolist()
+    [4.0, 3.0, 1.0, 2.0, 5.0, 6.0]
+    """
+    arr = np.asarray(values, dtype=float)
+    if arr.ndim != 2 or arr.shape[0] % 2 != 0:
+        raise InputError(
+            "discontinuity factors must be a (2 * n_axes, G) array, got "
+            f"shape {arr.shape}"
+        )
+    if not 0 <= quarter_turns <= 3:
+        raise InputError(
+            f"quarter_turns must be 0, 1, 2 or 3, got {quarter_turns}"
+        )
+    order = [rotated_face(f, quarter_turns) for f in range(arr.shape[0])]
+    return arr[order]
 
 
 class XSLibrary:
@@ -215,6 +286,32 @@ class XSLibrary:
                 f"ADF array must have shape {expected}, got {arr.shape}"
             )
         self._lib.set_adf(int(index), arr.ravel(order="C"), n_axes)
+
+    def rotated_adf(self, index: int, quarter_turns: int, n_axes: int = 3):
+        """Discontinuity factors of one composition, turned counter-clockwise.
+
+        Parameters
+        ----------
+        index : int
+        quarter_turns : int
+            0 to 3, counter-clockwise about +z, as KOMODO's ``%ADF`` ``ROT``
+            defines it.
+        n_axes : int, optional
+
+        Returns
+        -------
+        ndarray, shape (2 * n_axes, G)
+            The set the assembly would present after turning. Four quarter
+            turns return the original exactly.
+
+        See Also
+        --------
+        openndm.rotate_adf : the same permutation on a plain array.
+        openndm.Geometry.set_rotation : turn an assembly where it sits, which
+            is what a core with one assembly type in several orientations
+            wants.
+        """
+        return rotate_adf(self.adf(index, n_axes), quarter_turns)
 
     def adf(self, index: int, n_axes: int = 3) -> np.ndarray:
         """Discontinuity factors as a ``(2 * n_axes, G)`` array."""

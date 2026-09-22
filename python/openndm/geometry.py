@@ -63,6 +63,7 @@ class Geometry:
         outside: str = "vacuum",
         outside_albedo: Sequence[float] | None = None,
         subdivide: int | Sequence[int] = 1,
+        rotation: np.ndarray | None = None,
     ) -> Geometry:
         """Build a Cartesian geometry from a ``(nz, ny, nx)`` composition map.
 
@@ -97,6 +98,16 @@ class Geometry:
             Split each lattice cell into this many nodes per direction
             (FR-GEO-4). Discontinuity factors follow the composition, so a
             subdivided assembly keeps the ADFs of its parent.
+        rotation : array_like of int, shape (nz, ny, nx), optional
+            Quarter turns counter-clockwise about +z applied to the assembly
+            at each lattice position, 0 to 3 (FR-OPT-7). Only the
+            discontinuity factors turn with it; a rotation is meaningless
+            without them and costs nothing when they are all one.
+
+            Rotation belongs to the position and not to the composition,
+            because one assembly type is loaded at many positions in
+            different orientations. This follows KOMODO's ``%ADF`` ``ROT``
+            convention, so a deck translates without re-deriving anything.
 
         Returns
         -------
@@ -118,6 +129,7 @@ class Geometry:
                 f"composition map must be 2D or 3D, got {comp.ndim}D"
             )
 
+        original_shape = comp.shape
         sub = np.broadcast_to(np.asarray(subdivide, dtype=int), (3,))
         if np.any(sub < 1):
             raise ValueError("subdivide must be at least 1 in every direction")
@@ -148,6 +160,26 @@ class Geometry:
         spec = _core.CartesianSpec()
         spec.dx, spec.dy, spec.dz = (list(w) for w in widths)
         spec.composition = [int(v) for v in comp.ravel(order="C")]
+
+        if rotation is not None:
+            turns = np.asarray(rotation, dtype=np.int32)
+            if turns.ndim == 2:
+                turns = turns[np.newaxis, :, :]
+            if turns.shape != original_shape:
+                raise ValueError(
+                    f"rotation map must have shape {original_shape} to match "
+                    f"the composition map, got {turns.shape}"
+                )
+            if np.any(turns < 0) | np.any(turns > 3):
+                raise ValueError(
+                    "rotation must be 0, 1, 2 or 3 quarter turns "
+                    "counter-clockwise"
+                )
+            if np.any(sub > 1):
+                turns = np.repeat(turns, sub[2], axis=0)
+                turns = np.repeat(turns, sub[1], axis=1)
+                turns = np.repeat(turns, sub[0], axis=2)
+            spec.rotation = [int(v) for v in turns.ravel(order="C")]
 
         bc = dict.fromkeys(_FACES, "vacuum")
         bc.update({k.lower(): v for k, v in (boundaries or {}).items()})
@@ -203,6 +235,11 @@ class Geometry:
         return self._g.compositions
 
     @property
+    def rotations(self) -> np.ndarray:
+        """Quarter turns counter-clockwise per node, shape ``(n_nodes,)``."""
+        return self._g.rotations
+
+    @property
     def dz(self) -> np.ndarray:
         """Axial node widths in cm, one per plane of ``shape[0]``.
 
@@ -256,6 +293,17 @@ class Geometry:
     def set_composition(self, node: int, composition: int) -> None:
         """Reassign one node's composition in place (FR-OPT-7)."""
         self._g.set_composition(int(node), int(composition))
+
+    def set_rotation(self, node: int, quarter_turns: int) -> None:
+        """Rotate one node's assembly in place, counter-clockwise (FR-OPT-7).
+
+        Parameters
+        ----------
+        node : int
+        quarter_turns : int
+            0 to 3. Only the discontinuity factors turn with it.
+        """
+        self._g.set_rotation(int(node), int(quarter_turns))
 
     def __repr__(self) -> str:
         nz, ny, nx = self.shape

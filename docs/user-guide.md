@@ -172,6 +172,36 @@ lib.adf(0)                    # read them back as (6, n_groups)
 They are folded into the coupling coefficient before any nonlinear
 correction, so they act even with the `fdm` kernel.
 
+#### Rotated assemblies
+
+OpenMC gives you an assembly's factors in one orientation. The same assembly
+loaded at a position turned 90 degrees presents different faces to its
+neighbours, so the factors have to be permuted to match.
+
+Rotation belongs to the **position**, not to the composition, because one
+assembly type is loaded at many positions in different orientations:
+
+```python
+rotation = np.zeros_like(core)          # quarter turns counter-clockwise
+rotation[core == MOX] = 1               # 90 degrees
+geom = openndm.Geometry.from_lattice(core, pitch=21.5, rotation=rotation)
+
+geom.set_rotation(node, 2)              # or per node, absolute not cumulative
+geom.rotations                          # quarter turns per node
+```
+
+0 to 3 quarter turns counter-clockwise about +z, following KOMODO's `%ADF`
+`ROT` convention so a deck translates without re-deriving anything. Only the
+discontinuity factors turn; a rotation costs nothing when they are all one.
+
+To permute a set by hand instead, for example to build a pre-rotated
+composition:
+
+```python
+openndm.rotate_adf(values, quarter_turns)   # returns a new (6, G) array
+lib.rotated_adf(0, quarter_turns)           # the same, read from the library
+```
+
 ### Delayed neutrons
 
 ```python

@@ -50,6 +50,11 @@ Geometry Geometry::from_cartesian(const CartesianSpec& spec)
                      std::to_string(spec.composition.size()) +
                      " entries but the mesh has " + std::to_string(expected));
   }
+  if (!spec.rotation.empty() && spec.rotation.size() != expected) {
+    throw InputError("rotation map has " +
+                     std::to_string(spec.rotation.size()) +
+                     " entries but the mesh has " + std::to_string(expected));
+  }
   for (const auto* d : {&spec.dx, &spec.dy, &spec.dz}) {
     for (double w : *d) {
       if (!(w > 0.0)) throw InputError("node widths must be positive");
@@ -75,6 +80,16 @@ Geometry Geometry::from_cartesian(const CartesianSpec& spec)
         }
         Node n;
         n.composition = comp;
+        if (!spec.rotation.empty()) {
+          const int turns = spec.rotation[flat];
+          if (turns < 0 || turns > 3) {
+            throw InputError(
+                "rotation must be 0, 1, 2 or 3 quarter turns "
+                "counter-clockwise, got " +
+                std::to_string(turns));
+          }
+          n.rotation = turns;
+        }
         n.width = {spec.dx[i], spec.dy[j], spec.dz[k]};
         n.volume = n.width[0] * n.width[1] * n.width[2];
         n.ijk = {i, j, k};
@@ -198,6 +213,18 @@ void Geometry::set_composition(int node, int composition)
     throw InputError("composition index must be non-negative");
   }
   nodes_[node].composition = composition;
+}
+
+void Geometry::set_rotation(int node, int quarter_turns)
+{
+  if (node < 0 || node >= n_nodes()) {
+    throw InputError("node index out of range");
+  }
+  if (quarter_turns < 0 || quarter_turns > 3) {
+    throw InputError(
+        "rotation must be 0, 1, 2 or 3 quarter turns counter-clockwise");
+  }
+  nodes_[node].rotation = quarter_turns;
 }
 
 int Geometry::n_compositions() const

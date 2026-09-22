@@ -157,8 +157,14 @@ void CmfdSystem::build_coupling()
       for (int g = 0; g < G; ++g) {
         const double DL = diffusion_[static_cast<std::size_t>(L) * G + g];
         const double DR = diffusion_[static_cast<std::size_t>(R) * G + g];
-        const double fL = xs_.adf_value(comp_l, 2 * axis + 1, g);
-        const double fR = xs_.adf_value(comp_r, 2 * axis + 0, g);
+        const double fL = xs_.adf_value(comp_l,
+            rotated_face(
+                2 * axis + 1, nodes[static_cast<std::size_t>(L)].rotation),
+            g);
+        const double fR = xs_.adf_value(comp_r,
+            rotated_face(
+                2 * axis + 0, nodes[static_cast<std::size_t>(R)].rotation),
+            g);
         const double denom = fL * surf.h_lo * DR + fR * surf.h_hi * DL;
         const double base = 2.0 * DL * DR / denom;
         dtilde_[static_cast<std::size_t>(s) * G + g] = base * 0.5 * (fL + fR);
@@ -170,7 +176,8 @@ void CmfdSystem::build_coupling()
       const int face = surf.boundary_is_lo_side() ? 2 * axis : 2 * axis + 1;
       for (int g = 0; g < G; ++g) {
         const double D = diffusion_[static_cast<std::size_t>(N) * G + g];
-        const double f = xs_.adf_value(comp, face, g);
+        const double f = xs_.adf_value(comp,
+            rotated_face(face, nodes[static_cast<std::size_t>(N)].rotation), g);
         dtilde_[static_cast<std::size_t>(s) * G + g] =
             boundary_coupling(surf, g, D, f);
         dhat_[static_cast<std::size_t>(s) * G + g] = 0.0;
@@ -464,10 +471,10 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
             leakage_[(static_cast<std::size_t>(R) * n_axes + la) * G + g];
         tl_hi[static_cast<std::size_t>(2) * G + g] =
             leakage_[(static_cast<std::size_t>(next) * n_axes + la) * G + g];
-        adf_lo[static_cast<std::size_t>(g)] =
-            xs_.adf_value(nl.composition, 2 * a + 1, g);
-        adf_hi[static_cast<std::size_t>(g)] =
-            xs_.adf_value(nr.composition, 2 * a + 0, g);
+        adf_lo[static_cast<std::size_t>(g)] = xs_.adf_value(
+            nl.composition, rotated_face(2 * a + 1, nl.rotation), g);
+        adf_hi[static_cast<std::size_t>(g)] = xs_.adf_value(
+            nr.composition, rotated_face(2 * a + 0, nr.rotation), g);
         if (external) {
           const auto& q = *external;
           src_lo[static_cast<std::size_t>(0) * G + g] =
