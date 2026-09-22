@@ -20,9 +20,10 @@ How to drive the solver. For the equations it implements see
 10. [Branch libraries and feedback](#branch-libraries-and-feedback)
 11. [Control rods](#control-rods)
 12. [Transients](#transients)
-13. [Embedding and performance](#embedding-and-performance)
-14. [Files](#files)
-15. [When something goes wrong](#when-something-goes-wrong)
+13. [Thermal-hydraulic coupling](#thermal-hydraulic-coupling)
+14. [Embedding and performance](#embedding-and-performance)
+15. [Files](#files)
+16. [When something goes wrong](#when-something-goes-wrong)
 
 ---
 
@@ -858,10 +859,95 @@ do not.
 ### What is not implemented
 
 No exponential transformation, no adaptive time stepping, no decay heat, and
-no feedback — FR-MODE-7 needs the thermal-hydraulics model, which does not
-exist yet. The nonlinear nodal coupling coefficients are held at their static
+no feedback — FR-MODE-7 needs a thermal-hydraulics model, and there is no
+built-in one yet. There *is* somewhere to attach your own; see the next
+section. The nonlinear nodal coupling coefficients are held at their static
 values inside a step, so the nodal kernels drift from consistency as the flux
 shape moves; FDM has nothing to freeze.
+
+---
+
+## Thermal-hydraulic coupling
+
+There is no built-in thermal-hydraulics model yet. What exists is the place to
+attach one: an interface, a Picard driver and a mesh mapping, none of which
+know any physics.
+
+A thermal solver is anything with four methods:
+
+```python
+class Channel:
+    def set_heat_source(self, q): ...      # node power, W
+    def solve(self): ...
+    def get_temperatures(self): ...        # {name: array}, K
+    def get_densities(self): ...           # {name: array}, kg/m^3
+```
+
+`isinstance(channel, openndm.ThermalSolver)` checks it. The field names are
+yours, and the point of that is that they can be the axis names of a branch
+library, so the state the solver reports feeds `lib.interpolate` unchanged.
+
+`PicardCoupling` runs the loop. It takes the solver, a callback that pushes
+the reported state into the cross sections, and a callable that runs whatever
+neutronics you want and returns the node power in watts:
+
+```python
+doppler = openndm.DopplerFeedback(lib, range(lib.n_compositions),
+                                  gamma=2.5e-3, reference_temperature=560.0)
+last = {}
+
+def apply_state(temperatures, densities):
+    doppler.apply(temperatures["fuel_temperature"])
+    model.refresh()
+
+def node_power():
+    last["result"] = model.solve()
+    relative = last["result"].power
+    return relative * (TOTAL_POWER / relative.sum())
+
+coupling = openndm.PicardCoupling(channel, apply_state, relaxation=0.7)
+result = coupling.solve(node_power, k_eff_source=lambda: last["result"].k_eff)
+```
+
+`DopplerFeedback` is the stand-in here because cross sections live per
+composition: a temperature that varies node to node needs one composition per
+node that can differ. A branch library and `lib.interpolate(**state)` is the
+better route where you have one.
+
+The loop stops when the node power moves by less than `tolerance` relative to
+the mean power, and raises `ConvergenceError` if it is still moving after
+`max_iterations`. It does not return an unconverged state. Lower `relaxation`
+if it oscillates: a coupling whose power falls off temperature steeply enough
+to diverge at `relaxation=1.0` usually converges in a few iterations at 0.25.
+
+`result.history` holds one `CouplingStep` per iteration with the power change
+and, if you supplied `k_eff_source`, the eigenvalue.
+
+### Mapping onto another mesh
+
+An external solver rarely uses the neutronics mesh. `AxialMapping` transfers
+between two axial meshes over the same span, conserving volume:
+
+```python
+mapping = openndm.AxialMapping(source_edges=[0.0, 30.0, 70.0, 100.0],
+                               target_edges=np.linspace(0.0, 100.0, 21))
+channel_power = mapping.distribute(watts_per_node)   # keeps the total
+node_temperature = mapping.reverse().average(channel_temperature)
+```
+
+The two directions are different operations and choosing the wrong one
+conserves nothing while looking entirely plausible:
+
+| Field | Method | What is preserved |
+|---|---|---|
+| power, heat rate — **extensive** | `distribute` | the total |
+| temperature, density — **intensive** | `average` | the volume-weighted mean |
+
+Both take a trailing mesh axis and leave the leading ones alone, so a whole
+core of channels maps in one call: pass an array of shape
+`(n_channels, n_source)` and get back `(n_channels, n_target)`.
+
+Everything is numpy arrays in memory. Nothing in this module writes a file.
 
 ---
 

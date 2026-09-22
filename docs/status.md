@@ -102,11 +102,21 @@ inhour equation to 0.2%, and the observed order in time. See
 
 ## 4.7 Thermal hydraulics (FR-TH)
 
-**Not started.** FR-TH-1 through FR-TH-8. No `ThermalSolver` interface exists
-yet. FR-TH-6 and FR-TH-7 constrain the *shape* of that work rather than the
-neutronics, and nothing in the current solver blocks them: no kernel refers to
-temperature or density, and cross sections reach the solver only through
-`XSLibrary`, which already interpolates over a temperature axis.
+| ID | State | Notes |
+|---|---|---|
+| FR-TH-1 | not started | No channel model. |
+| FR-TH-2 | not started | No pin conduction model. |
+| FR-TH-3 | not started | No water properties. |
+| FR-TH-4 | not started | Needs FR-TH-2. |
+| FR-TH-5 | not started | Needs FR-TH-1. |
+| FR-TH-6 | partial | `ThermalSolver` is a runtime-checkable protocol over `set_heat_source`, `solve`, `get_temperatures` and `get_densities`, and no kernel calls anything behind it: nothing in `src/` refers to temperature or density. The built-in channel model that is meant to be one implementation of it does not exist yet. |
+| FR-TH-7 | done | `PicardCoupling` owns the iteration, the under-relaxation and the convergence test, and reaches the thermal model only through the protocol. `AxialMapping` maps volume-conservatively in both directions: `distribute` for an extensive field, `average` for an intensive one. Transfer is numpy arrays throughout; nothing in the module touches the filesystem. |
+| FR-TH-8 | not started | Needs FR-TH-3. |
+
+The interface and the driver exist before any physics does, deliberately. Had
+the channel model come first, the channel model would have become the shape of
+the coupling, and FR-TH-7's v1.1 external solver would have had to be shaped
+like it.
 
 ## 4.8 Optimisation and embedding (FR-OPT)
 
