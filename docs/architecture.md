@@ -61,7 +61,9 @@ requirements decided it:
   maps each C++ exception onto the matching class in `openndm.exceptions`, so
   `except openndm.InputError` catches what the core raises and users can
   subclass the hierarchy. Through ctypes this is error codes and manual
-  raising at every call site.
+  raising at every call site. The translator resolves those classes out of
+  `openndm.exceptions` as the extension loads, so `openndm/__init__.py`
+  imports that module before anything that pulls the extension in.
 - FR-OPT-2 wants the GIL released during a solve. That is
   `py::call_guard<py::gil_scoped_release>()`, one line.
 

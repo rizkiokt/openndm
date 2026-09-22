@@ -16,7 +16,7 @@ __all__ = ["plot_axial", "plot_convergence", "plot_radial"]
 def _pyplot():
     try:
         import matplotlib.pyplot as plt
-    except ImportError as exc:  # pragma: no cover - exercised only without mpl
+    except ImportError as exc:  # pragma: no cover
         raise ImportError(
             "plotting needs matplotlib; install it with "
             "`pip install openndm[plot]`"

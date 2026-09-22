@@ -12,8 +12,8 @@ from .exceptions import InputError
 
 __all__ = ["BranchAxis", "XSLibrary", "rotate_adf", "rotated_face"]
 
-#: Layout version of the ``xslib.h5`` file this module reads and writes.
 XSLIB_FORMAT_VERSION = 1
+"""Layout version of the ``xslib.h5`` file this module reads and writes."""
 
 BranchAxis = _core.BranchAxis
 
@@ -127,7 +127,6 @@ class XSLibrary:
     def __init__(self, n_groups: int, n_compositions: int):
         self._lib = _core.XSLibrary(int(n_groups), int(n_compositions))
 
-    # ------------------------------------------------------------ properties
     @property
     def n_groups(self) -> int:
         return self._lib.n_groups
@@ -170,7 +169,6 @@ class XSLibrary:
                 ) from None
         self._lib.extrapolation = value
 
-    # --------------------------------------------------------------- writing
     def set_axes(self, axes: Sequence[tuple[str, Sequence[float]]]) -> None:
         """Declare the branch axes, outermost first (FR-XS-5).
 
@@ -365,7 +363,6 @@ class XSLibrary:
                 warnings.warn(message, stacklevel=2)
         return messages
 
-    # --------------------------------------------------------------- reading
     def composition(self, index: int, state: int = 0):
         """Snapshot of one composition's group constants, for inspection.
 
@@ -427,7 +424,6 @@ class XSLibrary:
             f"{self.n_compositions} compositions{branch}>"
         )
 
-    # ------------------------------------------------------------- hdf5 i/o
     def to_hdf5(self, path) -> None:
         """Write the library to ``xslib.h5`` (FR-IN-3).
 
@@ -567,7 +563,6 @@ class XSLibrary:
         lib.finalize(warn=False)
         return lib
 
-    # ----------------------------------------------------------------- utils
     @staticmethod
     def _vector(value, G: int, name: str) -> np.ndarray:
         arr = np.asarray(value, dtype=float).ravel()
