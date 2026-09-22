@@ -49,7 +49,32 @@ struct Node {
   //! Original lattice position, retained for reporting and for the loading
   //! pattern API (FR-OPT-7). Meaningless for non-Cartesian builders.
   std::array<int, 3> ijk{{0, 0, 0}};
+  //! Quarter turns counter-clockwise about +z applied to the assembly sitting
+  //! here, 0 to 3 (FR-OPT-7). Rotation belongs to the position rather than to
+  //! the composition, because one assembly type is loaded at many positions in
+  //! different orientations.
+  int rotation = 0;
 };
+
+//! Face index whose discontinuity factor a rotated assembly presents to a
+//! given face of the lattice.
+//!
+//! Faces are ordered -x, +x, -y, +y, -z, +z. Rotating an assembly a quarter
+//! turn counter-clockwise about +z carries its +x face onto +y, +y onto -x,
+//! -x onto -y and -y onto +x, so the factor the lattice sees on \c face is
+//! the one the unrotated assembly carried on the face returned here. The
+//! axial faces never move.
+//!
+//! \param face lattice face index, 0 to 5.
+//! \param quarter_turns 0 to 3; anything else is reduced modulo 4.
+constexpr int rotated_face(int face, int quarter_turns)
+{
+  if (face >= 4) return face;
+  constexpr int kTurn[4] = {3, 2, 0, 1};
+  int f = face;
+  for (int t = ((quarter_turns % 4) + 4) % 4; t > 0; --t) f = kTurn[f];
+  return f;
+}
 
 //! Structured description used by the Cartesian builder (FR-GEO-1..5).
 struct CartesianSpec {
@@ -59,6 +84,9 @@ struct CartesianSpec {
   //! Composition index per (k, j, i), C order, with COMP_INACTIVE marking a
   //! position outside the core (FR-GEO-2).
   std::vector<int> composition;
+  //! Quarter turns counter-clockwise per (k, j, i), C order, matching
+  //! \c composition. Empty leaves every assembly unrotated (FR-OPT-7).
+  std::vector<int> rotation;
   //! Boundary condition per face in the order -x, +x, -y, +y, -z, +z.
   std::array<BoundaryType, 6> bc{
       {BoundaryType::vacuum, BoundaryType::vacuum, BoundaryType::vacuum,
@@ -119,6 +147,11 @@ public:
   //! Mutate the composition of a node in place (FR-OPT-7). Cheap enough to sit
   //! inside a loading pattern optimisation loop; no surfaces are rebuilt.
   void set_composition(int node, int composition);
+
+  //! Set the quarter turns counter-clockwise applied to one node (FR-OPT-7).
+  //!
+  //! \throws InputError if \c quarter_turns is outside 0 to 3.
+  void set_rotation(int node, int quarter_turns);
 
   //! Number of compositions referenced by the map, i.e. max index + 1.
   int n_compositions() const;

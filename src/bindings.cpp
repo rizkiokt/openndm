@@ -105,12 +105,17 @@ PYBIND11_MODULE(_core, m)
       .value("linear", Extrapolation::linear)
       .value("error", Extrapolation::error);
 
+  m.def("rotated_face", &rotated_face, py::arg("face"),
+      py::arg("quarter_turns"),
+      "Face of an unrotated assembly presented as the given lattice face.");
+
   py::class_<CartesianSpec>(m, "CartesianSpec")
       .def(py::init<>())
       .def_readwrite("dx", &CartesianSpec::dx)
       .def_readwrite("dy", &CartesianSpec::dy)
       .def_readwrite("dz", &CartesianSpec::dz)
       .def_readwrite("composition", &CartesianSpec::composition)
+      .def_readwrite("rotation", &CartesianSpec::rotation)
       .def_readwrite("bc", &CartesianSpec::bc)
       .def_readwrite("albedo", &CartesianSpec::albedo)
       .def_readwrite("inactive_bc", &CartesianSpec::inactive_bc)
@@ -166,8 +171,17 @@ PYBIND11_MODULE(_core, m)
             for (const auto& n : g.nodes()) c.push_back(n.composition);
             return int_array(c);
           })
+      .def_property_readonly("rotations",
+          [](const Geometry& g) {
+            std::vector<int> r;
+            r.reserve(static_cast<std::size_t>(g.n_nodes()));
+            for (const auto& n : g.nodes()) r.push_back(n.rotation);
+            return int_array(r);
+          })
       .def("set_composition", &Geometry::set_composition, py::arg("node"),
-          py::arg("composition"));
+          py::arg("composition"))
+      .def("set_rotation", &Geometry::set_rotation, py::arg("node"),
+          py::arg("quarter_turns"));
 
   py::class_<Composition>(m, "Composition")
       .def_readwrite("D", &Composition::D)

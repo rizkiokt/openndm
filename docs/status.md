@@ -118,7 +118,7 @@ temperature or density, and cross sections reach the solver only through
 | FR-OPT-4 | done | Fixed-size chunked reductions; tested bit-identical on 1, 2, 4 and 8 threads. |
 | FR-OPT-5 | done | Zero-copy numpy views with keep-alive, through pybind11 rather than xtensor. |
 | FR-OPT-6 | done | Typed exceptions on every path; nothing aborts. |
-| FR-OPT-7 | partial | `swap_assemblies` and `set_composition`. Rotation is not implemented, and positions are addressed by index rather than by label. |
+| FR-OPT-7 | partial | `swap_assemblies` and `set_composition`. Assembly rotation is implemented for discontinuity factors: `from_lattice(rotation=...)` and `Geometry.set_rotation` turn a position 0 to 3 quarter turns counter-clockwise on KOMODO's `%ADF` `ROT` convention, and every ADF lookup in the coupling and in the two-node problem follows it. Nothing else about an assembly is orientation-dependent today, so nothing else turns. Positions are still addressed by index rather than by label. |
 
 ## 4.9 Output (FR-OUT)
 

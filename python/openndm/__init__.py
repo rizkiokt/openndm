@@ -40,7 +40,7 @@ from .model import BoronSearchResult, Model, Result, Transient, TransientStep
 from .rods import ControlRodBank, ControlRods, RodWorth
 from .settings import Settings
 from .statepoint import StatePoint, write_statepoint
-from .xslib import XSLibrary
+from .xslib import XSLibrary, rotate_adf, rotated_face
 
 __version__ = _core.__version__
 
@@ -64,6 +64,8 @@ __all__ = [
     "TransientStep",
     "XSLibrary",
     "__version__",
+    "rotate_adf",
+    "rotated_face",
     "write_statepoint",
 ]
 
