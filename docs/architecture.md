@@ -186,11 +186,18 @@ conftest. The verification suite is parameterised over that list, so a new
 kernel is immediately held to the analytic solution, the convergence order and
 the fine-mesh consistency check.
 
-**External thermal hydraulics (FR-TH-6, FR-TH-7).** Nothing in the solver
-refers to temperature or density. Cross sections reach it only through
-`XSLibrary`, which already interpolates over arbitrary state axes. A
-`ThermalSolver` interface and a Picard driver can sit entirely above the
-current code, with field transfer through numpy arrays as FR-TH-7 requires.
+**External thermal hydraulics (FR-TH-6, FR-TH-7).** Satisfy the
+`ThermalSolver` protocol in `openndm.thermal` -- `set_heat_source`, `solve`,
+`get_temperatures`, `get_densities` -- and hand the object to
+`PicardCoupling`. Nothing in the solver refers to temperature or density, and
+cross sections reach it only through `XSLibrary`, so the driver sits entirely
+above the C++ core: it calls a neutronics step the caller supplies and never
+looks past the protocol in the other direction.
+
+Field names are the caller's, not the driver's, because they are the axis
+names of a branch library. That is what lets the same driver run a built-in
+channel model, an external code and a hand-written correlation without a
+translation layer in between.
 
 **Run-time sizing (NFR-EXT-2).** Group count, precursor count and branch axes
 are all run-time values. Nothing is a template parameter and nothing is a

@@ -8,6 +8,32 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Thermal-hydraulic coupling interface, Picard driver and field mapping**
+  (FR-TH-6, FR-TH-7), in `openndm.thermal`. No physics: the shape of the
+  coupling only, so that a v1.1 external solver attaches without touching the
+  neutronics.
+
+  `ThermalSolver` is a runtime-checkable protocol over `set_heat_source`,
+  `solve`, `get_temperatures` and `get_densities`. Temperatures and densities
+  are keyed by name rather than fixed, because the names are the axis names
+  of a branch library and so feed `XSLibrary.interpolate` unchanged.
+
+  `PicardCoupling` owns the loop, the under-relaxation and the convergence
+  test, and reaches the thermal model only through the protocol. The
+  neutronics step is a callable the caller supplies, the way `search_boron`
+  takes the boron model. It raises `ConvergenceError` rather than returning an
+  unconverged state.
+
+  `AxialMapping` maps volume-conservatively in both directions. `distribute`
+  keeps the total of an extensive field, `average` keeps the volume-weighted
+  mean of an intensive one; they are separate methods rather than a flag
+  because using one where the other belongs conserves nothing and looks
+  plausible. Leading axes are free, so a whole core of channels maps in one
+  call.
+
+  The interface comes before the channel model deliberately: built the other
+  way round, the channel model becomes the shape of the coupling.
+
 - **Assembly rotation for discontinuity factors** (FR-OPT-7).
   `Geometry.from_lattice(rotation=...)` and `Geometry.set_rotation` turn a
   core position 0 to 3 quarter turns counter-clockwise, following KOMODO's

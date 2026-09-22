@@ -40,26 +40,38 @@ from .model import BoronSearchResult, Model, Result, Transient, TransientStep
 from .rods import ControlRodBank, ControlRods, RodWorth
 from .settings import Settings
 from .statepoint import StatePoint, write_statepoint
+from .thermal import (
+    AxialMapping,
+    CouplingResult,
+    CouplingStep,
+    PicardCoupling,
+    ThermalSolver,
+)
 from .xslib import XSLibrary, rotate_adf, rotated_face
 
 __version__ = _core.__version__
 
 __all__ = [
     "INACTIVE",
+    "AxialMapping",
     "BoronSearchResult",
     "ControlRodBank",
     "ControlRods",
     "ConvergenceError",
+    "CouplingResult",
+    "CouplingStep",
     "DopplerFeedback",
     "Geometry",
     "InputError",
     "LibraryError",
     "Model",
     "OpenNDMError",
+    "PicardCoupling",
     "Result",
     "RodWorth",
     "Settings",
     "StatePoint",
+    "ThermalSolver",
     "Transient",
     "TransientStep",
     "XSLibrary",
