@@ -43,7 +43,8 @@ class RodWorth:
     reported in pcm and signed so that **inserting a bank gives positive
     worth**, which is the usual convention. Using :math:`\\Delta k/k` instead
     is a common shortcut that drifts from this by of order its own square,
-    which matters once a bank is worth several thousand pcm.
+    which matters once a bank is worth several thousand pcm, and it does not
+    stay additive over a sequence of insertions.
 
     Attributes
     ----------
@@ -256,7 +257,6 @@ class ControlRods:
 
         self._positions: dict[str, float | None] = dict.fromkeys(self._banks)
 
-    # ------------------------------------------------------------ properties
     @property
     def banks(self) -> tuple[str, ...]:
         return tuple(self._banks)
@@ -277,7 +277,6 @@ class ControlRods:
             return float(np.sum(self._geometry.dz))
         return bank.tip_height(steps)
 
-    # --------------------------------------------------------------- methods
     def insert(self, positions: Mapping[str, float | None] | None = None, **kwargs):
         """Set bank positions in steps and rewrite the node compositions.
 
@@ -455,10 +454,6 @@ class ControlRods:
             model.refresh()
 
         k_eff = np.asarray(eigenvalues, dtype=float)
-        # Worth is a reactivity difference: rho_ref - rho(p) with
-        # rho = 1 - 1/k, which is 1/k - 1/k_ref. Positive when the bank is
-        # further in than the reference, and unlike dk/k it stays additive
-        # over a sequence.
         integral = 1.0e5 * (1.0 / k_eff - 1.0 / reference_k)
         if steps.size > 1:
             differential = np.gradient(integral, steps)
@@ -478,7 +473,6 @@ class ControlRods:
             reference_k=float(reference_k),
         )
 
-    # ----------------------------------------------------------------- inner
     def _solve_at(self, model, state, cusping: bool, warm_start: bool) -> float:
         self.insert(state)
         model.refresh()
@@ -514,6 +508,10 @@ class ControlRods:
     def _reweight_from_flux(self, flux: np.ndarray) -> float | None:
         """Rewrite every cusp mixture using flux-volume weights.
 
+        Each half of the partial node is represented by the average of that
+        node and the neighbour on its own side: the lower half is unrodded
+        and the upper half is rodded.
+
         Returns the largest relative change, or None when no bank has a
         partially rodded node to correct.
         """
@@ -539,9 +537,6 @@ class ControlRods:
                 active = take & (here >= 0) & (below >= 0) & (above >= 0)
                 if not active.any():
                     continue
-                # The lower half of the node is unrodded and the upper half is
-                # rodded, so each half is represented by the average of the
-                # node and the neighbour on its own side.
                 phi_un = 0.5 * (
                     flux[below[active]].mean(axis=0) + flux[here[active]].mean(axis=0)
                 )
@@ -589,6 +584,12 @@ class ControlRods:
             ) from None
 
     def _apply(self) -> None:
+        """Rewrite every covered node's composition for the current positions.
+
+        A bank with no ``cusp`` slots has no mixture to write, so each node
+        rounds to whichever state covers its centre. That is what makes
+        ``k_eff`` a staircase in rod position.
+        """
         geometry = self._geometry
         for name, bank in self._banks.items():
             nodes = self._nodes[name]
@@ -602,16 +603,10 @@ class ControlRods:
             else:
                 tip = bank.tip_height(steps)
                 lo, hi = self._lo[name], self._hi[name]
-                # Rods enter from the top, so a node is rodded when it sits
-                # above the tip. A node the tip falls inside is partial: the
-                # fraction is how much of its height the rod occupies.
                 rodded = lo >= tip
                 partial = (lo < tip) & (tip < hi)
                 fraction = np.zeros(nodes.shape, dtype=float)
                 if bank.cusp is None:
-                    # No mixture available, so round to whichever state covers
-                    # the node centre. This is what makes k_eff a staircase in
-                    # rod position.
                     rodded = self._centres[name] > tip
                     partial = np.zeros(nodes.shape, dtype=bool)
                 else:
@@ -644,6 +639,11 @@ class ControlRods:
         Every column of a bank shares one tip height and one axial mesh, so
         all partial nodes with the same unrodded composition share one
         mixture and one spare slot.
+
+        Finalises the library afterwards: writing a composition marks it
+        unfinalized and its removal cross sections stay cached until it is
+        finalized again, so the mixture would otherwise be written but not
+        solved with.
         """
         if not partial.any():
             return
@@ -659,9 +659,6 @@ class ControlRods:
                     float(shares[0]),
                 ),
             )
-        # Writing a composition marks the library unfinalized, and its removal
-        # cross sections stay cached until it is finalized again. Skipping this
-        # would leave the mixture written but not solved with.
         self._library.finalize(warn=False)
 
 
@@ -711,11 +708,14 @@ def _homogenise(
         w_rod = np.where(total > 0.0, w_rod / total, volume_rod)
 
     def mix(field):
+        """Weight one field of the two compositions together.
+
+        A scattering matrix is weighted by the flux of the group the transfer
+        leaves, which is its row.
+        """
         x = np.asarray(getattr(a, field), dtype=float)
         y = np.asarray(getattr(b, field), dtype=float)
         if x.size == groups * groups:
-            # A scattering matrix is weighted by the flux of the group the
-            # transfer leaves, which is its row.
             shape = (groups, groups)
             return (
                 w_un[:, None] * x.reshape(shape) + w_rod[:, None] * y.reshape(shape)

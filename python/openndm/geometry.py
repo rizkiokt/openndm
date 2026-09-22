@@ -10,9 +10,8 @@ from . import _core
 
 __all__ = ["INACTIVE", "Geometry"]
 
-#: Marker for a lattice position that lies outside the core (FR-GEO-2).
-INACTIVE = _core.CartesianSpec  # placeholder replaced below
 INACTIVE = -1
+"""Marker for a lattice position that lies outside the core (FR-GEO-2)."""
 
 _BC = {
     "zero_flux": _core.BoundaryType.zero_flux,
@@ -48,7 +47,6 @@ class Geometry:
         self._shape = shape or core.lattice_shape
         self._dz = None if dz is None else np.asarray(dz, dtype=float)
 
-    # ------------------------------------------------------------- builders
     @classmethod
     def from_lattice(
         cls,
@@ -147,10 +145,8 @@ class Geometry:
             if explicit is None:
                 widths.append(np.full(n, p[axis] / sub_n, dtype=float))
             else:
-                # Each lattice cell splits into sub_n nodes that share its
-                # width. Repeating the parent width instead would scale the
-                # whole axis by sub_n, silently enlarging the core.
-                w = np.repeat(np.asarray(explicit, dtype=float) / sub_n, sub_n)
+                shared_width = np.asarray(explicit, dtype=float) / sub_n
+                w = np.repeat(shared_width, sub_n)
                 if w.size != n:
                     raise ValueError(
                         f"axis {axis}: {w.size} widths for {n} nodes"
@@ -202,7 +198,6 @@ class Geometry:
             dz=widths[2],
         )
 
-    # ------------------------------------------------------------ properties
     @property
     def n_nodes(self) -> int:
         return self._g.n_nodes
@@ -257,7 +252,6 @@ class Geometry:
         """Node index per flat lattice position, -1 where inactive."""
         return self._g.lattice_to_node
 
-    # --------------------------------------------------------------- methods
     def expand(self, node_values: np.ndarray, fill: float = np.nan) -> np.ndarray:
         """Scatter a per-node array back onto the ``(nz, ny, nx)`` lattice.
 

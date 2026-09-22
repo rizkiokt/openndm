@@ -15,6 +15,9 @@ from .xslib import XSLibrary
 
 __all__ = ["BoronSearchResult", "Model", "Result"]
 
+_SECANT_SEED_STEP_PPM = 100.0
+"""Offset from the initial guess to the second point of the secant, in ppm."""
+
 
 class Result:
     """Results of one solve.
@@ -28,7 +31,6 @@ class Result:
         self._geom = geometry
         self._lib = library
 
-    # ------------------------------------------------------------- scalars
     @property
     def k_eff(self) -> float:
         return self._raw.k_eff
@@ -50,7 +52,6 @@ class Result:
     def kernel(self) -> str:
         return self._raw.kernel
 
-    # -------------------------------------------------------------- arrays
     @property
     def flux(self) -> np.ndarray:
         """Scalar flux, shape ``(n_nodes, n_groups)``."""
@@ -85,7 +86,6 @@ class Result:
             )
         return out
 
-    # ---------------------------------------------------- derived quantities
     def power_lattice(self) -> np.ndarray:
         """Node power scattered onto the ``(nz, ny, nx)`` lattice."""
         return self._geom.expand(self.power)
@@ -291,7 +291,6 @@ class Model:
         self._solver = _core.Solver(geometry._g, library._lib)
         self._last_result: Result | None = None
 
-    # ---------------------------------------------------------------- solves
     def solve(self, settings: Settings | None = None, **overrides) -> Result:
         """Run a static eigenvalue solve (FR-MODE-1, FR-MODE-2).
 
@@ -349,7 +348,6 @@ class Model:
             self.library,
         )
 
-    # ------------------------------------------------------------ parametric
     def search_boron(
         self,
         apply_boron: Callable[[XSLibrary, float], None],
@@ -388,7 +386,8 @@ class Model:
         Raises
         ------
         ConvergenceError
-            If ``max_iterations`` is reached without meeting ``tolerance``.
+            If ``max_iterations`` is reached without meeting ``tolerance``, or
+            if two evaluations return the same eigenvalue.
         """
         lo, hi = bracket
         if not lo <= guess <= hi:
@@ -407,48 +406,19 @@ class Model:
         if abs(f0) < tolerance:
             return BoronSearchResult(guess, r0, 1, history)
 
-        # A second point one hundred ppm away seeds the secant; the sign of the
-        # first residual chooses the direction that should move k toward target.
-        x0, x1 = guess, min(max(guess + (100.0 if f0 > 0 else -100.0), lo), hi)
+        k_is_above_target = f0 > 0
+        toward_target = (
+            _SECANT_SEED_STEP_PPM if k_is_above_target else -_SECANT_SEED_STEP_PPM
+        )
+        x0, x1 = guess, min(max(guess + toward_target, lo), hi)
         f1, r1 = evaluate(x1)
 
         for iteration in range(2, max_iterations + 1):
             if abs(f1) < tolerance:
                 return BoronSearchResult(x1, r1, iteration, history)
             if f1 == f0:
-                # Two evaluations gave the same eigenvalue, so the secant step
-                # is undefined. The usual cause is not an insensitive model but
-                # an unreachable target: the search walks to a bracket edge,
-                # gets clamped, and evaluates the same concentration twice.
-                # Saying so is far more useful than reporting insensitivity.
-                observed = [k for _, k in history]
-                low, high = min(observed), max(observed)
-                if high - low < 1.0e-12:
-                    raise ConvergenceError(
-                        f"k_eff did not respond to boron at all: it stayed at "
-                        f"{high:.6f} across {len(history)} concentrations "
-                        f"between {history[0][0]:.1f} and {history[-1][0]:.1f} "
-                        f"ppm. Check that apply_boron mutates the library it "
-                        f"is handed and re-finalizes it.",
-                        iterations=iteration,
-                        residual=abs(f1),
-                    )
-                if not low <= target_k <= high:
-                    raise ConvergenceError(
-                        f"k_eff = {target_k} is not reachable within the "
-                        f"bracket {bracket} ppm: over {len(history)} "
-                        f"evaluations k_eff stayed between {low:.6f} and "
-                        f"{high:.6f}. Widen the bracket, or check that boron "
-                        f"moves k_eff in the direction you expect.",
-                        iterations=iteration,
-                        residual=abs(f1),
-                    )
-                raise ConvergenceError(
-                    f"boron search stalled: k_eff did not change between "
-                    f"{x0:.1f} and {x1:.1f} ppm. Check that apply_boron "
-                    f"mutates the library it is handed and re-finalizes it.",
-                    iterations=iteration,
-                    residual=abs(f1),
+                raise _stalled_search_error(
+                    history, x0, x1, target_k, bracket, iteration, abs(f1)
                 )
             x2 = x1 - f1 * (x1 - x0) / (f1 - f0)
             if not lo <= x2 <= hi or not np.isfinite(x2):
@@ -456,11 +426,7 @@ class Model:
             x0, f0 = x1, f1
             x1 = x2
             f1, r1 = evaluate(x1)
-            # Keep the bracket honest so the bisection fallback stays valid.
-            if f1 > 0:
-                lo = max(lo, x1) if f0 < 0 else lo
-            else:
-                hi = min(hi, x1) if f0 > 0 else hi
+            lo, hi = _tightened_bracket(lo, hi, x1, f0, f1)
 
         raise ConvergenceError(
             f"boron search did not reach k_eff = {target_k} in "
@@ -552,9 +518,9 @@ class Model:
         scatter = library.array("scatter")[compositions]
 
         residual = removal * flux * volume[:, None]
-        # In-scatter, excluding the within-group term which never leaves.
-        in_scatter = np.einsum("nij,ni->nj", scatter, flux)
-        in_scatter -= np.einsum("nii,ni->ni", scatter, flux)
+        scattered_into_group = np.einsum("nij,ni->nj", scatter, flux)
+        stayed_within_group = np.einsum("nii,ni->ni", scatter, flux)
+        in_scatter = scattered_into_group - stayed_within_group
         residual -= in_scatter * volume[:, None]
         fission = np.einsum("ng,ng->n", nu_fission, flux)
         residual -= chi * (fission / result.k_eff)[:, None] * volume[:, None]
@@ -571,8 +537,6 @@ class Model:
         scale = np.maximum(np.abs(scale), np.abs(scale).max() * 1.0e-12)
         return residual / scale
 
-    # --------------------------------------------------------- manipulation
-    # ------------------------------------------------------------- transient
     def start_transient(self, settings: Settings | None = None, **overrides):
         """Begin a time-dependent solve from the converged static solution.
 
@@ -641,7 +605,6 @@ class Model:
             self.geometry.set_composition(na, int(cb))
             self.geometry.set_composition(nb, int(ca))
 
-    # ---------------------------------------------------------------- utils
     def _require_finalized(self) -> None:
         """Refuse to solve a library that has been mutated since finalizing.
 
@@ -679,3 +642,55 @@ class Model:
             f"<Model {self.geometry!r} {self.library!r} "
             f"kernel={self.settings.kernel!r}>"
         )
+
+
+def _tightened_bracket(lo, hi, x, f_previous, f_current):
+    """Narrow the search bracket onto the side the root is now known to be on.
+
+    The secant method does not maintain a bracket of its own, so the bisection
+    fallback it takes on a step outside the bracket is only valid while the
+    bracket still straddles the root.
+    """
+    if f_current > 0:
+        return (max(lo, x) if f_previous < 0 else lo), hi
+    return lo, (min(hi, x) if f_previous > 0 else hi)
+
+
+def _stalled_search_error(history, x0, x1, target_k, bracket, iteration, residual):
+    """Explain a secant step that two equal eigenvalues left undefined.
+
+    The usual cause is not an insensitive model but an unreachable target: the
+    search walks to a bracket edge, gets clamped, and evaluates the same
+    concentration twice. Which of the three it is follows from the spread of
+    the eigenvalues seen so far, and saying so is far more useful to the
+    caller than reporting insensitivity.
+    """
+    observed = [k for _, k in history]
+    low, high = min(observed), max(observed)
+    if high - low < 1.0e-12:
+        return ConvergenceError(
+            f"k_eff did not respond to boron at all: it stayed at "
+            f"{high:.6f} across {len(history)} concentrations "
+            f"between {history[0][0]:.1f} and {history[-1][0]:.1f} "
+            f"ppm. Check that apply_boron mutates the library it "
+            f"is handed and re-finalizes it.",
+            iterations=iteration,
+            residual=residual,
+        )
+    if not low <= target_k <= high:
+        return ConvergenceError(
+            f"k_eff = {target_k} is not reachable within the "
+            f"bracket {bracket} ppm: over {len(history)} "
+            f"evaluations k_eff stayed between {low:.6f} and "
+            f"{high:.6f}. Widen the bracket, or check that boron "
+            f"moves k_eff in the direction you expect.",
+            iterations=iteration,
+            residual=residual,
+        )
+    return ConvergenceError(
+        f"boron search stalled: k_eff did not change between "
+        f"{x0:.1f} and {x1:.1f} ppm. Check that apply_boron "
+        f"mutates the library it is handed and re-finalizes it.",
+        iterations=iteration,
+        residual=residual,
+    )

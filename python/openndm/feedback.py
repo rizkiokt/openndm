@@ -22,8 +22,8 @@ from .exceptions import InputError
 
 __all__ = ["DopplerFeedback"]
 
-#: Cross section fields the model may scale.
 _FIELDS = ("absorption", "nu_fission", "kappa_fission")
+"""Cross section fields the model may scale."""
 
 
 class DopplerFeedback:
@@ -111,12 +111,8 @@ class DopplerFeedback:
                 if not 0 <= g < n_groups:
                     raise InputError(f"group {g} is outside the library's {n_groups}")
 
-        # Snapshot every field, not just the scaled one: set_composition
-        # writes a whole composition, so the others have to be handed back
-        # unchanged or they revert to zero.
         self._base = {index: self._snapshot(index) for index in self._compositions}
 
-    # ------------------------------------------------------------ properties
     @property
     def compositions(self) -> tuple[int, ...]:
         return self._compositions
@@ -125,7 +121,6 @@ class DopplerFeedback:
     def groups(self) -> tuple[int, ...]:
         return self._groups
 
-    # --------------------------------------------------------------- methods
     def factor(self, temperature: float) -> float:
         """The multiplier at one temperature."""
         if not (temperature >= 0.0):
@@ -182,6 +177,12 @@ class DopplerFeedback:
         self._library.finalize(warn=False)
 
     def _snapshot(self, index: int) -> dict[str, np.ndarray]:
+        """Copy every field of one composition, not only the scaled ones.
+
+        ``set_composition`` writes a whole composition, so the fields this
+        model never touches still have to be handed back unchanged or they
+        revert to zero.
+        """
         composition = self._library.composition(index)
         return {
             name: np.asarray(getattr(composition, name), dtype=float).copy()

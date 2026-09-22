@@ -17,8 +17,8 @@ from .exceptions import InputError
 
 __all__ = ["STATEPOINT_FORMAT_VERSION", "StatePoint", "write_statepoint"]
 
-#: Layout version of the statepoint file.
 STATEPOINT_FORMAT_VERSION = 1
+"""Layout version of the statepoint file."""
 
 _FILETYPE = "openndm_statepoint"
 
@@ -119,7 +119,6 @@ class StatePoint:
                 f"(this build reads version {STATEPOINT_FORMAT_VERSION})"
             )
 
-    # ------------------------------------------------------------- metadata
     @property
     def k_eff(self) -> float:
         return float(self._f.attrs["k_eff"])
@@ -144,7 +143,6 @@ class StatePoint:
     def date_and_time(self) -> str:
         return self._f.attrs["date_and_time"].decode()
 
-    # -------------------------------------------------------------- results
     @property
     def flux(self) -> np.ndarray:
         return self._f["results/flux"][()]
@@ -181,7 +179,6 @@ class StatePoint:
     def lattice_shape(self) -> tuple[int, int, int]:
         return tuple(int(v) for v in self._f["geometry"].attrs["lattice_shape"])
 
-    # --------------------------------------------------------------- lifecyle
     def close(self) -> None:
         self._f.close()
 

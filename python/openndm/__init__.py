@@ -31,9 +31,6 @@ from .exceptions import (
     LibraryError,
     OpenNDMError,
 )
-
-# The exception module must be importable before the extension loads, because
-# the extension resolves ConvergenceError out of it.
 from .feedback import DopplerFeedback
 from .geometry import INACTIVE, Geometry
 from .model import BoronSearchResult, Model, Result, Transient, TransientStep
@@ -83,7 +80,10 @@ __all__ = [
 
 
 def __getattr__(name):
-    # Import openndm.gc lazily so that `import openndm` never pulls in OpenMC.
+    """Import ``openndm.gc`` only when it is asked for (FR-OMC-14).
+
+    Importing it eagerly would make ``import openndm`` pull in OpenMC.
+    """
     if name == "gc":
         import importlib
 
