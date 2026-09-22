@@ -34,6 +34,32 @@ double sum(const std::vector<double>& v)
   return t;
 }
 
+//! Reciprocal shift that puts the in-group fission term on the diagonal.
+//!
+//! This is what makes a fixed-source solve a subcritical multiplication
+//! operator rather than a pure absorber; see docs/theory.md section 6.
+constexpr double kSubcriticalMultiplication = 1.0;
+
+//! Largest node-wise change in a fission source between two outers.
+//!
+//! Each source is normalised to unit mean first, so the criterion does not
+//! depend on how the flux happens to be scaled (FR-SOL-6).
+double node_wise_source_change(const std::vector<double>& source_new,
+    const std::vector<double>& source_old, double s_new, double s_old)
+{
+  constexpr double kSourceFloor = 1.0e-12;
+  const std::size_t n = source_new.size();
+  const double scale_new = static_cast<double>(n) / s_new;
+  const double scale_old = static_cast<double>(n) / s_old;
+  double largest = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    const double a = source_new[i] * scale_new;
+    const double b = source_old[i] * scale_old;
+    if (a > kSourceFloor) largest = std::max(largest, std::abs(a - b) / a);
+  }
+  return largest;
+}
+
 }  // namespace
 
 Solver::Solver(const Geometry& geom, const XSLibrary& xs)
@@ -44,6 +70,21 @@ Solver::Solver(const Geometry& geom, const XSLibrary& xs)
 }
 
 Solver::~Solver() = default;
+
+void Solver::normalise_to_unit_mean_flux()
+{
+  const int G = xs_.n_groups();
+  const auto& nodes = geom_.nodes();
+  double integral = 0.0;
+  for (int i = 0; i < geom_.n_nodes(); ++i) {
+    for (int g = 0; g < G; ++g) {
+      integral += flux_[static_cast<std::size_t>(i) * G + g] *
+                  nodes[static_cast<std::size_t>(i)].volume;
+    }
+  }
+  const double norm = (integral > 0.0) ? geom_.total_volume() / integral : 1.0;
+  for (auto& f : flux_) f *= norm;
+}
 
 void Solver::reset()
 {
@@ -57,9 +98,6 @@ void Solver::reset()
   has_solution_ = false;
   flux_.clear();
   k_eff_ = 1.0;
-  // Cross sections may have been mutated in place since the last solve, for
-  // instance by a boron search, so the cached per-node data is refreshed
-  // before the coupling that depends on it is rebuilt.
   cmfd_.refresh_cross_sections();
   cmfd_.build_coupling();
 }
@@ -76,8 +114,6 @@ Result Solver::solve(const Settings& settings)
   const int G = xs_.n_groups();
   const std::size_t size = static_cast<std::size_t>(n) * G;
 
-  // An adjoint run reuses the nonlinear coupling from a forward solve, so a
-  // cold adjoint request runs the forward problem first (see set_adjoint).
   if (settings.mode == SolveMode::adjoint && !cmfd_.adjoint()) {
     if (settings.kernel != KernelType::fdm && !has_solution_) {
       Settings forward = settings;
@@ -94,9 +130,6 @@ Result Solver::solve(const Settings& settings)
   if (!settings.warm_start || !has_solution_ || flux_.size() != size) {
     flux_.assign(size, 1.0);
     k_eff_ = 1.0;
-    // Discard the nonlinear correction as well, so that a cold solve of the
-    // same model always retraces the same iteration path. An adjoint run is
-    // the exception: it needs the Dhat converged by the forward solve.
     if (!cmfd_.adjoint()) cmfd_.build_coupling();
   }
 
@@ -118,10 +151,6 @@ Result Solver::solve(const Settings& settings)
   double k = k_eff_;
   int total_inner = 0;
 
-  // The two-node kernels solve the forward transverse-integrated problem, so
-  // running them against an adjoint flux would produce meaningless coupling
-  // corrections. The adjoint instead keeps the Dhat converged by the forward
-  // solve, which is exactly the transpose of the corrected forward operator.
   const bool update_nodal = !kernel->is_finite_difference() && !cmfd_.adjoint();
 
   for (int outer = 1; outer <= settings.max_outer; ++outer) {
@@ -149,18 +178,8 @@ Result Solver::solve(const Settings& settings)
         inv_shift + (1.0 / k - inv_shift) * (s_old / s_new);
     k = 1.0 / inv_k_new;
 
-    // Node-wise fission source change, on a source normalised to unit mean so
-    // that the criterion is independent of the flux normalisation (FR-SOL-6).
-    double src_change = 0.0;
-    const double scale_new = static_cast<double>(n) / s_new;
-    const double scale_old = static_cast<double>(n) / s_old;
-    for (int i = 0; i < n; ++i) {
-      const double a = source_new[static_cast<std::size_t>(i)] * scale_new;
-      const double b = source_old[static_cast<std::size_t>(i)] * scale_old;
-      if (a > 1.0e-12) {
-        src_change = std::max(src_change, std::abs(a - b) / a);
-      }
-    }
+    const double src_change =
+        node_wise_source_change(source_new, source_old, s_new, s_old);
 
     IterationRecord rec;
     rec.outer = outer;
@@ -201,17 +220,7 @@ Result Solver::solve(const Settings& settings)
         result.outer_iterations, last);
   }
 
-  // Normalise the flux so that the volume-averaged total flux is one, which
-  // makes results comparable between meshes and between runs.
-  double integral = 0.0;
-  for (int i = 0; i < n; ++i) {
-    for (int g = 0; g < G; ++g) {
-      integral += flux_[static_cast<std::size_t>(i) * G + g] *
-                  geom_.nodes()[static_cast<std::size_t>(i)].volume;
-    }
-  }
-  const double norm = (integral > 0.0) ? geom_.total_volume() / integral : 1.0;
-  for (auto& f : flux_) f *= norm;
+  normalise_to_unit_mean_flux();
 
   result.k_eff = k;
   result.flux = flux_;
@@ -245,10 +254,7 @@ Result Solver::solve_fixed_source(
   Result result;
   result.kernel = kernel->name();
 
-  // Assembling at a reciprocal shift of one puts the in-group fission term on
-  // the diagonal, which is what makes this a subcritical multiplication
-  // operator rather than a pure absorber.
-  cmfd_.assemble(1.0);
+  cmfd_.assemble(kSubcriticalMultiplication);
   double previous = 0.0;
   for (int outer = 1; outer <= settings.max_outer; ++outer) {
     if (!kernel->is_finite_difference() && outer >= settings.nodal_start &&
@@ -322,15 +328,11 @@ void Solver::compute_power(std::vector<double>& power) const
       ++n_fuel;
     }
   }
-  // Relative power, normalised to a mean of one over the powered nodes, which
-  // is the convention peaking factors are quoted against (FR-OUT-3).
   if (total > 0.0 && n_fuel > 0) {
     const double norm = static_cast<double>(n_fuel) / total;
     for (auto& p : power) p *= norm;
   }
 }
-
-// ---------------------------------------------------------------- transient
 
 double Solver::chi_delayed(int node, int g, int d) const
 {
@@ -340,9 +342,6 @@ double Solver::chi_delayed(int node, int g, int d) const
       delayed.n_precursors() * G) {
     return delayed.chi_delayed[static_cast<std::size_t>(d) * G + g];
   }
-  // No delayed spectrum supplied: delayed neutrons are born with the same
-  // spectrum as prompt ones. That is exact for a one-group problem and an
-  // approximation for any other, which is why FR-XS-3 stores chi_delayed.
   return cmfd_.chi(node, g);
 }
 
@@ -389,8 +388,6 @@ void Solver::time_derivative(const std::vector<double>& flux,
   const DelayedData& delayed = xs_.delayed();
   const double beta = delayed.beta_total();
 
-  // The assembled operator carries leakage, removal and, during a step, the
-  // time term. Subtracting the time term leaves the static operator.
   std::vector<double> applied;
   cmfd_.apply_operator(flux, applied);
 
@@ -445,11 +442,6 @@ void Solver::start_transient(const Settings& settings)
   }
   precursors_->set_equilibrium(fission_norm_);
 
-  // The explicit half of the theta scheme needs the derivative as it stands
-  // now. At a converged critical steady state it is zero analytically, and
-  // evaluating it rather than assuming it turns any inconsistency between
-  // the static operator and the transient one into a visible null-transient
-  // drift rather than a silent bias.
   cmfd_.set_time_removal(0.0);
   cmfd_.set_transient_chi({});
   cmfd_.set_transient_source({});
@@ -494,12 +486,6 @@ TransientRecord Solver::step(double dt, const Settings& settings)
   cmfd_.refresh_coupling();
 
   if (theta < 1.0) {
-    // Evaluate the explicit half against the cross sections this step runs
-    // with, not the ones the previous step ended with. A perturbation applied
-    // between steps belongs to this interval, and using the stale operator
-    // injects a local O(1) error at the step where it changes -- one step, so
-    // O(dt) overall, which silently drags Crank-Nicolson down to first order
-    // while leaving theta = 1 untouched because it never reads this term.
     cmfd_.set_time_removal(0.0);
     cmfd_.set_transient_chi({});
     cmfd_.set_transient_source({});
@@ -511,9 +497,6 @@ TransientRecord Solver::step(double dt, const Settings& settings)
 
   cmfd_.set_time_removal(theta * dt);
 
-  // The analytic precursor solution is linear in the new fission source, so
-  // its implicit part is an extra fission spectrum rather than an iteration:
-  //   chi_eff = chi_p (1 - beta) + sum_d lambda_d chi_d beta_d I1_d / dt
   std::vector<double> chi_eff(static_cast<std::size_t>(n) * G, 0.0);
   std::vector<double> known(static_cast<std::size_t>(n) * G, 0.0);
   std::vector<double> decay(static_cast<std::size_t>(D));
@@ -553,21 +536,12 @@ TransientRecord Solver::step(double dt, const Settings& settings)
   cmfd_.set_transient_source(known);
   cmfd_.assemble(0.0);
 
-  // The nonlinear nodal coupling coefficients are not re-converged inside a
-  // step: Dhat is held at the value the static solve left. The two-node
-  // problem would have to carry the time and delayed terms to be consistent
-  // here, and that is a separate piece of work. For FDM there is nothing to
-  // freeze; for the nodal kernels this is an approximation that grows with
-  // how far the flux shape moves from the static one.
   std::vector<double> previous = flux_;
   std::vector<double> source(static_cast<std::size_t>(n));
   TransientRecord record;
   record.dt = dt;
 
   for (int iter = 1; iter <= settings.max_step_iterations; ++iter) {
-    // solve_groups scales the fission source by 1/k_eff, so passing the raw
-    // source with k_eff = k_static applies the criticality normalisation
-    // exactly once.
     cmfd_.fission_source(flux_, source);
     record.inner_iterations +=
         cmfd_.solve_groups(source, k_static_, 0.0, flux_, settings);
@@ -586,9 +560,6 @@ TransientRecord Solver::step(double dt, const Settings& settings)
     }
   }
 
-  // Advance the precursors across the step with the fission source running
-  // linearly from its old value to the new one, which is the assumption the
-  // effective spectrum above was built on.
   std::vector<double> fission_new(static_cast<std::size_t>(n));
   cmfd_.fission_source(flux_, source);
   for (int i = 0; i < n; ++i) {
