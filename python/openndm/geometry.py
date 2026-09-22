@@ -20,6 +20,8 @@ _BC = {
     "albedo": _core.BoundaryType.albedo,
 }
 _FACES = ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max")
+_AXIS_NAMES = ("x", "y", "axial")
+_AXIS_SLICES = ("column", "row", "plane")
 
 
 def _boundary(value):
@@ -42,10 +44,14 @@ class Geometry:
     a hexagonal builder be added later without touching them (FR-GEO-6).
     """
 
-    def __init__(self, core: _core.Geometry, *, shape=None, dz=None):
+    def __init__(self, core: _core.Geometry, *, shape=None, dx=None, dy=None,
+                 dz=None):
         self._g = core
         self._shape = shape or core.lattice_shape
-        self._dz = None if dz is None else np.asarray(dz, dtype=float)
+        self._widths = [
+            None if w is None else np.asarray(w, dtype=float)
+            for w in (dx, dy, dz)
+        ]
 
     @classmethod
     def from_lattice(
@@ -195,6 +201,8 @@ class Geometry:
         return cls(
             _core.Geometry.from_cartesian(spec),
             shape=(nz, ny, nx),
+            dx=widths[0],
+            dy=widths[1],
             dz=widths[2],
         )
 
@@ -235,6 +243,16 @@ class Geometry:
         return self._g.rotations
 
     @property
+    def dx(self) -> np.ndarray:
+        """Node widths along x in cm, one per column of ``shape[2]``."""
+        return self._width(0)
+
+    @property
+    def dy(self) -> np.ndarray:
+        """Node widths along y in cm, one per row of ``shape[1]``."""
+        return self._width(1)
+
+    @property
     def dz(self) -> np.ndarray:
         """Axial node widths in cm, one per plane of ``shape[0]``.
 
@@ -243,9 +261,7 @@ class Geometry:
         them wrong as soon as ``subdivide`` is used: the widths here are the
         post-subdivision ones.
         """
-        if self._dz is None:
-            self._dz = self._derive_dz()
-        return self._dz
+        return self._width(2)
 
     @property
     def lattice_to_node(self) -> np.ndarray:
@@ -268,21 +284,27 @@ class Geometry:
         out[active] = values[mapping[active]]
         return out.reshape(self.shape + values.shape[1:])
 
-    def _derive_dz(self) -> np.ndarray:
-        """Recover the axial widths from the node graph.
+    def _width(self, axis: int) -> np.ndarray:
+        if self._widths[axis] is None:
+            self._widths[axis] = self._derive_widths(axis)
+        return self._widths[axis]
+
+    def _derive_widths(self, axis: int) -> np.ndarray:
+        """Recover one axis's node widths from the node graph.
 
         Only reached for a Geometry built straight from a ``_core.Geometry``
         rather than through :meth:`from_lattice`, which records them.
         """
-        dz = np.zeros(self.shape[0], dtype=float)
+        widths = np.zeros(self.shape[2 - axis], dtype=float)
         for node in self._g.nodes:
-            dz[node.ijk[2]] = node.width[2]
-        if np.any(dz <= 0.0):
+            widths[node.ijk[axis]] = node.width[axis]
+        if np.any(widths <= 0.0):
             raise ValueError(
-                "could not recover the axial mesh: plane(s) "
-                f"{np.flatnonzero(dz <= 0.0).tolist()} have no active node"
+                f"could not recover the {_AXIS_NAMES[axis]} mesh: "
+                f"{_AXIS_SLICES[axis]}(s) "
+                f"{np.flatnonzero(widths <= 0.0).tolist()} have no active node"
             )
-        return dz
+        return widths
 
     def set_composition(self, node: int, composition: int) -> None:
         """Reassign one node's composition in place (FR-OPT-7)."""

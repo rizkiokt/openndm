@@ -8,6 +8,25 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **VTK export for 3D visualisation** (FR-OUT-6). `openndm.write_vtk` writes
+  the serial XML unstructured grid ParaView reads, one hexahedral cell per
+  active node on the real Cartesian mesh — non-uniform widths and whatever
+  `subdivide` produced, not the lattice. Cell data is `power`, `flux_g1` to
+  `flux_gG` and `composition`, with `k_eff` as field data.
+
+  **An out-of-core position gets no cell**, rather than a cell carrying zero.
+  In a plot those two are indistinguishable, which is exactly how a wrong core
+  map goes unnoticed. A reflector node is not out of core and is written,
+  powerless or not.
+
+  No new dependency. The format is plain XML and is written directly, so the
+  package still imports without VTK, the way FR-OMC-14 requires of OpenMC.
+
+- `Geometry.dx` and `Geometry.dy`, alongside the existing `Geometry.dz`. All
+  three are recorded by `from_lattice` and recovered from the node graph
+  otherwise, so a caller needing the mesh gets the post-subdivision widths
+  rather than reconstructing them from its own input.
+
 - **Thermal-hydraulic coupling interface, Picard driver and field mapping**
   (FR-TH-6, FR-TH-7), in `openndm.thermal`. No physics: the shape of the
   coupling only, so that a v1.1 external solver attaches without touching the

@@ -16,6 +16,7 @@ OpenMC-dependent group constant generation path and is imported explicitly.
    thermal
    settings
    statepoint
+   vtk
    plots
    exceptions
    gc
