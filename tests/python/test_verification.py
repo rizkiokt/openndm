@@ -37,17 +37,18 @@ def test_v1_bare_cuboid_matches_analytic_buckling(kernel, tight):
     assert abs(error_pcm) < 5.0, f"{kernel}: {error_pcm:+.2f} pcm from analytic"
 
 
-#: Lower bound on the observed spatial convergence order per kernel. FDM is
-#: second order by construction. The nodal kernels are exact inside a node, so
-#: their residual error comes from the finite difference treatment of the
-#: outer boundary faces and converges faster; they are held to a floor rather
-#: than to a band.
-EXPECTED_ORDER = {"fdm": (1.8, 2.3), "nem": (1.8, 4.0), "sanm": (1.8, 4.0)}
+EXPECTED_ORDER = {"fdm": (1.8, 2.3), "nem": (3.5, 5.0), "sanm": (3.5, 5.0)}
 
 
 @pytest.mark.parametrize("kernel", ALL_KERNELS)
 def test_v2_spatial_convergence_order(kernel, tight):
-    """V-2: refining the mesh reduces the error at the expected order."""
+    """V-2: refining the mesh reduces the error at the expected order.
+
+    FDM is second order by construction. The nodal kernels are exact inside a
+    node and, since the one-node boundary problem closed the outer faces, no
+    longer carry a second-order term from them either; what is left is the
+    quadratic transverse leakage fit, and they run at fourth order.
+    """
     side = 100.0
     reference = analytic_k(side=side, **ONE_GROUP)
     errors = []
@@ -87,9 +88,9 @@ def test_v1_nodal_kernels_beat_finite_difference(kernel, tight):
 IAEA_2D_CONVERGED = 1.0295271
 
 #: Tolerance in pcm on how far a nodal kernel may sit from the converged
-#: eigenvalue when run at one node per assembly. Measured: SANM +3.7, NEM
-#: -110.4.
-COARSE_MESH_TOLERANCE = {"sanm": 10.0, "nem": 150.0}
+#: eigenvalue when run at one node per assembly. Measured: SANM +27.8, NEM
+#: -83.7.
+COARSE_MESH_TOLERANCE = {"sanm": 35.0, "nem": 100.0}
 
 
 @pytest.fixture(scope="module")
@@ -406,8 +407,21 @@ def test_mirroring_the_core_mirrors_the_power(tight):
 
 
 # --------------------------------------------------------- neutron balance
+#: The balance residual is bounded by the looser of the inner and outer
+#: criteria, so it measures the iteration rather than the discretisation
+#: unless both are driven well below the threshold asserted.
+BALANCE_TIGHT = openndm.Settings(
+    verbosity=0,
+    k_tolerance=1.0e-12,
+    fission_source_tolerance=1.0e-12,
+    inner_tolerance=1.0e-12,
+    max_inner=2000,
+    max_outer=5000,
+)
+
+
 @pytest.mark.parametrize("kernel", ALL_KERNELS)
-def test_node_neutron_balance_closes(kernel, tight):
+def test_node_neutron_balance_closes(kernel):
     """Every node must conserve neutrons to the iteration tolerance.
 
     The standard internal consistency check for a nodal code. It fails on a
@@ -415,7 +429,7 @@ def test_node_neutron_balance_closes(kernel, tight):
     condition applied to the wrong face, none of which need move k_eff far
     enough to be obvious.
     """
-    model = openndm.Model(iaea_geometry(planes=4), iaea_library(), tight)
+    model = openndm.Model(iaea_geometry(planes=4), iaea_library(), BALANCE_TIGHT)
     model.solve(kernel=kernel)
     residual = np.abs(model.neutron_balance())
     assert residual.max() < 1.0e-8, residual.max()

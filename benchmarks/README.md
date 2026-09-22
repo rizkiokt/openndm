@@ -25,45 +25,58 @@ the eigenvalue iteration together.
 
 ```
 nodes/side                     FDM                     NEM                    SANM
-         4  1.20755774 (+217.04 pcm)  1.20743391 (+204.65 pcm)  1.20743465 (+204.73 pcm)
-         8  1.20593766 ( +55.03 pcm)  1.20566957 ( +28.22 pcm)  1.20566959 ( +28.22 pcm)
-        16  1.20552544 ( +13.81 pcm)  1.20542229 (  +3.49 pcm)  1.20542229 (  +3.49 pcm)
-        32  1.20542193 (  +3.45 pcm)  1.20539167 (  +0.43 pcm)  1.20539167 (  +0.43 pcm)
-        64  1.20539603 (  +0.86 pcm)  1.20538792 (  +0.05 pcm)  1.20538792 (  +0.05 pcm)
+         4  1.20755774 (+217.04 pcm)  1.20643446 (+104.71 pcm)  1.20643571 (+104.83 pcm)
+         8  1.20593766 ( +55.03 pcm)  1.20543889 (  +5.15 pcm)  1.20543890 (  +5.15 pcm)
+        16  1.20552544 ( +13.81 pcm)  1.20539000 (  +0.26 pcm)  1.20539000 (  +0.26 pcm)
+        32  1.20542193 (  +3.45 pcm)  1.20538753 (  +0.01 pcm)  1.20538753 (  +0.01 pcm)
+        64  1.20539603 (  +0.86 pcm)  1.20538740 (  +0.00 pcm)  1.20538740 (  +0.00 pcm)
 ```
 
 FDM converges at exactly second order, the error falling by 4× per
-refinement. NEM and SANM agree with each other to 1e-8 throughout and are
-about 4× more accurate than FDM at the same mesh, limited by the finite
-difference treatment of the outer boundary faces rather than by the node
-interior.
+refinement. NEM and SANM agree with each other to 1e-8 throughout and
+converge at **fourth** order, the error falling by about 20× per refinement:
+at 32 nodes per side they are 0.01 pcm out where FDM is 3.45.
+
+This problem is the one that pins the boundary treatment, because its entire
+remaining error used to live there. While boundary faces kept a finite
+difference coupling the nodal kernels ran at third order and were only about
+4× better than FDM. The one-node boundary problem and the linear transverse
+leakage fit at boundary nodes are what removed that term.
 
 ## iaea2d — published reference 1.02959
 
 ```
 nodes/asm  nodes                       FDM                     NEM                    SANM
-        1     75   1.033324 ( +373.4 pcm) 1.028412 ( -117.8 pcm) 1.029553 (   -3.7 pcm)
-        2    300   1.029580 (   -1.0 pcm) 1.029507 (   -8.3 pcm) 1.029560 (   -3.0 pcm)
-        4   1200   1.029088 (  -50.2 pcm) 1.029527 (   -6.3 pcm) 1.029528 (   -6.2 pcm)
-        8   4800   1.029331 (  -25.9 pcm) 1.029528 (   -6.2 pcm) 1.029528 (   -6.2 pcm)
+        1     75   1.033324 ( +373.4 pcm) 1.028690 (  -90.0 pcm) 1.029805 (  +21.5 pcm)
+        2    300   1.029580 (   -1.0 pcm) 1.029541 (   -4.9 pcm) 1.029594 (   +0.4 pcm)
+        4   1200   1.029088 (  -50.2 pcm) 1.029530 (   -6.0 pcm) 1.029530 (   -6.0 pcm)
+        8   4800   1.029331 (  -25.9 pcm) 1.029527 (   -6.3 pcm) 1.029527 (   -6.3 pcm)
        16  19200   1.029470 (  -12.0 pcm) 1.029527 (   -6.3 pcm) 1.029527 (   -6.3 pcm)
        24  43200   1.029501 (   -8.9 pcm) 1.029527 (   -6.3 pcm) 1.029527 (   -6.3 pcm)
 ```
 
-The headline nodal result is the top-right cell. **SANM at one node per
-assembly — a 20 cm mesh — lands 2.6 pcm from the mesh-converged eigenvalue
-and 3.7 pcm from the published reference.** That is what a nodal method is
-for, and it is what a broken transverse leakage, discontinuity factor
-convention or two-node closure would destroy.
+**SANM at two nodes per assembly lands 0.4 pcm from the published reference
+and 0.7 pcm from the mesh-converged eigenvalue**, and NEM 4.9. That is what a
+nodal method is for, and it is what a broken transverse leakage,
+discontinuity factor convention or two-node closure would destroy.
 
-Two things in this table are worth reading carefully.
+Three things in this table are worth reading carefully.
 
-**SANM and NEM converge to 1.0295271 and stay there** from four nodes per
-assembly onward, agreeing with each other to 0.08 pcm. The two kernels share
-only the transverse leakage fit: NEM closes its two-node problem with quartic
-polynomials, two moment equations and the coarse-mesh outer-face currents,
-while SANM uses analytic basis functions and the node-average constraint
-alone. They have no reason to agree to that precision unless both are right.
+**SANM and NEM converge to 1.029527 and stay there** from four nodes per
+assembly onward, agreeing with each other to the last digit printed. The two
+kernels share only the transverse leakage fit: NEM closes its two-node
+problem with quartic polynomials, two moment equations and the coarse-mesh
+outer-face currents, while SANM uses analytic basis functions and the
+node-average constraint alone. They have no reason to agree to that precision
+unless both are right.
+
+**The top-right cell is the one number this deck reports that got worse**
+when boundary faces stopped using a finite difference coupling: SANM at one
+node per assembly was 2.6 pcm from the converged value and is now 27.8. It
+was that close by cancellation, not by accuracy — the boundary error ran
+against the coarse-mesh reflector error on this particular problem, and 20 cm
+is a single node across a reflector. Every other cell in the nodal columns
+improved, NEM at two nodes per assembly by a factor of four.
 
 **FDM is non-monotone, and that is not a defect.** It starts 380 pcm high at
 20 cm, crosses the converged value between 10 and 5 cm, and then approaches
@@ -79,11 +92,11 @@ the cause.
 
 ```
  radial     dz   nodes                       FDM                     NEM                    SANM
-      1   20.0    1425   1.031928 ( +289.8 pcm) 1.028038 (  -99.2 pcm) 1.029477 (  +44.7 pcm)
-      1   10.0    2700   1.031776 ( +274.6 pcm) 1.028439 (  -59.1 pcm) 1.029347 (  +31.7 pcm)
-      1    5.0    5250   1.031719 ( +268.9 pcm) 1.028453 (  -57.7 pcm) 1.029341 (  +31.1 pcm)
-      2   10.0   10800   1.029138 (  +10.8 pcm) 1.029317 (  +28.7 pcm) 1.029390 (  +36.0 pcm)
-      2    5.0   21000   1.029062 (   +3.2 pcm) 1.029330 (  +30.0 pcm) 1.029383 (  +35.3 pcm)
+      1   20.0    1425   1.031928 ( +289.8 pcm) 1.028310 (  -72.0 pcm) 1.029722 (  +69.2 pcm)
+      1   10.0    2700   1.031776 ( +274.6 pcm) 1.028704 (  -32.6 pcm) 1.029590 (  +56.0 pcm)
+      1    5.0    5250   1.031719 ( +268.9 pcm) 1.028718 (  -31.2 pcm) 1.029585 (  +55.5 pcm)
+      2   10.0   10800   1.029138 (  +10.8 pcm) 1.029399 (  +36.9 pcm) 1.029472 (  +44.2 pcm)
+      2    5.0   21000   1.029062 (   +3.2 pcm) 1.029412 (  +38.2 pcm) 1.029465 (  +43.5 pcm)
 ```
 
 FDM stays near +270 pcm down the first three rows because those refine only
@@ -140,14 +153,14 @@ divisions make the node mesh uniform at 11.5613 cm, so it runs at 17x17.
 
 ```
 nodes/asm  nodes                       FDM                     NEM                    SANM
-        1    514   1.028516 ( +340.6 pcm) 1.024987 (  -12.3 pcm) 1.025089 (   -2.1 pcm)
-        2   2056   1.025826 (  +71.6 pcm) 1.025104 (   -0.6 pcm) 1.025107 (   -0.3 pcm)
-        4   8224   1.025243 (  +13.3 pcm) 1.025109 (   -0.1 pcm) 1.025109 (   -0.1 pcm)
+        1    514   1.028516 ( +340.6 pcm) 1.024993 (  -11.7 pcm) 1.025096 (   -1.4 pcm)
+        2   2056   1.025826 (  +71.6 pcm) 1.025105 (   -0.5 pcm) 1.025109 (   -0.1 pcm)
+        4   8224   1.025243 (  +13.3 pcm) 1.025110 (   -0.0 pcm) 1.025110 (   -0.0 pcm)
 ```
 
-All three kernels converge on the published eigenvalue to 0.1 pcm, and FDM
-gets there at second order — the error falls by roughly a factor of five per
-refinement. SANM is 2.1 pcm out at one node per assembly.
+All three kernels converge on the published eigenvalue, the nodal ones to
+0.05 pcm, and FDM gets there at second order — the error falls by roughly a
+factor of five per refinement. SANM is 1.4 pcm out at one node per assembly.
 
 ### This deck was attempted once before and not shipped
 

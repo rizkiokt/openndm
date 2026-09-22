@@ -30,6 +30,18 @@ constexpr int kA4Lo = 1;
 constexpr int kA3Hi = 2;
 constexpr int kA4Hi = 3;
 
+//! Row of the one-node boundary system carrying the boundary condition.
+constexpr int kBoundaryCondition = 0;
+
+//! Row carrying the coarse-mesh net current at the node's interior face,
+//! which is what the boundary problem has in place of the two continuity
+//! rows a shared interface provides.
+constexpr int kInteriorCurrent = 1;
+
+//! Unknowns of the one-node boundary system.
+constexpr int kA3 = 0;
+constexpr int kA4 = 1;
+
 //! Keep an effective removal away from zero, since the moment equations
 //! divide by it; see \c docs/theory.md 3.5.
 double floored_removal(double sr)
@@ -211,6 +223,108 @@ public:
     for (int g = 0; g < G; ++g) {
       const NodeExpansion& L = ex[static_cast<std::size_t>(g)];
       current[g] = -L.D_over_h * L.face_derivative(1.0);
+    }
+  }
+
+  bool has_boundary_problem() const override { return true; }
+
+  void solve_boundary(const OneNodeProblem& p, const XSLibrary& xs,
+      const std::vector<int>& composition, int G, int sweeps,
+      double* current) const override
+  {
+    const Composition& c =
+        xs.composition(composition[static_cast<std::size_t>(p.node)]);
+    const double inv_k = 1.0 / p.k_eff;
+    const double s = p.outward;
+
+    std::vector<NodeExpansion> ex(static_cast<std::size_t>(G));
+    std::vector<double> l1(static_cast<std::size_t>(G));
+    std::vector<double> l2(static_cast<std::size_t>(G));
+    std::vector<double> q_ext1(static_cast<std::size_t>(G), 0.0);
+    std::vector<double> q_ext2(static_cast<std::size_t>(G), 0.0);
+    std::vector<double> sr_eff(static_cast<std::size_t>(G));
+
+    for (int g = 0; g < G; ++g) {
+      const std::size_t e = static_cast<std::size_t>(g);
+      ex[e].phibar = p.flux[e];
+      ex[e].D_over_h = c.D[e] / p.h;
+      const double sr = floored_removal(detail::effective_removal(
+          c.removal[e], c.chi[e], c.nu_fission[e], inv_k));
+      sr_eff[e] = sr;
+      const double dh2 = c.D[e] / (p.h * p.h);
+      ex[e].beta1 = 3.0 * dh2 / sr + 1.0 / 20.0;
+      ex[e].beta2 = 2.0 * dh2 / sr + 1.0 / 70.0;
+      const auto fit = detail::leakage_fit(p.tl[e],
+          p.tl[static_cast<std::size_t>(G) + e],
+          p.tl[static_cast<std::size_t>(2 * G) + e], p.h_prev, p.h, p.h_next);
+      l1[e] = fit[0];
+      l2[e] = fit[1];
+      if (p.src) {
+        const auto sfit = detail::leakage_fit(p.src[e],
+            p.src[static_cast<std::size_t>(G) + e],
+            p.src[static_cast<std::size_t>(2 * G) + e], p.h_prev, p.h,
+            p.h_next);
+        q_ext1[e] = sfit[0];
+        q_ext2[e] = sfit[1];
+      }
+    }
+
+    const int n_sweeps = sweeps > 0 ? sweeps : 1;
+    for (int sweep = 0; sweep < n_sweeps; ++sweep) {
+      for (int g = 0; g < G; ++g) {
+        const std::size_t e = static_cast<std::size_t>(g);
+        double q1 = q_ext1[e] - l1[e];
+        double q2 = q_ext2[e] - l2[e];
+        for (int gp = 0; gp < G; ++gp) {
+          if (gp == g) continue;
+          const std::size_t ep = static_cast<std::size_t>(gp);
+          const double coeff =
+              c.scatter[ep * G + e] + c.chi[e] * c.nu_fission[ep] * inv_k;
+          q1 += coeff * ex[ep].moment1();
+          q2 += coeff * ex[ep].moment2();
+        }
+        NodeExpansion& N = ex[e];
+        N.alpha1 = q1 / sr_eff[e];
+        N.alpha2 = q2 / sr_eff[e];
+
+        const double c3 = 2.0 * N.beta1 + 0.5;
+        const double c4 = 6.0 * N.beta2 + 0.2;
+        const double known_flux = N.phibar + s * N.alpha1 + N.alpha2;
+        const double known_dphi = 2.0 * N.alpha1 + 6.0 * s * N.alpha2;
+        const double gamma = p.gamma[e];
+
+        double a[4];
+        double rhs[2];
+        if (std::isinf(gamma)) {
+          a[2 * kBoundaryCondition + kA3] = s * N.beta1;
+          a[2 * kBoundaryCondition + kA4] = N.beta2;
+          rhs[kBoundaryCondition] = -known_flux;
+        } else {
+          a[2 * kBoundaryCondition + kA3] =
+              -s * N.D_over_h * c3 - gamma * s * N.beta1;
+          a[2 * kBoundaryCondition + kA4] = -N.D_over_h * c4 - gamma * N.beta2;
+          rhs[kBoundaryCondition] =
+              gamma * known_flux + s * N.D_over_h * known_dphi;
+        }
+        a[2 * kInteriorCurrent + kA3] = -N.D_over_h * c3;
+        a[2 * kInteriorCurrent + kA4] = s * N.D_over_h * c4;
+        rhs[kInteriorCurrent] =
+            p.cmfd_current_interior[e] +
+            N.D_over_h * (2.0 * N.alpha1 - 6.0 * s * N.alpha2);
+
+        if (detail::solve_dense(a, rhs, 2)) {
+          N.a3 = rhs[kA3];
+          N.a4 = rhs[kA4];
+        } else {
+          N.a3 = N.a4 = 0.0;
+        }
+        N.update_moment_coefficients();
+      }
+    }
+
+    for (int g = 0; g < G; ++g) {
+      const NodeExpansion& N = ex[static_cast<std::size_t>(g)];
+      current[g] = -N.D_over_h * N.face_derivative(s);
     }
   }
 };

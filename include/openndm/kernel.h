@@ -61,6 +61,45 @@ struct TwoNodeProblem {
   double k_eff = 1.0;
 };
 
+//! Everything a one-node boundary problem needs, gathered by CmfdSystem.
+//!
+//! A boundary face has no second node to be continuous with, so the two-node
+//! problem does not apply and the coupling there stayed at its finite
+//! difference value. The one-node problem replaces it: the node-average
+//! constraint and the boundary condition between them determine the within
+//! node shape, and the current that shape produces at the face is what the
+//! nonlinear iteration matches (FR-SOL-4). See \c docs/theory.md 3.6.
+struct OneNodeProblem {
+  int surface = 0;
+  int node = 0;
+  int axis = 0;
+  double h = 0.0;
+  //! +1 when the boundary is the node's high face along the axis, -1 when it
+  //! is the low one. Currents stay positive along the axis, as everywhere
+  //! else, so this is what turns one into an outward current.
+  double outward = 1.0;
+  //! Node-average scalar flux from the coarse-mesh solution, per group.
+  const double* flux = nullptr;
+  //! The boundary condition, as the one relation all four kinds share:
+  //! \f$J_{out} = \gamma\,\phi_{face}\f$, per group. Zero is a reflective
+  //! face and infinity a zero flux one, where the relation degenerates to
+  //! \f$\phi_{face} = 0\f$. The discontinuity factor is already folded in,
+  //! because the condition applies to the heterogeneous surface flux.
+  const double* gamma = nullptr;
+  //! Transverse leakage expansion, per group: three node-average values for
+  //! the quadratic fit, low neighbour then self then high neighbour, with the
+  //! node repeated on whichever side the boundary is.
+  const double* tl = nullptr;   //!< 3*G
+  const double* src = nullptr;  //!< 3*G, null for an eigenvalue solve
+  double h_prev = 0.0;
+  double h_next = 0.0;
+  //! Net current from the coarse-mesh solution at the node's *other* face,
+  //! which the caller guarantees is an interior surface. Positive along the
+  //! axis. NEM needs it to close its second coefficient; SANM does not.
+  const double* cmfd_current_interior = nullptr;
+  double k_eff = 1.0;
+};
+
 //! Interface implemented by FDM, NEM and SANM.
 class Kernel {
 public:
@@ -80,6 +119,20 @@ public:
   //! True when the kernel leaves Dhat at its finite difference value, in which
   //! case the nonlinear iteration is skipped entirely.
   virtual bool is_finite_difference() const { return false; }
+
+  //! True when the kernel implements \c solve_boundary, so the nonlinear
+  //! iteration corrects boundary faces as well as interior ones.
+  virtual bool has_boundary_problem() const { return false; }
+
+  //! Solve one one-node boundary problem.
+  //!
+  //! \param[out] current net current at the boundary face, per group,
+  //!             positive along the axis rather than outward.
+  virtual void solve_boundary(const OneNodeProblem& /*p*/,
+      const XSLibrary& /*xs*/, const std::vector<int>& /*composition*/,
+      int /*n_groups*/, int /*sweeps*/, double* /*current*/) const
+  {
+  }
 
   static std::unique_ptr<Kernel> create(KernelType type);
 };

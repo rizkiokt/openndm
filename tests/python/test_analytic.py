@@ -186,8 +186,12 @@ def test_reflected_slab_converges_to_the_analytic_eigenvalue(kernel):
     assert abs(error) < 20.0, f"{kernel}: {error:+.2f} pcm from analytic"
 
 
-@pytest.mark.parametrize("kernel", ALL_KERNELS)
-def test_reflected_slab_error_falls_under_refinement(kernel):
+#: Below this the eigenvalue sits at the iteration's own round-off and has no
+#: discretisation error left for a finer mesh to remove.
+SLAB_ROUND_OFF = 1.0e-11
+
+
+def reflected_slab_errors(kernel):
     reference, _ = reflected_slab_reference()
     errors = []
     for factor in (1, 2, 4):
@@ -196,10 +200,35 @@ def test_reflected_slab_error_falls_under_refinement(kernel):
             geometry, library, openndm.Settings(**TIGHT)
         ).solve(kernel=kernel)
         errors.append(abs(result.k_eff - reference))
+    return errors
+
+
+@pytest.mark.parametrize("kernel", ALL_KERNELS)
+def test_reflected_slab_error_falls_under_refinement(kernel):
+    """Refining must reduce the error, unless there is none left to reduce.
+
+    SANM reaches round-off on the coarsest mesh, so it has nothing to
+    converge; see the exactness test below.
+    """
+    errors = reflected_slab_errors(kernel)
     for coarse, fine in itertools.pairwise(errors):
-        assert fine < coarse, errors
-    order = math.log2(errors[0] / errors[-1]) / 2.0
-    assert order > 1.5, f"{kernel}: observed order {order:.2f}, errors {errors}"
+        assert fine < coarse or fine < SLAB_ROUND_OFF, errors
+    if max(errors) >= SLAB_ROUND_OFF:
+        order = math.log2(errors[0] / errors[-1]) / 2.0
+        assert order > 1.5, f"{kernel}: observed order {order:.2f}, errors {errors}"
+
+
+def test_reflected_slab_is_exact_for_sanm():
+    """SANM reproduces this problem exactly, on any mesh.
+
+    A cosine in the core and a hyperbolic sine in the reflector are both in
+    the analytic basis, and the transverse leakage is identically zero, so
+    the discretisation has no error to make once the outer face is closed by
+    the one-node boundary problem instead of a finite difference coupling.
+    Five core nodes reproduce the analytic eigenvalue to round-off.
+    """
+    errors = reflected_slab_errors("sanm")
+    assert max(errors) < SLAB_ROUND_OFF, errors
 
 
 def test_reflected_slab_nodal_kernels_beat_finite_difference():
@@ -472,16 +501,19 @@ def test_mms_recovers_the_manufactured_flux(kernel):
     assert np.all(computed > 0.0)
 
 
-#: Observed order of accuracy band per kernel on the manufactured solution.
-#: FDM is second order exactly. The nodal kernels do better because the
-#: analytic basis resolves the within-node shape, and the external source is
-#: expanded quadratically rather than treated as flat.
-MMS_ORDER = {"fdm": (1.8, 2.2), "nem": (1.8, 3.5), "sanm": (1.8, 3.5)}
+MMS_ORDER = {"fdm": (1.8, 2.2), "nem": (3.0, 5.5), "sanm": (3.0, 5.5)}
 
 
 @pytest.mark.parametrize("kernel", ALL_KERNELS)
 def test_mms_converges_at_the_expected_order(kernel):
-    """V-2: the observed spatial order of accuracy of each kernel."""
+    """V-2: the observed spatial order of accuracy of each kernel.
+
+    FDM is second order exactly. The nodal kernels do better because the
+    analytic basis resolves the within-node shape and the external source is
+    expanded quadratically rather than treated as flat; with the boundary
+    faces no longer held at a finite difference coupling they reach fourth
+    order, the quadratic transverse leakage fit being what now limits them.
+    """
     errors = [mms_error(n, kernel)[0] for n in (8, 16, 32)]
     low, high = MMS_ORDER[kernel]
     for coarse, fine in itertools.pairwise(errors):

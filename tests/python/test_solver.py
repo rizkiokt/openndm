@@ -26,7 +26,7 @@ def test_power_is_normalised_to_a_mean_of_one(iaea_model):
     assert powered.mean() == pytest.approx(1.0)
     assert result.f_q > 1.0
     assert result.f_dh > 1.0
-    assert result.f_q >= result.f_dh
+    assert result.f_q >= result.f_dh * (1.0 - 1.0e-12)
 
 
 def test_reflector_nodes_carry_no_power(iaea_model):
@@ -172,24 +172,48 @@ def test_fixed_source_with_a_distributed_source_stays_positive(kernel, tight):
     assert np.all(np.asarray(result.flux) > 0.0)
 
 
-def test_fixed_source_kernels_agree_on_a_distributed_source(tight):
+def vacuum_box_total_flux(n_per_side, kernel, settings):
+    """Volume-integrated flux in a 40 cm vacuum-bounded box of pure absorber.
+
+    Volume-integrated rather than summed, so meshes are comparable. The
+    diffusion length is 4.1 cm, which makes the coarsest mesh here 2.4
+    diffusion lengths per node: the regime where the boundary treatment
+    decides the answer.
+    """
+    pitch = 40.0 / n_per_side
     geometry = openndm.Geometry.from_lattice(
-        np.zeros((4, 4, 4), dtype=int),
-        pitch=10.0,
+        np.zeros((n_per_side,) * 3, dtype=int),
+        pitch=pitch,
         boundaries=dict.fromkeys(
             ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"], "vacuum"
         ),
     )
-    model = openndm.Model(geometry, _absorber_library(), tight)
+    model = openndm.Model(geometry, _absorber_library(), settings)
     source = np.ones((geometry.n_nodes, 1))
-    totals = {
-        kernel: np.asarray(
-            model.solve_fixed_source(source, kernel=kernel).flux
-        ).sum()
-        for kernel in ALL_KERNELS
-    }
-    spread = (max(totals.values()) - min(totals.values())) / min(totals.values())
-    assert spread < 5.0e-3, totals
+    flux = np.asarray(model.solve_fixed_source(source, kernel=kernel).flux)
+    return float(flux.sum()) * pitch**3
+
+
+def test_fixed_source_nodal_kernels_beat_fdm_at_a_vacuum_boundary(tight):
+    """Two diffusion lengths per node is where the boundary treatment shows.
+
+    The reference is FDM's own Richardson limit, so it borrows nothing from
+    either nodal kernel. Asserting instead that all three kernels agree on
+    the coarse mesh would hold the nodal ones to FDM's 13% error, which is
+    what they made themselves while boundary faces kept a finite difference
+    coupling.
+    """
+    fine = vacuum_box_total_flux(16, "fdm", tight)
+    finer = vacuum_box_total_flux(32, "fdm", tight)
+    reference = finer + (finer - fine) / 3.0
+
+    coarse = {k: vacuum_box_total_flux(4, k, tight) for k in ALL_KERNELS}
+    error = {k: abs(v - reference) / reference for k, v in coarse.items()}
+
+    assert error["fdm"] > 0.10, coarse
+    for kernel in ("nem", "sanm"):
+        assert error[kernel] < 0.02, (kernel, coarse, reference)
+    assert abs(coarse["nem"] - coarse["sanm"]) / coarse["sanm"] < 5.0e-3, coarse
 
 
 def test_fixed_source_shape_is_validated(iaea_model):

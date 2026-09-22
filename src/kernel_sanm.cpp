@@ -185,6 +185,109 @@ public:
       current[g] = -L.D_over_h * L.face_derivative(1.0);
     }
   }
+
+  bool has_boundary_problem() const override { return true; }
+
+  void solve_boundary(const OneNodeProblem& p, const XSLibrary& xs,
+      const std::vector<int>& composition, int G, int sweeps,
+      double* current) const override
+  {
+    const Composition& c =
+        xs.composition(composition[static_cast<std::size_t>(p.node)]);
+    const double inv_k = 1.0 / p.k_eff;
+    const double s = p.outward;
+
+    std::vector<NodeExpansion> ex(static_cast<std::size_t>(G));
+    std::vector<double> l1(static_cast<std::size_t>(G));
+    std::vector<double> l2(static_cast<std::size_t>(G));
+    std::vector<double> l0(static_cast<std::size_t>(G));
+    std::vector<double> q_ext0(static_cast<std::size_t>(G), 0.0);
+    std::vector<double> q_ext1(static_cast<std::size_t>(G), 0.0);
+    std::vector<double> q_ext2(static_cast<std::size_t>(G), 0.0);
+
+    for (int g = 0; g < G; ++g) {
+      const std::size_t e = static_cast<std::size_t>(g);
+      const double D = c.D[e];
+      const double sr = detail::effective_removal(
+          c.removal[e], c.chi[e], c.nu_fission[e], inv_k);
+      ex[e].basis = detail::AnalyticBasis::make(sr * p.h * p.h / D);
+      ex[e].D_over_h = D / p.h;
+      ex[e].phibar = p.flux[e];
+      const auto fit = detail::leakage_fit(p.tl[e],
+          p.tl[static_cast<std::size_t>(G) + e],
+          p.tl[static_cast<std::size_t>(2 * G) + e], p.h_prev, p.h, p.h_next);
+      l0[e] = p.tl[static_cast<std::size_t>(G) + e];
+      l1[e] = fit[0];
+      l2[e] = fit[1];
+      if (p.src) {
+        const auto sfit = detail::leakage_fit(p.src[e],
+            p.src[static_cast<std::size_t>(G) + e],
+            p.src[static_cast<std::size_t>(2 * G) + e], p.h_prev, p.h,
+            p.h_next);
+        q_ext0[e] = p.src[static_cast<std::size_t>(G) + e];
+        q_ext1[e] = sfit[0];
+        q_ext2[e] = sfit[1];
+      }
+      ex[e].apply_average_constraint();
+    }
+
+    const int n_sweeps = sweeps > 0 ? sweeps : 1;
+    for (int sweep = 0; sweep < n_sweeps; ++sweep) {
+      for (int g = 0; g < G; ++g) {
+        const std::size_t e = static_cast<std::size_t>(g);
+        double q0 = q_ext0[e] - l0[e];
+        double q1 = q_ext1[e] - l1[e];
+        double q2 = q_ext2[e] - l2[e];
+        for (int gp = 0; gp < G; ++gp) {
+          if (gp == g) continue;
+          const std::size_t ep = static_cast<std::size_t>(gp);
+          const double coeff =
+              c.scatter[ep * G + e] + c.chi[e] * c.nu_fission[ep] * inv_k;
+          q0 += coeff * ex[ep].phibar;
+          q1 += coeff * ex[ep].moment1();
+          q2 += coeff * ex[ep].moment2();
+        }
+        const double scale = p.h * p.h / c.D[e];
+        const double k2 = ex[e].basis.k2;
+        ex[e].b2 = scale * q2 / k2;
+        ex[e].b1 = scale * q1 / k2;
+        ex[e].b0 = (scale * q0 + 12.0 * ex[e].b2) / k2;
+        ex[e].apply_average_constraint();
+
+        NodeExpansion& N = ex[e];
+        const double known_flux =
+            N.C * N.basis.even_face + N.b0 + s * N.b1 + N.b2;
+        const double known_dphi =
+            s * N.C * N.basis.even_dface + 2.0 * N.b1 + s * 6.0 * N.b2;
+        N.A = odd_coefficient(N, p.gamma[e], s, known_flux, known_dphi);
+      }
+    }
+
+    for (int g = 0; g < G; ++g) {
+      const NodeExpansion& N = ex[static_cast<std::size_t>(g)];
+      current[g] = -N.D_over_h * N.face_derivative(s);
+    }
+  }
+
+private:
+  //! The one free coefficient, set by the boundary condition alone.
+  //!
+  //! \f$J_{out} = \gamma\,\phi_{face}\f$ with the face at
+  //! \f$\xi = s/2\f$ is one linear equation in \c A. An infinite gamma is
+  //! a zero flux face, where it degenerates to \f$\phi_{face} = 0\f$ and
+  //! the diffusion coefficient drops out.
+  static double odd_coefficient(const NodeExpansion& n, double gamma, double s,
+      double known_flux, double known_dphi)
+  {
+    if (std::isinf(gamma)) {
+      if (std::abs(n.basis.odd_face) < 1.0e-300) return 0.0;
+      return -s * known_flux / n.basis.odd_face;
+    }
+    const double denom =
+        n.D_over_h * n.basis.odd_dface + gamma * n.basis.odd_face;
+    if (std::abs(denom) < 1.0e-300) return 0.0;
+    return -s * (gamma * known_flux + s * n.D_over_h * known_dphi) / denom;
+  }
 };
 
 }  // namespace

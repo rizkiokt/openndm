@@ -150,6 +150,16 @@ private:
   //! Boundary coupling coefficient for one exterior surface and group.
   double boundary_coupling(
       const Surface& surf, int group, double D, double adf) const;
+  //! The boundary condition as the single relation all four kinds share,
+  //! \f$J_{out} = \gamma\,\phi_{face}\f$: zero for a reflective face,
+  //! infinite for a zero flux one. Both the finite difference coupling and
+  //! the one-node boundary problem are derived from this, so the convention
+  //! has one definition rather than two that can drift apart.
+  double boundary_gamma(const Surface& surf, int group, double adf) const;
+  //! Correct the coupling on the boundary faces, from the kernel's one-node
+  //! problem. Returns the largest relative change in Dhat.
+  double boundary_update(const Kernel& kernel, const std::vector<double>& flux,
+      double k_eff, const Settings& s, const std::vector<double>* external);
 
   const Geometry& geom_;
   const XSLibrary& xs_;
