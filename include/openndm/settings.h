@@ -55,6 +55,12 @@ struct Settings {
   int two_node_sweeps = 2;
   //! Clip on the magnitude of Dhat relative to Dtilde. Large corrected
   //! coefficients destabilise the CMFD system; PARCS and KOMODO both clamp.
+  //!
+  //! Interior faces clamp to this. Boundary faces *discard* an update that
+  //! exceeds it instead, keeping the value they had. A one-node correction
+  //! that lands outside the band has been asked for a current the coarse mesh
+  //! cannot express as Dhat times a node flux, and clamping it would replace
+  //! an untrustworthy number with a large wrong one.
   double dhat_limit = 10.0;
   //! Under-relaxation on the boundary faces' Dhat, in (0, 1].
   //!
