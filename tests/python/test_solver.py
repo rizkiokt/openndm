@@ -7,7 +7,7 @@ import pytest
 
 import openndm
 
-from conftest import ALL_KERNELS, iaea_geometry, iaea_library
+from conftest import ALL_KERNELS, chain_library, iaea_geometry, iaea_library
 
 
 def test_result_reports_convergence_metadata(iaea_model):
@@ -494,3 +494,54 @@ def test_a_transient_that_changes_nothing_is_unaffected_by_the_refresh(tight):
     model.solve()
     first = _powers(model, steps=6)
     assert np.allclose(first, first[0], rtol=1.0e-10), first
+
+
+@pytest.mark.parametrize("kernel", ALL_KERNELS)
+def test_a_long_down_scatter_chain_converges(kernel):
+    """Eight groups against a zero flux boundary, which once made a two-cycle.
+
+    The one-node boundary problem writes a face current as Dhat times the
+    node-average flux. In an intermediate group of a chain that ratio is badly
+    conditioned at a boundary, because the flux there is small next to the
+    within-node source driving it. Undamped, the update saturated against
+    `dhat_limit` and alternated sign forever at about 1e-4 in k.
+
+    Nothing else in the suite has more than two groups, which is why this went
+    unnoticed until an eight-group deck was built for the performance cases.
+    """
+    model = openndm.Model(
+        iaea_geometry(planes=4),
+        chain_library(),
+        openndm.Settings(verbosity=0, max_outer=400),
+    )
+    result = model.solve(kernel=kernel)
+    assert result.converged
+    assert result.outer_iterations < 100
+
+
+def test_boundary_relaxation_does_not_move_the_answer():
+    """Damping changes the path to the fixed point, not the fixed point.
+
+    At convergence the update is a no-op whatever the factor, so damping
+    cannot move the answer it converges to. It is held to 1 pcm rather than to
+    round-off because the outer iteration stops on the eigenvalue and the
+    fission source and does not watch the change in Dhat, so it can stop while
+    Dhat is still moving; how far it has got by then does depend on the path.
+    That is a property of the nonlinear scheme and not of the damping, and
+    tightening the source tolerance by two decades does not alter the spread.
+    """
+    eigenvalues = []
+    for relaxation in (0.3, 0.5, 0.8):
+        model = openndm.Model(
+            iaea_geometry(planes=4),
+            chain_library(),
+            openndm.Settings(
+                verbosity=0,
+                max_outer=400,
+                k_tolerance=1.0e-11,
+                fission_source_tolerance=1.0e-10,
+                boundary_relaxation=relaxation,
+            ),
+        )
+        eigenvalues.append(model.solve(kernel="sanm").k_eff)
+    assert max(eigenvalues) - min(eigenvalues) < 1.0e-5, eigenvalues

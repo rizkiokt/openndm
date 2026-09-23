@@ -56,6 +56,21 @@ struct Settings {
   //! Clip on the magnitude of Dhat relative to Dtilde. Large corrected
   //! coefficients destabilise the CMFD system; PARCS and KOMODO both clamp.
   double dhat_limit = 10.0;
+  //! Under-relaxation on the boundary faces' Dhat, in (0, 1].
+  //!
+  //! The one-node boundary problem writes the face current as \c Dhat times
+  //! the node-average flux. In a group whose flux at the boundary is small
+  //! next to the within-node source driving it -- an intermediate group of a
+  //! long down-scatter chain, at a zero flux face -- that ratio is badly
+  //! conditioned, and the undamped update overshoots, saturates against
+  //! \c dhat_limit and settles into a two-cycle instead of converging.
+  //! Damping the step removes the cycle without moving the fixed point,
+  //! since at convergence the update is a no-op whatever the factor.
+  //!
+  //! Interior faces are not damped: their Dhat divides by the sum of two node
+  //! fluxes and is tied to a neighbour by continuity, so it does not suffer
+  //! the same conditioning.
+  double boundary_relaxation = 0.5;
 
   //! Time integration weighting (FR-KIN-2): 1 is fully implicit, 0.5 is
   //! Crank-Nicolson. KOMODO allows 0.01 to 1 and defaults to 1; matching
