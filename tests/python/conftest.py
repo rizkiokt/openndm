@@ -96,6 +96,39 @@ def iaea_library():
     return lib
 
 
+def chain_library(n_fast=7):
+    """IAEA data with the fast group resolved into a chain of ``n_fast`` groups.
+
+    A multi-group deck the two-group benchmarks cannot provide. The thermal
+    group is kept exactly and the fast group becomes a down-scatter chain, each
+    link carrying the same absorption and scattering ``n_fast`` times faster,
+    so a neutron makes the same journey through a longer chain. The eigenvalue
+    means nothing on its own; what this is for is the group coupling.
+    """
+    groups = n_fast + 1
+    lib = openndm.XSLibrary(groups, len(IAEA_XS))
+    for index, (d1, d2, a1, a2, f2, s12) in enumerate(IAEA_XS):
+        scatter = np.zeros((groups, groups))
+        for g in range(n_fast):
+            scatter[g][g + 1] = n_fast * s12
+        chi = np.zeros(groups)
+        nu_fission = np.zeros(groups)
+        if f2 > 0.0:
+            chi[0] = 1.0
+            nu_fission[-1] = f2
+        lib.set_composition(
+            index,
+            D=[d1] * n_fast + [d2],
+            absorption=[a1] * n_fast + [a2],
+            nu_fission=nu_fission,
+            kappa_fission=nu_fission,
+            chi=chi,
+            scatter=scatter,
+        )
+    lib.finalize(warn=False)
+    return lib
+
+
 def iaea_geometry(subdivide=1, planes=1):
     """IAEA 2D core map, optionally extruded and radially subdivided."""
     core = np.where(IAEA_MAP == 0, openndm.INACTIVE, IAEA_MAP - 1)

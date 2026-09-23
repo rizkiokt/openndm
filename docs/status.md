@@ -63,7 +63,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | FR-SOL-1 | done | Finite difference, also the CMFD base. |
 | FR-SOL-2 | done | NEM, quartic expansion, quadratic transverse leakage. |
 | FR-SOL-3 | done | SANM, the default. |
-| FR-SOL-4 | done | Nonlinear two-node iteration on interior surfaces and a one-node problem on boundary faces, so every surface carries a corrected coupling. A node spanning the core along an axis keeps the finite difference coupling on both of its faces there, having no interior surface to take information from. |
+| FR-SOL-4 | done | Nonlinear two-node iteration on interior surfaces and a one-node problem on boundary faces, so every surface carries a corrected coupling. The boundary update is under-relaxed by `Settings.boundary_relaxation`, without which a group whose boundary flux is small next to its within-node source drives the update into a two-cycle. A node spanning the core along an axis keeps the finite difference coupling on both of its faces there, having no interior surface to take information from. |
 | FR-SOL-5 | done | Power iteration with a capped Wielandt shift; BiCGSTAB with ILU0. |
 | FR-SOL-6 | done | Criteria on k, node-wise fission source and iteration count; `ConvergenceError` carries the count and the residual. |
 | FR-SOL-7 | partial | OpenMP over nodes and surfaces in the two-node update, the matrix-vector product and the source assembly. The triangular solves in ILU0 are serial. |

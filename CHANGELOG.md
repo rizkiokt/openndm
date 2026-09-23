@@ -6,6 +6,31 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The boundary Dhat update no longer oscillates on a multi-group deck.**
+  The one-node boundary problem added in #77 writes a face current as `Dhat`
+  times the node-average flux. In an intermediate group of a long down-scatter
+  chain, at a zero flux face, the flux there is small next to the within-node
+  source driving it, so that ratio is badly conditioned: the undamped update
+  overshot, saturated against `dhat_limit` and settled into a two-cycle,
+  alternating by 1e-4 in k forever instead of converging.
+
+  `Settings.boundary_relaxation` damps the step and defaults to 0.5. On an
+  eight-group deck both nodal kernels go from not converging in 3000 outers to
+  converging in 18 and 20, which is what they took before #77. Interior faces
+  are not damped: their `Dhat` divides by the sum of two node fluxes and is
+  tied to a neighbour by continuity, so it does not have the same
+  conditioning.
+
+  Every eigenvalue, error and convergence order reported for #77 is unchanged,
+  because damping alters the path to the fixed point and not the fixed point.
+
+  This went unnoticed because **nothing in the test suite had more than two
+  groups**. `conftest.chain_library` now builds an eight-group deck by
+  resolving the IAEA fast group into a chain, and the suite solves it with all
+  three kernels.
+
 ### Changed
 
 - **The nonlinear nodal correction now covers boundary faces** (FR-SOL-4), and

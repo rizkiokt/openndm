@@ -669,6 +669,7 @@ double CmfdSystem::boundary_update(const Kernel& kernel,
         double dh = outward * current[static_cast<std::size_t>(g)] / phi - dt;
         const double limit = s.dhat_limit * dt;
         dh = std::max(-limit, std::min(limit, dh));
+        dh = dhat_[idx] + s.boundary_relaxation * (dh - dhat_[idx]);
         local_change = std::max(local_change, std::abs(dh - dhat_[idx]) / dt);
         dhat_[idx] = dh;
       }
