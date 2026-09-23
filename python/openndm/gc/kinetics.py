@@ -87,7 +87,10 @@ def compute_kinetics(
     Notes
     -----
     The k-ratio estimate is not adjoint weighted and is systematically biased
-    in a spatially heterogeneous core; it is a fallback, not an equivalent.
+    in a spatially heterogeneous core; it is a fallback, not an equivalent. Its
+    sigma takes the two runs as independent, so their relative variances add in
+    quadrature, and it carries no per-family information, so ``beta_eff`` is
+    split evenly across the families given by ``decay_constant``.
     """
     from .mgxs import require_openmc
 
@@ -132,14 +135,11 @@ def compute_kinetics(
     beta_eff = 1.0 - k_prompt / k_total
     sigma_total = float(statepoint.keff.std_dev)
     sigma_prompt = float(prompt_statepoint.keff.std_dev)
-    # Independent runs, so the ratio's variance adds in quadrature.
     sigma_beta = (k_prompt / k_total) * np.hypot(
         sigma_prompt / k_prompt, sigma_total / k_total
     )
 
     lam = np.asarray(decay_constant, dtype=float)
-    # With no per-family adjoint weighting available, the total is split by the
-    # physical delayed yields, which is the usual approximation.
     beta = np.full(lam.size, beta_eff / lam.size)
     return KineticsParameters(
         beta_eff=beta_eff,

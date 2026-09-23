@@ -26,11 +26,11 @@ from ..exceptions import InputError
 
 __all__ = ["DEFAULT_SLAB_FRACTION", "AdfResult", "add_adf_tallies", "compute_adf"]
 
-#: Slab width as a fraction of the assembly pitch.
 DEFAULT_SLAB_FRACTION = 0.05
+"""Slab width as a fraction of the assembly pitch."""
 
-#: ADF relative standard deviation above which a warning is issued.
 ADF_SIGMA_WARNING = 0.02
+"""ADF relative standard deviation above which a warning is issued."""
 
 _FACE_NAMES = ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max")
 
@@ -45,7 +45,9 @@ class AdfResult:
         Face-ordered as ``-x, +x, -y, +y, -z, +z``, matching
         :meth:`openndm.XSLibrary.set_adf`.
     std_dev : numpy.ndarray, shape (n_faces, G)
-        Propagated 1-sigma of the ratio.
+        Propagated 1-sigma of the ratio, taking the two tallies as
+        uncorrelated. They share particle histories, so the true sigma is
+        smaller and this is an upper bound.
     slab_fraction : float
         Slab width used, as a fraction of the pitch.
     """
@@ -131,7 +133,6 @@ def add_adf_tallies(
     extent = pitch * shape
     upper_right = lower_left + extent
     if lower_left.size == 2:
-        # A 2D lattice is infinite in z, but a mesh needs finite bounds.
         lower_left = np.append(lower_left, z_bounds[0])
         upper_right = np.append(upper_right, z_bounds[1])
         extent = np.append(extent, z_bounds[1] - z_bounds[0])
@@ -191,6 +192,11 @@ def compute_adf(
         Statepoint holding the tallies added by :func:`add_adf_tallies`.
     prefix : str
         The same prefix that was passed to :func:`add_adf_tallies`.
+    slab_fraction : float
+        The same slab width that was passed to :func:`add_adf_tallies`. Both
+        tallies score a volume-integrated track length, so the slab's integral
+        is divided by this fraction to put it on the whole-assembly basis
+        before the ratio is taken.
     n_axes : int
         Number of axes in the target geometry; faces not instrumented get 1.0.
     reverse_groups : bool
@@ -236,9 +242,6 @@ def compute_adf(
             f"statepoint has no tally named {prefix!r}_volume; was "
             f"add_adf_tallies called with prefix={prefix!r}?"
         )
-    # A mesh flux tally scores track length, so dividing by the cell volume is
-    # unnecessary for a ratio of flux densities only if both cells are
-    # normalised the same way; they are not, so normalise both by their width.
     n_groups = volume_mean.size
     values = np.ones((2 * n_axes, n_groups))
     std_dev = np.zeros((2 * n_axes, n_groups))
@@ -252,12 +255,10 @@ def compute_adf(
         surface_mean, surface_std = tally_flux(f"{prefix}_{name}")
         if surface_mean is None:
             continue
-        # Both tallies are volume-integrated track lengths, so the ratio of
-        # flux densities divides out by the slab's fractional width.
+        surface_on_assembly_basis = surface_mean / slab_fraction
         ratio = np.where(
             volume_mean > 0,
-            (surface_mean / slab_fraction)
-            / np.where(volume_mean > 0, volume_mean, 1),
+            surface_on_assembly_basis / np.where(volume_mean > 0, volume_mean, 1),
             1.0,
         )
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -267,8 +268,6 @@ def compute_adf(
                 0.0,
             )
         values[face] = ratio
-        # Uncorrelated propagation is conservative here: the two tallies share
-        # particle histories, so the true sigma of the ratio is smaller.
         std_dev[face] = np.abs(ratio) * np.hypot(surface_rel, volume_rel)
 
     worst = float(np.nanmax(std_dev)) if std_dev.size else 0.0
