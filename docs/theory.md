@@ -102,8 +102,10 @@ and in the zero-flux limit `D̃_bc = 2D/h`, where the discontinuity factor drops
 out because the surface flux is zero either way. The boundary contributes
 `+ A D̃_bc` to the node's diagonal.
 
-`D̂` is **not** updated on boundary faces; see the limitation in
-[`status.md`](status.md).
+`D̂` **is** updated on boundary faces, from the one-node problem of §3.6. The
+same `γ` serves both: the finite difference coupling above and the boundary
+condition the nodal kernel imposes are the one relation, so they cannot drift
+apart.
 
 ---
 
@@ -153,8 +155,29 @@ reproduces their averages. With `a = h_{i−1}/h_i`, `b = h_{i+1}/h_i`,
 [  (1+b)        (2s³ − s/2)/b ] [ l_2 ] = [ L_{i+1} − L_i ]
 ```
 
-At a core boundary the missing neighbour is replaced by the node itself, which
-is the usual flat extrapolation.
+At a core boundary one of the three averages does not exist, and what is put
+in its place matters more than it looks.
+
+**Reflective face.** The solution is mirror-symmetric about the face, so the
+ghost node genuinely has `h_{i−1} = h_i` and `L_{i−1} = L_i`. The quadratic
+fit is kept and it is exact.
+
+**Any other face.** There is no third average and nothing to invent one from,
+so the quadratic drops to the linear fit through the two averages that do
+exist:
+
+```
+l_1 = (L_{i+1} − L_i) / (1 + h_{i+1}/h_i),    l_2 = 0
+```
+
+with the mirrored form at a low-side face. This is what KOMODO does, and the
+alternative — repeating the boundary node's own average, as though the face
+were reflective when it is not — asserts a symmetry the solution does not
+have. It costs more than the missing quadratic term does: on the bare cuboid
+the observed order of both nodal kernels falls from 4 to 3, on the
+manufactured solution the error at 32 nodes per side is 27 times larger, and
+on a vacuum-bounded absorber box the nodal kernels track the finite
+difference answer instead of converging away from it.
 
 ### 3.3 In-group fission
 
@@ -272,7 +295,45 @@ coarse-mesh net currents. That is a 4×4 solve per surface per group.
 The moment equations divide by `Σ_r,eff`, so it is floored at `1e-10` in
 magnitude rather than allowed to blow the coefficients up.
 
-### 3.6 The nonlinear update
+### 3.6 The one-node boundary problem
+
+A boundary face has no second node to be continuous with, so the two-node
+problem of §3.4 and §3.5 does not apply to it. The one-node problem replaces
+it. The node-average constraint and the boundary condition of §2.4 between
+them determine the within-node shape, and the current that shape produces at
+the face is what the nonlinear update matches.
+
+For SANM the node average fixes `C` and the boundary condition fixes `A`, the
+only coefficient left. Writing the face at `ξ = s/2`, with `s = +1` for a high
+face and `−1` for a low one, `J_out = γ f φ(s/2)` gives
+
+```
+A = −s [ γ f K_φ + s (D/h) K_φ' ] / [ (D/h) odd'(1/2) + γ f odd(1/2) ]
+```
+
+where `K_φ` and `K_φ'` are the parts of the face flux and its derivative that
+do not involve `A`. In the zero-flux limit the condition degenerates to
+`φ(s/2) = 0` and `A = −s K_φ / odd(1/2)`, with `D` dropping out.
+
+For NEM the two free coefficients `a_3, a_4` need two equations: the boundary
+condition, and the coarse-mesh net current at the node's other face. That is
+the same row NEM already uses at the outer faces of a two-node problem.
+
+Both are exactly determined, with no continuity rows and no iteration between
+two nodes. A node whose other face along the same axis is also a boundary
+keeps the finite difference coupling: it spans the core in that direction, and
+there is no interior surface to carry information into it.
+
+The consequence is that a problem whose exact solution lies in the kernel's
+basis is now reproduced exactly rather than nearly. A one-dimensional slab,
+homogeneous or reflected, is a cosine and a hyperbolic sine, both of which the
+SANM basis spans; with the boundary faces closed this way and the transverse
+leakage identically zero, SANM returns the analytic eigenvalue to round-off on
+any mesh, five nodes included.
+
+---
+
+### 3.7 The nonlinear update
 
 Whichever kernel is used, the two-node problem returns the interface current
 `J_nodal`. The corrected coupling coefficient is whatever makes the

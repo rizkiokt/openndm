@@ -114,30 +114,37 @@ void CmfdSystem::set_adjoint(bool adjoint)
   refresh_cross_sections();
 }
 
-double CmfdSystem::boundary_coupling(
-    const Surface& surf, int group, double D, double adf) const
+double CmfdSystem::boundary_gamma(
+    const Surface& surf, int group, double adf) const
 {
-  const double h = surf.boundary_is_lo_side() ? surf.h_hi : surf.h_lo;
+  constexpr double kInfinite = std::numeric_limits<double>::infinity();
   switch (surf.bc) {
     case BoundaryType::reflective:
       return 0.0;
     case BoundaryType::zero_flux:
-      return 2.0 * D / h;
-    case BoundaryType::vacuum: {
-      const double gamma = 0.5 * adf;
-      return 2.0 * D * gamma / (2.0 * D + gamma * h);
-    }
+      return kInfinite;
+    case BoundaryType::vacuum:
+      return 0.5 * adf;
     case BoundaryType::albedo: {
       const double beta = geom_.albedos()[static_cast<std::size_t>(
           surf.albedo_id)][static_cast<std::size_t>(group)];
       if (beta >= 1.0) return 0.0;
-      if (beta <= -1.0) return 2.0 * D / h;
-      const double gamma = adf * (1.0 - beta) / (2.0 * (1.0 + beta));
-      return 2.0 * D * gamma / (2.0 * D + gamma * h);
+      if (beta <= -1.0) return kInfinite;
+      return adf * (1.0 - beta) / (2.0 * (1.0 + beta));
     }
     default:
       return 0.0;
   }
+}
+
+double CmfdSystem::boundary_coupling(
+    const Surface& surf, int group, double D, double adf) const
+{
+  const double h = surf.boundary_is_lo_side() ? surf.h_hi : surf.h_lo;
+  const double gamma = boundary_gamma(surf, group, adf);
+  if (gamma == 0.0) return 0.0;
+  if (std::isinf(gamma)) return 2.0 * D / h;
+  return 2.0 * D * gamma / (2.0 * D + gamma * h);
 }
 
 void CmfdSystem::build_coupling()
@@ -214,7 +221,7 @@ void CmfdSystem::assemble(double inv_k_shift)
         A.add(L, R, area * (adjoint_ ? (-dt + dh) : (-dt - dh)));
         A.add(R, L, area * (adjoint_ ? (-dt - dh) : (-dt + dh)));
       } else {
-        A.add_diagonal(surf.boundary_node(), area * dt);
+        A.add_diagonal(surf.boundary_node(), area * (dt + dh));
       }
     }
     precond_[static_cast<std::size_t>(g)].factor(A);
@@ -376,7 +383,7 @@ void CmfdSystem::compute_currents(
         const double p =
             flux[static_cast<std::size_t>(surf.boundary_node()) * G + g];
         const double sign = surf.boundary_is_lo_side() ? -1.0 : 1.0;
-        current[si] = sign * dtilde_[si] * p;
+        current[si] = sign * (dtilde_[si] + dhat_[si]) * p;
       }
     }
   }
@@ -454,8 +461,12 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
           surfaces[static_cast<std::size_t>(nl.face[2 * a + 0])];
       const Surface& s_next =
           surfaces[static_cast<std::size_t>(nr.face[2 * a + 1])];
-      const int prev = (s_prev.bc == BoundaryType::interior) ? s_prev.lo : L;
-      const int next = (s_next.bc == BoundaryType::interior) ? s_next.hi : R;
+      const bool has_prev = s_prev.bc == BoundaryType::interior;
+      const bool has_next = s_next.bc == BoundaryType::interior;
+      const bool mirror_prev = s_prev.bc == BoundaryType::reflective;
+      const bool mirror_next = s_next.bc == BoundaryType::reflective;
+      const int prev = has_prev ? s_prev.lo : L;
+      const int next = has_next ? s_next.hi : R;
 
       for (int g = 0; g < G; ++g) {
         const std::size_t la = static_cast<std::size_t>(a);
@@ -509,10 +520,14 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
         p.src_lo = src_lo.data();
         p.src_hi = src_hi.data();
       }
-      p.h_lo_prev = nodes[static_cast<std::size_t>(prev)]
-                        .width[static_cast<std::size_t>(a)];
-      p.h_hi_next = nodes[static_cast<std::size_t>(next)]
-                        .width[static_cast<std::size_t>(a)];
+      p.h_lo_prev = (has_prev || mirror_prev)
+                        ? nodes[static_cast<std::size_t>(prev)]
+                              .width[static_cast<std::size_t>(a)]
+                        : 0.0;
+      p.h_hi_next = (has_next || mirror_next)
+                        ? nodes[static_cast<std::size_t>(next)]
+                              .width[static_cast<std::size_t>(a)]
+                        : 0.0;
       p.cmfd_current_lo =
           &current_[static_cast<std::size_t>(nl.face[2 * a + 0]) * G];
       p.cmfd_current_hi =
@@ -535,6 +550,126 @@ double CmfdSystem::nodal_update(const Kernel& kernel,
         dh = std::max(-limit, std::min(limit, dh));
         local_change =
             std::max(local_change, std::abs(dh - dhat_[idx]) / (dtilde_[idx]));
+        dhat_[idx] = dh;
+      }
+      change[static_cast<std::size_t>(si)] = local_change;
+    }
+  }
+
+  double max_change = 0.0;
+  for (double c : change) max_change = std::max(max_change, c);
+  if (kernel.has_boundary_problem()) {
+    max_change =
+        std::max(max_change, boundary_update(kernel, flux, k_eff, s, external));
+  }
+  return max_change;
+}
+
+double CmfdSystem::boundary_update(const Kernel& kernel,
+    const std::vector<double>& flux, double k_eff, const Settings& s,
+    const std::vector<double>* external)
+{
+  const int G = n_groups_;
+  const int n_axes = geom_.n_axes();
+  const int ns = geom_.n_surfaces();
+  const auto& surfaces = geom_.surfaces();
+  const auto& nodes = geom_.nodes();
+
+  std::vector<int> composition(static_cast<std::size_t>(geom_.n_nodes()));
+  for (int i = 0; i < geom_.n_nodes(); ++i) {
+    composition[static_cast<std::size_t>(i)] =
+        nodes[static_cast<std::size_t>(i)].composition;
+  }
+
+  std::vector<double> change(static_cast<std::size_t>(ns), 0.0);
+
+#ifdef _OPENMP
+#pragma omp parallel
+#endif
+  {
+    std::vector<double> tl(static_cast<std::size_t>(3) * G);
+    std::vector<double> src(static_cast<std::size_t>(3) * G);
+    std::vector<double> gamma(static_cast<std::size_t>(G));
+    std::vector<double> current(static_cast<std::size_t>(G));
+
+#ifdef _OPENMP
+#pragma omp for schedule(static)
+#endif
+    for (std::ptrdiff_t si = 0; si < ns; ++si) {
+      const Surface& surf = surfaces[static_cast<std::size_t>(si)];
+      if (surf.bc == BoundaryType::interior) continue;
+      if (surf.bc == BoundaryType::reflective) continue;
+
+      const int N = surf.boundary_node();
+      const int a = surf.axis;
+      const Node& node = nodes[static_cast<std::size_t>(N)];
+      const bool boundary_is_hi_face = !surf.boundary_is_lo_side();
+      const double outward = boundary_is_hi_face ? 1.0 : -1.0;
+      const int other_face = boundary_is_hi_face ? 2 * a + 0 : 2 * a + 1;
+      const Surface& inner =
+          surfaces[static_cast<std::size_t>(node.face[other_face])];
+      if (inner.bc != BoundaryType::interior) continue;
+
+      const int neighbour = boundary_is_hi_face ? inner.lo : inner.hi;
+      const int lo_node = boundary_is_hi_face ? neighbour : N;
+      const int hi_node = boundary_is_hi_face ? N : neighbour;
+      const std::size_t la = static_cast<std::size_t>(a);
+
+      const int face = boundary_is_hi_face ? 2 * a + 1 : 2 * a + 0;
+      for (int g = 0; g < G; ++g) {
+        const std::size_t gg = static_cast<std::size_t>(g);
+        tl[gg] =
+            leakage_[(static_cast<std::size_t>(lo_node) * n_axes + la) * G + g];
+        tl[static_cast<std::size_t>(G) + gg] =
+            leakage_[(static_cast<std::size_t>(N) * n_axes + la) * G + g];
+        tl[static_cast<std::size_t>(2 * G) + gg] =
+            leakage_[(static_cast<std::size_t>(hi_node) * n_axes + la) * G + g];
+        gamma[gg] = boundary_gamma(surf, g,
+            xs_.adf_value(
+                node.composition, rotated_face(face, node.rotation), g));
+        if (external) {
+          const auto& q = *external;
+          src[gg] = q[static_cast<std::size_t>(lo_node) * G + g];
+          src[static_cast<std::size_t>(G) + gg] =
+              q[static_cast<std::size_t>(N) * G + g];
+          src[static_cast<std::size_t>(2 * G) + gg] =
+              q[static_cast<std::size_t>(hi_node) * G + g];
+        }
+      }
+
+      OneNodeProblem p;
+      p.surface = static_cast<int>(si);
+      p.node = N;
+      p.axis = a;
+      p.h = node.width[la];
+      p.outward = outward;
+      p.flux = &flux[static_cast<std::size_t>(N) * G];
+      p.gamma = gamma.data();
+      p.tl = tl.data();
+      if (external) p.src = src.data();
+      p.h_prev = boundary_is_hi_face
+                     ? nodes[static_cast<std::size_t>(lo_node)].width[la]
+                     : 0.0;
+      p.h_next = boundary_is_hi_face
+                     ? 0.0
+                     : nodes[static_cast<std::size_t>(hi_node)].width[la];
+      p.cmfd_current_interior =
+          &current_[static_cast<std::size_t>(node.face[other_face]) * G];
+      p.k_eff = k_eff;
+
+      kernel.solve_boundary(
+          p, xs_, composition, G, s.two_node_sweeps, current.data());
+
+      double local_change = 0.0;
+      for (int g = 0; g < G; ++g) {
+        const std::size_t idx = static_cast<std::size_t>(si) * G + g;
+        const double dt = dtilde_[idx];
+        const double phi = flux[static_cast<std::size_t>(N) * G + g];
+        if (dt <= 0.0 || std::abs(phi) < 1.0e-30) continue;
+        double dh = outward * current[static_cast<std::size_t>(g)] / phi - dt;
+        const double limit = s.dhat_limit * dt;
+        dh = std::max(-limit, std::min(limit, dh));
+        local_change = std::max(local_change, std::abs(dh - dhat_[idx]) / dt);
         dhat_[idx] = dh;
       }
       change[static_cast<std::size_t>(si)] = local_change;

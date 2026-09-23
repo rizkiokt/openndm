@@ -6,6 +6,46 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The nonlinear nodal correction now covers boundary faces** (FR-SOL-4), and
+  the transverse leakage of a boundary node is fitted linearly rather than by
+  repeating its own average. Both nodal kernels gain roughly two orders of
+  accuracy on every problem with an analytic answer.
+
+  `Kernel` gains an optional `solve_boundary`, a one-node problem in which the
+  node-average constraint and the boundary condition determine the within-node
+  shape. SANM has one free coefficient and NEM two, the second closed by the
+  coarse-mesh current at the node's interior face. Both are exactly determined,
+  with none of the two-node problem's continuity rows.
+
+  The leakage fit is the other half and neither works without it. A boundary
+  node has only two of the three averages the quadratic needs; repeating its
+  own asserts a mirror symmetry that only a reflective face actually has. It is
+  now a linear fit through the two real averages on any other face, which is
+  what KOMODO does. The one-node problem *on its own* made every
+  three-dimensional case worse, because it made the boundary current depend on
+  a leakage shape that had been wrong all along without anything reading it.
+
+  | | before | after |
+  |---|---|---|
+  | 1D slab, SANM | 231 to 4.0 pcm | exact |
+  | Reflected slab, SANM | 1.8e-5 | round-off on any mesh |
+  | Bare cuboid, 32 per side | 3.45 pcm | 0.014 pcm |
+  | Bare cuboid observed order | 2.0 | 4.2 |
+  | Manufactured solution, 32 per side | 1.13e-4 | 4.2e-6 |
+  | IAEA-2D, NEM, 2 nodes per assembly | -20.7 pcm | +1.4 pcm |
+  | IAEA-2D, SANM, 1 node per assembly | +2.5 pcm | +27.8 pcm |
+
+  That last row is the one regression and it is a lost cancellation, not lost
+  accuracy: SANM's boundary error used to run against its coarse-mesh error on
+  that one problem. The converged eigenvalue is unchanged at 1.029527, and both
+  kernels still reach it.
+
+  A node that spans the core along an axis keeps the finite difference coupling
+  on both of its faces there: with no interior surface on that axis there is
+  nothing to carry information into the one-node problem.
+
 ### Added
 
 - **VTK export for 3D visualisation** (FR-OUT-6). `openndm.write_vtk` writes

@@ -24,12 +24,23 @@ namespace detail {
 //!
 //! Returns the \f$P_1\f$ and \f$P_2\f$ coefficients of the leakage shape in
 //! the centre node, chosen so that the polynomial reproduces the node-average
-//! leakage of all three nodes. \c h_prev or \c h_next equal to \c h_self with
-//! the corresponding leakage repeated is the flat extrapolation used at a core
-//! boundary.
+//! leakage of all three nodes.
+//!
+//! A neighbour width of zero says that neighbour does not exist, which happens
+//! on whichever side of a boundary node faces out of the core. There is then
+//! no third average to fit, so the quadratic drops to the linear fit through
+//! the two averages that do exist and the corresponding \c l_prev or
+//! \c l_next is ignored. With neither neighbour the shape is flat, because
+//! nothing constrains it. See \c docs/theory.md 3.2.
 inline std::array<double, 2> leakage_fit(double l_prev, double l_self,
     double l_next, double h_prev, double h_self, double h_next)
 {
+  const bool has_prev = h_prev > 0.0;
+  const bool has_next = h_next > 0.0;
+  if (!has_prev && !has_next) return {0.0, 0.0};
+  if (!has_prev) return {(l_next - l_self) / (1.0 + h_next / h_self), 0.0};
+  if (!has_next) return {(l_self - l_prev) / (1.0 + h_prev / h_self), 0.0};
+
   const double a = h_prev / h_self;
   const double b = h_next / h_self;
   const double t = 0.5 + a;

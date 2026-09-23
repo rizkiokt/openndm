@@ -184,7 +184,9 @@ the CMFD layer is unchanged.
 
 **A new kernel (FR-SOL-8).** Implement `Kernel`, register it in
 `Kernel::create`, name it in `settings.py`, add it to `ALL_KERNELS` in the test
-conftest. The verification suite is parameterised over that list, so a new
+conftest. `solve` is the two-node problem and is required; `solve_boundary` is
+the one-node boundary problem and is optional, defaulting to leaving boundary
+faces at their finite difference coupling. The verification suite is parameterised over that list, so a new
 kernel is immediately held to the analytic solution, the convergence order and
 the fine-mesh consistency check.
 

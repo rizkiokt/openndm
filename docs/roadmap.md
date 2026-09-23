@@ -119,21 +119,29 @@ temperature axis.
 | `feat/perf-acceptance` | NFR-PERF-1..7 have **never been measured**. The specification states numeric targets and no acceptance run has ever been made against them |
 | `feat/vtk-export` | FR-OUT-6. Mesh output for external visualisation |
 | Cut the first release | NFR-EXT-3. The release pipeline landed in #7: tag-triggered, trusted publishing, version agreement enforced before it builds. No tag has been cut, so nothing is on PyPI or conda-forge yet |
-| Boundary nodal correction | FR-SOL-4 completeness. See below — small value, listed so the reasoning is not lost |
 
-### On the boundary nodal correction
+### On the boundary nodal correction, now done
 
-The nonlinear correction is applied to interior surfaces only. It is
-tempting to schedule this because it is cheap and closes a documented
-limitation, and an earlier version of `status.md` justified it by claiming
-SANM at one node per assembly sits 18 pcm from the mesh-converged
-eigenvalue on the IAEA-2D map.
+Worth keeping, because the reasoning that scheduled it was wrong twice over
+and the record is more useful than the conclusion.
 
-It sits 2.6 pcm from it. On a core problem there is essentially nothing for
-a boundary correction to recover, because the outer boundary sits in a
-reflector far from the fuel. It remains worth doing for the analytic bare
-cuboid, where the entire remaining error genuinely does live at the
-boundary, and for completeness — but not for core accuracy.
+An early `status.md` justified the work by claiming SANM at one node per
+assembly sits 18 pcm from the mesh-converged IAEA-2D eigenvalue. It sat 2.6
+pcm from it, so the issue was rewritten to say there was essentially nothing
+for a boundary correction to recover on a core problem, and that it was worth
+doing only for the analytic cuboid and for completeness.
+
+That was wrong in the other direction. The one-node boundary problem on its
+own made *every* three-dimensional case worse, because it makes the boundary
+current depend on the nodal shape and so exposed a transverse leakage fit
+that had been wrong at boundary nodes all along — flat extrapolation asserts a
+mirror symmetry only a reflective face has. Fixing both together took the
+nodal kernels from third to fourth order and cut the manufactured-solution
+error by 27×.
+
+The lesson is not about boundaries. It is that a measurement which says a
+change is not worth making can be measuring a cancellation, and that the
+2.6 pcm which retired the issue was itself the cancellation.
 
 ## Deferred on purpose
 

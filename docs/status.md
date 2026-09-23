@@ -63,7 +63,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | FR-SOL-1 | done | Finite difference, also the CMFD base. |
 | FR-SOL-2 | done | NEM, quartic expansion, quadratic transverse leakage. |
 | FR-SOL-3 | done | SANM, the default. |
-| FR-SOL-4 | done | Nonlinear two-node iteration on interior surfaces. Boundary faces keep their finite difference coupling; see the limitation below. |
+| FR-SOL-4 | done | Nonlinear two-node iteration on interior surfaces and a one-node problem on boundary faces, so every surface carries a corrected coupling. A node spanning the core along an axis keeps the finite difference coupling on both of its faces there, having no interior surface to take information from. |
 | FR-SOL-5 | done | Power iteration with a capped Wielandt shift; BiCGSTAB with ILU0. |
 | FR-SOL-6 | done | Criteria on k, node-wise fission source and iteration count; `ConvergenceError` carries the count and the residual. |
 | FR-SOL-7 | partial | OpenMP over nodes and surfaces in the two-node update, the matrix-vector product and the source assembly. The triangular solves in ILU0 are serial. |
@@ -213,20 +213,33 @@ exponential transformation costs. Its mesh is converged — eight times the
 nodes moves the peak power by 0.06% — while its time step is not, and the
 gap between those two is the finding. See `benchmarks/README.md`.
 
-## The one physics limitation worth knowing
+## What the boundary treatment costs and buys
 
-The nonlinear nodal correction is applied to **interior surfaces only**.
-Boundary faces keep the finite difference coupling derived from the boundary
-condition. This is why the nodal kernels are only about 4× more accurate than
-FDM on the analytic bare cuboid rather than the order of magnitude they achieve
-inside a core: on that problem the entire remaining error lives at the
-boundary. It matters much less on a real core, where the outer boundary sits
-in a reflector far from the fuel: SANM at one node per assembly lands 2.6 pcm
-from the fine-mesh limit on the IAEA map, so on a core problem there is almost
-nothing left for a boundary correction to recover.
+Every surface now carries a corrected coupling: interior faces from the
+two-node problem, boundary faces from the one-node problem of
+[`theory.md`](theory.md) §3.6. Alongside it the transverse leakage of a
+boundary node drops to a linear fit on a non-reflective face instead of
+repeating its own average.
 
-Closing it means adding a one-node boundary problem to the `Kernel` interface:
-the node-average constraint fixes one coefficient and the boundary condition
-fixes the other, so it is exactly determined and structurally simpler than the
-two-node problem already implemented. Worth doing for the analytic problem and
-for completeness of FR-SOL-4; not worth doing for core accuracy.
+The two changes belong together. The one-node problem alone makes the boundary
+current depend on the nodal shape, which makes it sensitive to a leakage fit
+that the old flat extrapolation had got wrong all along; on its own it made
+every three-dimensional case worse. With the leakage fit corrected:
+
+| | before | after |
+|---|---|---|
+| 1D slab, SANM, 2 to 8 nodes | 231 to 4.0 pcm | exact |
+| Reflected slab, SANM | 1.8e-5 to 3.3e-7 | round-off, any mesh |
+| Bare cuboid V-1, 32 per side | 3.45 pcm | 0.014 pcm |
+| Bare cuboid observed order | 2.0 | 4.2 |
+| Manufactured solution, 32 per side | 1.13e-4 | 4.2e-6 |
+| Manufactured solution order | 2.8 | 3.8 to 4.7 |
+| IAEA-2D, NEM, 2 nodes per assembly | −20.7 pcm | +1.4 pcm |
+| IAEA-2D, SANM, 1 node per assembly | +2.5 pcm | +27.8 pcm |
+
+The last row is the price. SANM at one node per assembly was that close to the
+limit by cancellation rather than by accuracy — the boundary error ran against
+the coarse-mesh error on that particular problem — and the cancellation is
+gone. Every refinement of it, both kernels at every other mesh, and every
+problem with an analytic answer are better. The converged eigenvalue is
+unchanged at 1.029527.
