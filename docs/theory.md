@@ -753,6 +753,48 @@ this table.
 
 
 
+## 12. Water properties
+
+IAPWS-IF97 region 1 (compressed liquid) and region 4 (the saturation line),
+from IAPWS R7-97(2012). Region 1 is a fundamental equation for the specific
+Gibbs free energy in dimensionless form,
+
+```
+gamma(pi, tau) = sum_i n_i (7.1 - pi)^I_i (tau - 1.222)^J_i
+```
+
+with `pi = p/16.53 MPa` and `tau = 1386 K/T`, from which
+
+```
+v = (R T / p) pi gamma_pi        h = R T tau gamma_tau
+cp = -R tau^2 gamma_tautau       R = 461.526 J/(kg K)
+```
+
+Both `7.1 - pi` and `tau - 1.222` are strictly positive everywhere in region
+1 — `pi` reaches 6.05 at 100 MPa and `tau` falls to 2.224 at 623.15 K — so the
+negative exponents in the table need no special handling.
+
+### Why the inverse is iterated rather than tabulated
+
+The release gives a backward equation `T(p,h)` with its own 20 coefficients,
+whose purpose is to avoid iteration. It is not used here. The release permits
+it to differ from the basic equation by up to 25 mK, and it is a second table
+that has to be kept consistent with the first.
+
+Instead `T(p,h)` is a Newton iteration on the basic equation, whose derivative
+is the specific heat the same equation already provides. Enthalpy rises
+monotonically with temperature throughout region 1, so there is one root and
+it is reached in a few steps. The result is exact against the equation it
+inverts, which is a stronger guarantee than 25 mK, and against the backward
+equation's own published test values it lands 6.5 to 16.8 mK away — inside the
+allowance, as it must be.
+
+The iteration is clipped to the saturation temperature at that pressure rather
+than to region 1's flat upper bound, because the ceiling is where water stops
+being liquid and that depends on pressure.
+
+---
+
 ## References
 
 The formulations above follow the standard nodal literature:
@@ -768,3 +810,11 @@ The formulations above follow the standard nodal literature:
   (KOMODO) — the SANM formulation used as the default kernel.
 - Stamm'ler, R. and Abbate, M., *Methods of Steady-State Reactor Physics in
   Nuclear Design* — the B1 correction factor.
+
+The water properties follow:
+
+- IAPWS R7-97(2012), *Revised Release on the IAPWS Industrial Formulation 1997
+  for the Thermodynamic Properties of Water and Steam*, International
+  Association for the Properties of Water and Steam, Lucerne, August 2007.
+  Coefficients from Tables 2 and 34; verification values from Tables 5, 7, 35
+  and 36.
