@@ -45,6 +45,7 @@ from .thermal import (
     ThermalSolver,
 )
 from .vtk import write_vtk
+from .water import ConstantWater, IF97Water, WaterProperties
 from .xslib import XSLibrary, rotate_adf, rotated_face
 
 __version__ = _core.__version__
@@ -53,6 +54,7 @@ __all__ = [
     "INACTIVE",
     "AxialMapping",
     "BoronSearchResult",
+    "ConstantWater",
     "ControlRodBank",
     "ControlRods",
     "ConvergenceError",
@@ -60,6 +62,7 @@ __all__ = [
     "CouplingStep",
     "DopplerFeedback",
     "Geometry",
+    "IF97Water",
     "InputError",
     "LibraryError",
     "Model",
@@ -72,6 +75,7 @@ __all__ = [
     "ThermalSolver",
     "Transient",
     "TransientStep",
+    "WaterProperties",
     "XSLibrary",
     "__version__",
     "rotate_adf",

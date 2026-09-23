@@ -8,6 +8,42 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Water properties from IAPWS-IF97, behind a pluggable backend** (FR-TH-3,
+  FR-TH-8), in `openndm.water`. Three backends, all satisfying the
+  `WaterProperties` protocol:
+
+  `IF97Water` implements region 1 (compressed liquid) and region 4 (the
+  saturation line) from the coefficient tables of IAPWS R7-97(2012). Region 2
+  (vapour) is not implemented, so the steam side of a BWR is not covered yet.
+
+  `ConstantWater` has fixed density and specific heat. No physics, which is
+  the point: a channel model run against it has a closed-form answer, so the
+  channel model can be verified before the properties are trusted.
+
+  `external_backend()` adapts the `iapws` package or CoolProp when one is
+  installed, so property consistency with an external thermal-hydraulics code
+  can be enforced. Neither is a dependency and neither is imported until it is
+  asked for.
+
+  **The coefficients are transcribed from the release, and the release's own
+  program-verification values are asserted in the test suite** -- Tables 5, 35
+  and 36, to the nine significant figures they are printed to. That is what
+  makes a mistranscribed digit visible rather than plausible. As a second,
+  independent check the built-in formulation agrees with the `iapws` package
+  to 4e-16 over the PWR range.
+
+  `temperature(pressure, enthalpy)` inverts the basic equation by Newton
+  iteration rather than using the release's backward equation. The release
+  permits those two to disagree by up to 25 mK; an inverse that is exact
+  against the equation it inverts has no such gap and no second coefficient
+  table to keep in step. It lands 6.5 to 16.8 mK from the backward equation's
+  published values, inside that allowance.
+
+  A state outside region 1, or a saturation state above the critical point, is
+  an `InputError` rather than a quietly wrong number.
+
+### Added
+
 - **VTK export for 3D visualisation** (FR-OUT-6). `openndm.write_vtk` writes
   the serial XML unstructured grid ParaView reads, one hexahedral cell per
   active node on the real Cartesian mesh — non-uniform widths and whatever

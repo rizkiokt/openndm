@@ -923,6 +923,37 @@ to diverge at `relaxation=1.0` usually converges in a few iterations at 0.25.
 `result.history` holds one `CouplingStep` per iteration with the power change
 and, if you supplied `k_eff_source`, the eigenvalue.
 
+### Water properties
+
+There is no channel model yet, but the properties one needs are here, behind
+the same kind of protocol:
+
+```python
+water = openndm.IF97Water()
+water.density(15.5e6, 583.0)               # kg/m^3, ~705 at PWR conditions
+water.enthalpy(15.5e6, 583.0)              # J/kg
+water.temperature(15.5e6, 1.35e6)          # K, the inverse the channel needs
+water.saturation_temperature(15.5e6)       # K, ~618
+```
+
+Pressures are Pa, temperatures K, enthalpies J/kg and densities kg/m^3, and
+everything broadcasts over arrays.
+
+`IF97Water` is IAPWS-IF97 region 1 (compressed liquid) and region 4 (the
+saturation line). **Region 2 (vapour) is not implemented**, so the steam side
+of a BWR is not covered. A state outside region 1 raises rather than returning
+a number the equation does not stand behind.
+
+`ConstantWater` has fixed density and specific heat. Use it to verify a
+channel model, not to run one: with constant properties the axial enthalpy
+rise is exactly the integral of the heat input, so there is a closed-form
+answer to check against.
+
+`openndm.water.external_backend()` adapts the `iapws` package or CoolProp if
+you have one installed, which is how you make properties agree with an
+external thermal-hydraulics code. Neither is a dependency; `iapws` is
+GPL-licensed, so installing it is your decision rather than ours.
+
 ### Mapping onto another mesh
 
 An external solver rarely uses the neutronics mesh. `AxialMapping` transfers

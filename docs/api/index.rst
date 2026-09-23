@@ -14,6 +14,7 @@ OpenMC-dependent group constant generation path and is imported explicitly.
    xslib
    feedback
    thermal
+   water
    settings
    statepoint
    vtk
