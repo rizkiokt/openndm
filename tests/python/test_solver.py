@@ -7,7 +7,13 @@ import pytest
 
 import openndm
 
-from conftest import ALL_KERNELS, chain_library, iaea_geometry, iaea_library
+from conftest import (
+    ALL_KERNELS,
+    NODAL_KERNELS,
+    chain_library,
+    iaea_geometry,
+    iaea_library,
+)
 
 
 def test_result_reports_convergence_metadata(iaea_model):
@@ -511,6 +517,27 @@ def test_a_long_down_scatter_chain_converges(kernel):
     """
     model = openndm.Model(
         iaea_geometry(planes=4),
+        chain_library(),
+        openndm.Settings(verbosity=0, max_outer=400),
+    )
+    result = model.solve(kernel=kernel)
+    assert result.converged
+    assert result.outer_iterations < 100
+
+
+@pytest.mark.parametrize("kernel", NODAL_KERNELS)
+def test_a_refined_multi_group_core_converges(kernel):
+    """The same chain on a finer radial mesh, which damping alone did not fix.
+
+    Under-relaxing the boundary Dhat removed the two-cycle on one node per
+    assembly but not here. The cause was the clamp: an update the coarse mesh
+    cannot express is untrustworthy, and saturating it at `dhat_limit` puts a
+    large wrong number where the old good one was. A boundary update outside
+    the band is discarded instead, which falls back to the finite difference
+    coupling that face started with.
+    """
+    model = openndm.Model(
+        iaea_geometry(subdivide=2, planes=4),
         chain_library(),
         openndm.Settings(verbosity=0, max_outer=400),
     )

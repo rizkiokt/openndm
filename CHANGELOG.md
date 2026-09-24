@@ -8,6 +8,26 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Fixed
 
+- **A boundary Dhat update outside the trusted band is now discarded rather
+  than clamped**, which is what actually fixes the multi-group convergence the
+  under-relaxation of #79 only partly addressed. Damping removed the two-cycle
+  at one node per assembly; on a 2x2 radially refined eight-group core it did
+  not, and no damping factor above 0.2 converged at all.
+
+  The clamp was the cause. A one-node correction that lands outside
+  `dhat_limit` has been asked for a current the coarse mesh cannot express as
+  Dhat times a node flux, so saturating it at the limit replaces an
+  untrustworthy number with a large wrong one. Discarding it keeps the value
+  that face already had, which on the first update is the finite difference
+  coupling -- the right thing to fall back to.
+
+  With it the refined eight-group core converges in 25 outers undamped and 16
+  damped, against not at all before. Interior faces still clamp, as PARCS and
+  KOMODO do: their Dhat divides by the sum of two node fluxes and does not
+  reach the band in the first place.
+
+  Every eigenvalue, error and convergence order reported for #77 is unchanged.
+
 - **The boundary Dhat update no longer oscillates on a multi-group deck.**
   The one-node boundary problem added in #77 writes a face current as `Dhat`
   times the node-average flux. In an intermediate group of a long down-scatter
