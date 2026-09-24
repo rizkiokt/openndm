@@ -44,6 +44,19 @@ from ..exceptions import ConvergenceError, InputError
 
 __all__ = ["CriticalSpectrum", "b1_gamma", "critical_spectrum"]
 
+_SERIES_LIMIT_X = 1.0e-8
+"""Magnitude of ``x`` below which gamma is left at its P1 limit of one.
+
+The series ``alpha = 1 - x/3 + x^2/5`` carries gamma to one as ``x`` vanishes.
+"""
+
+_ARTANH_DOMAIN_LIMIT = 0.999999
+"""Largest r taken as inside artanh's domain.
+
+Beyond it the B1 form has no real solution, and the P1 value of one is the
+defensible fallback.
+"""
+
 
 def b1_gamma(buckling: float, total: np.ndarray) -> np.ndarray:
     """B1 leakage correction factor :math:`\\gamma_g`.
@@ -54,8 +67,7 @@ def b1_gamma(buckling: float, total: np.ndarray) -> np.ndarray:
     total = np.asarray(total, dtype=float)
     x = buckling / np.square(total)
     gamma = np.ones_like(x)
-    # Series expansion near zero: alpha = 1 - x/3 + x^2/5, so gamma -> 1.
-    small = np.abs(x) < 1.0e-8
+    small = np.abs(x) < _SERIES_LIMIT_X
     with np.errstate(invalid="ignore", divide="ignore"):
         positive = (~small) & (x > 0)
         if np.any(positive):
@@ -65,9 +77,7 @@ def b1_gamma(buckling: float, total: np.ndarray) -> np.ndarray:
         negative = (~small) & (x < 0)
         if np.any(negative):
             r = np.sqrt(-x[negative])
-            # artanh diverges at r = 1; beyond that the B1 form has no real
-            # solution and the P1 value is the defensible fallback.
-            usable = r < 0.999999
+            usable = r < _ARTANH_DOMAIN_LIMIT
             alpha = np.ones_like(r)
             alpha[usable] = np.arctanh(r[usable]) / r[usable]
             g = np.ones_like(r)
@@ -130,17 +140,20 @@ def _k_of_buckling(buckling, total, scatter, nu_fission, chi, transport, method)
     stopped being physical. That happens at sufficiently negative buckling,
     where the leakage term cancels removal and the flux solution changes sign;
     the bracketing search uses it to stay inside the physical region.
+
+    The balance matrix is indexed ``[g, g']`` and multiplies the flux of group
+    ``g'`` in the balance of group ``g``, which is why the scattering matrix
+    enters transposed.
     """
     if method == "b1":
         D = b1_gamma(buckling, total) / (3.0 * transport)
     else:
         D = 1.0 / (3.0 * transport)
-    # M[g, g'] multiplies phi_{g'} in the balance of group g.
-    M = np.diag(total + D * buckling) - scatter.T
-    if np.any(np.diag(M) <= 0.0):
+    balance = np.diag(total + D * buckling) - scatter.T
+    if np.any(np.diag(balance) <= 0.0):
         return None, None, D
     try:
-        phi = np.linalg.solve(M, chi)
+        phi = np.linalg.solve(balance, chi)
     except np.linalg.LinAlgError:
         return None, None, D
     if np.any(phi < 0.0):
@@ -156,7 +169,9 @@ def _bracket(residual, f_zero, width, tolerance):
     is supercritical at zero buckling and on the negative side otherwise. On
     the negative side the physical region is bounded, so the search first
     walks *inward* from the trial point until the residual is defined, and
-    only then expands outward.
+    only then expands outward. A doubling step that lands outside the physical
+    region has crossed the pole bounding it, so that step is halved once rather
+    than abandoned.
     """
     if abs(f_zero) < tolerance:
         return 0.0, f_zero, 0.0, f_zero, 0
@@ -178,7 +193,6 @@ def _bracket(residual, f_zero, width, tolerance):
 
     hi, f_hi = 0.0, f_zero
     lo = -width
-    # Walk inward until the residual exists at all.
     while steps < 60:
         f_lo = residual(lo)
         if f_lo is not None:
@@ -187,7 +201,6 @@ def _bracket(residual, f_zero, width, tolerance):
         steps += 1
     else:
         return lo, f_hi, hi, f_hi, steps
-    # Then outward until it changes sign, without leaving the physical region.
     while steps < 60:
         if f_lo > 0.0:
             return lo, f_lo, hi, f_hi, steps
@@ -195,7 +208,6 @@ def _bracket(residual, f_zero, width, tolerance):
         candidate = lo * 2.0
         f_candidate = residual(candidate)
         if f_candidate is None:
-            # The pole lies between lo and candidate; close in on it instead.
             candidate = 0.5 * (lo + candidate)
             f_candidate = residual(candidate)
             if f_candidate is None:
@@ -245,6 +257,12 @@ def critical_spectrum(
     ConvergenceError
         If no sign change can be bracketed, or bisection fails to converge.
 
+    Notes
+    -----
+    The search bisects on :math:`B^2`. A midpoint at which the balance operator
+    has stopped being physical lies below the pole that bounds the negative
+    side, so the lower half is discarded and the search continues.
+
     Examples
     --------
     >>> import numpy as np
@@ -287,8 +305,8 @@ def critical_spectrum(
             "total and scattering cross sections"
         )
 
-    if abs(k_inf - target_k) < tolerance:
-        # Already critical at infinite dilution: zero buckling is the answer.
+    already_critical = abs(k_inf - target_k) < tolerance
+    if already_critical:
         _, phi, D = _k_of_buckling(
             0.0, total, scatter, nu_fission, chi, transport, method
         )
@@ -320,7 +338,6 @@ def critical_spectrum(
         mid = 0.5 * (lo + hi)
         f_mid = residual(mid)
         if f_mid is None:
-            # Unphysical midpoint: the pole is below it, so keep the upper half.
             lo = mid
             continue
         if abs(f_mid) < tolerance or abs(hi - lo) < 1.0e-14:

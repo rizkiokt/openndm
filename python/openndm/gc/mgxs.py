@@ -29,11 +29,12 @@ __all__ = [
     "require_openmc",
 ]
 
-#: Relative disagreement between the two diffusion coefficient sources above
-#: which a warning is issued (FR-OMC-5).
 DEFAULT_D_TOLERANCE = 0.05
+"""Relative disagreement between the two sources of D that raises a warning.
 
-#: MGXS type names accepted for each OpenNDM field, in preference order.
+The two sources are ``diffusion-coefficient`` and ``transport`` (FR-OMC-5).
+"""
+
 _FIELD_TYPES = {
     "absorption": ("absorption",),
     "nu_fission": ("nu-fission",),
@@ -41,18 +42,23 @@ _FIELD_TYPES = {
     "chi": ("chi",),
     "inv_velocity": ("inverse-velocity",),
 }
+"""MGXS type names accepted for each OpenNDM field, in preference order."""
+
 _SCATTER_TYPES = (
     "consistent nu-scatter matrix",
     "nu-scatter matrix",
     "consistent scatter matrix",
     "scatter matrix",
 )
-#: Scattering matrix scores paired as (with multiplicity, without). The
-#: difference of their row sums is the (n,xn) multiplicity excess.
 _SCATTER_PAIRS = (
     ("consistent nu-scatter matrix", "consistent scatter matrix"),
     ("nu-scatter matrix", "scatter matrix"),
 )
+"""Scattering matrix scores paired as (with multiplicity, without).
+
+The difference of their row sums is the (n,xn) multiplicity excess.
+"""
+
 _DIFFUSION_TYPES = ("diffusion-coefficient",)
 _TRANSPORT_TYPES = ("transport", "nu-transport")
 
@@ -125,6 +131,24 @@ def _first_available(library, domain, names):
     return None, None
 
 
+def _p0_scatter(scatter: np.ndarray) -> np.ndarray:
+    """Drop the Legendre axis an MGXS file carries, keeping only P0.
+
+    Parameters
+    ----------
+    scatter : numpy.ndarray
+        Scattering array of two or more dimensions.
+
+    Returns
+    -------
+    numpy.ndarray, shape (G, G)
+        A view onto ``scatter``.
+    """
+    while scatter.ndim > 2:
+        scatter = scatter[..., 0] if scatter.shape[-1] <= 5 else scatter[0]
+    return scatter
+
+
 def from_mgxs_library(
     library,
     *,
@@ -175,6 +199,10 @@ def from_mgxs_library(
 
     Notes
     -----
+    OpenMC's ``absorption`` score includes fission, which is what the diffusion
+    balance wants, so it is carried over unchanged but for the multiplicity
+    correction below.
+
     Standard deviations are carried through wherever OpenMC provides them
     (FR-XS-9, FR-OMC-6). Monte Carlo noise routinely produces small negative
     scattering transfers; those survive ingestion and are reported as warnings
@@ -261,8 +289,6 @@ def from_mgxs_library(
             raise InputError(
                 f"domain {domain!r} has no absorption cross section"
             )
-        # OpenMC reports absorption including fission, which is what the
-        # diffusion balance wants, so it is used unchanged.
         out.set_composition(
             index,
             D=D,
@@ -306,9 +332,6 @@ def _multiplicity_excess(
 
     available = set(getattr(library, "mgxs_types", ()))
     if multiplied not in available or plain not in available:
-        # Only warn when the library actually carries multiplication. A plain
-        # matrix on its own simply has no (n,xn) neutrons to account for, but
-        # it also silently loses that production.
         warnings.warn(
             f"composition {index}: cannot correct for scattering multiplicity "
             f"because the library has only one of {multiplied!r} and "
@@ -416,9 +439,8 @@ def from_mgxs_file(path, *, reverse_groups: bool = False) -> XSLibrary:
     out = XSLibrary(n_groups, len(names))
 
     for index, xsdata in enumerate(mg.xsdatas):
-        # xsdata is bound as a default so the closure cannot capture the loop
-        # variable by reference.
         def pick(attr, default=None, xsdata=xsdata):
+            """Read one group-ordered array off the bound ``xsdata``."""
             value = getattr(xsdata, attr, None)
             if value is None:
                 return default
@@ -430,10 +452,7 @@ def from_mgxs_file(path, *, reverse_groups: bool = False) -> XSLibrary:
         scatter = getattr(xsdata, "scatter_matrix", None)
         if scatter is None:
             raise InputError(f"{path}: xsdata {names[index]!r} has no scatter matrix")
-        scatter = np.asarray(scatter, dtype=float).squeeze()
-        # The MGXS file keeps a Legendre axis; only P0 feeds diffusion.
-        while scatter.ndim > 2:
-            scatter = scatter[..., 0] if scatter.shape[-1] <= 5 else scatter[0]
+        scatter = _p0_scatter(np.asarray(scatter, dtype=float).squeeze())
         if reverse_groups:
             scatter = scatter[::-1, ::-1]
 

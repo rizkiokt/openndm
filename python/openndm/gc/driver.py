@@ -85,10 +85,13 @@ class BranchGrid:
             yield self[index]
 
     def __getitem__(self, index: int) -> BranchPoint:
+        """Return the branch point at a flat index.
+
+        The grid is unrolled row-major over the axes in declaration order,
+        which is the flat state index the C++ library uses.
+        """
         if not 0 <= index < len(self):
             raise IndexError(index)
-        # Row-major over the axes in declaration order, matching the flat state
-        # index the C++ library uses.
         state = {}
         remaining = index
         for name, points in reversed(list(self.axes.items())):
@@ -145,7 +148,6 @@ class BranchDriver:
     def __post_init__(self):
         self.workdir = Path(self.workdir)
 
-    # ----------------------------------------------------------- checkpoints
     @property
     def checkpoint_path(self) -> Path:
         return self.workdir / "branch_checkpoint.json"
@@ -170,7 +172,6 @@ class BranchDriver:
     def branch_dir(self, point: BranchPoint) -> Path:
         return self.workdir / f"branch_{point.index:05d}_{point.key}"
 
-    # ------------------------------------------------------------ execution
     def run_one(self, point: BranchPoint) -> XSLibrary:
         """Execute one branch point and return its single-state library."""
         from .mgxs import require_openmc
@@ -287,7 +288,6 @@ class BranchDriver:
         out.finalize()
         return out
 
-    # ------------------------------------------------------------ job arrays
     def write_job_array(
         self,
         path,
