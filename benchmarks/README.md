@@ -280,6 +280,71 @@ transient, and the cusping mixture is re-weighted against the previous step's
 flux rather than the current one. Turning the flux weighting off entirely, or
 switching from SANM to FDM, changes the observed convergence not at all.
 
+## performance — the acceptance cases, measured for the first time
+
+`performance/run.py` runs the NFR-PERF targets and reports each against the
+number the specification states. It is not a correctness deck and has no
+reference eigenvalue; it is not run in CI, because timing on a shared runner is
+noisy enough to turn a performance gate into a disabled performance gate.
+
+A target without a machine is not a claim, so the deck names the hardware,
+the governor, the build type and the compiler in its output. On an AMD Ryzen
+9 6900HX (8 physical cores, `powersave`, Release, OpenMP, g++):
+
+| case | target | measured | verdict |
+|---|---|---|---|
+| NFR-PERF-1 | < 1 s | 181 ms, 1800 nodes, 2 groups | pass |
+| NFR-PERF-2 | < 10 s | 1.9 s, 7200 nodes, 8 groups | pass |
+| NFR-PERF-5 | < 500 MB | 70 MB peak RSS | pass |
+| NFR-PERF-6 | < 0.3 s | 104 ms | pass |
+| FR-OPT-3 | >= 2x from warm start | 0.99x | **fail** |
+| NFR-PERF-7 | >= 60% on 8 threads | 31.8% | **fail** |
+| NFR-PERF-3 | < 5 s | no coupled steady state exists | blocked |
+| NFR-PERF-4 | < 5 min | no adaptive time stepping exists | blocked |
+
+The four that pass do so with margin, the smallest being a factor of five.
+
+### The two that fail
+
+**Parallel efficiency is 32%, not 60%.** The curve is 1.79x on two threads,
+2.36x on four and 2.55x on eight: almost all the gain is in the first four.
+Amdahl on the eight-thread figure implies a **31% serial fraction**, which is
+the cost FR-SOL-7 has been calling `partial` without a number — the ILU0
+triangular solves are serial. The eigenvalue is bit-identical on every thread
+count, so FR-OPT-4 holds.
+
+NFR-PERF-7 applies above 1e5 nodes x groups and the NFR-PERF-2 problem is only
+57600, so the scaling case is deliberately larger than it: 16200 nodes at eight
+groups, 129600. At 28800 nodes it is 25%, so the figure is not a small-problem
+artefact.
+
+**Warm start gives nothing on a perturbed solve, and the reason is a
+composability gap.** Warm start itself works, and dramatically: re-solving an
+unchanged model takes 2 outers instead of 24, a 38x saving. But any change to
+the model — a shuffled loading pattern, a perturbed cross section — needs
+`Model.refresh()`, and `refresh()` clears the flux, so there is nothing left
+to start from. A perturbed solve takes the same number of outers whether warm
+start is on or off.
+
+Skipping the `refresh()` is not an option: it is 2x faster and **366 pcm
+wrong**, because the solver keeps the cross sections of the old loading
+pattern. It converges and the answer looks plausible, which is the worst shape
+for a mistake to have.
+
+### The eight-group library is synthetic
+
+NFR-PERF-2 asks for the NFR-PERF-1 problem at eight groups and no eight-group
+data exists for this core. The deck keeps the IAEA thermal group exactly and
+resolves its fast group into seven, each carrying the same absorption and
+scattering seven times faster, so a neutron makes the same journey through a
+longer chain. **The eigenvalue it produces means nothing on its own.** What
+the library is for is an 8x8 scattering matrix and eight group sweeps per
+outer, so that the solve costs what an eight-group solve costs.
+
+It has earned its keep twice over as a correctness deck regardless: it was the
+first deck in this repository with more than two groups, and it found the two
+boundary-Dhat convergence defects fixed in #79 and #80.
+
 ## Adding a deck
 
 A deck is a directory with a `run.py` that imports shared data from

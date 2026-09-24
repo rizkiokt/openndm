@@ -16,7 +16,7 @@ import pytest
 
 import openndm
 
-from conftest import IAEA_2D_REFERENCE, IAEA_3D_REFERENCE, IAEA_MAP
+from conftest import IAEA_2D_REFERENCE, IAEA_3D_REFERENCE, IAEA_MAP, chain_library
 
 BENCHMARKS = Path(__file__).resolve().parents[2] / "benchmarks"
 sys.path.insert(0, str(BENCHMARKS))
@@ -69,6 +69,37 @@ def test_radial_map_invariants_hold():
 def test_conftest_map_matches_the_benchmark_deck():
     """The verification suite and the deck must not drift apart."""
     assert np.array_equal(IAEA_MAP, IAEA_RADIAL_MAP)
+
+
+def test_performance_deck_library_matches_the_test_suite_copy():
+    """The two synthetic eight-group libraries must not drift apart.
+
+    `benchmarks/performance` needs one to size NFR-PERF-2 and the verification
+    suite needs one to cover more than two groups, and neither can import the
+    other. This is the same guard as the core map above, for the same reason:
+    a correction applied to one copy and not the other is invisible.
+    """
+    deck = _deck("performance").eight_group_library()
+    suite = chain_library()
+    assert deck.n_groups == suite.n_groups
+    assert deck.n_compositions == suite.n_compositions
+    for index in range(suite.n_compositions):
+        a = deck.composition(index)
+        b = suite.composition(index)
+        for field in ("D", "absorption", "nu_fission", "chi", "scatter"):
+            np.testing.assert_allclose(
+                np.asarray(getattr(a, field)),
+                np.asarray(getattr(b, field)),
+                err_msg=f"composition {index} field {field}",
+            )
+
+
+def test_performance_deck_reports_every_target():
+    """Each NFR-PERF case must have a stated target, so none is quietly dropped."""
+    targets = _deck("performance").TARGETS
+    for case in range(1, 8):
+        assert f"NFR-PERF-{case}" in targets
+    assert "FR-OPT-3" in targets
 
 
 def test_map_is_not_accidentally_symmetric_only_in_shape():
