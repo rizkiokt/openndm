@@ -66,7 +66,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | FR-SOL-4 | done | Nonlinear two-node iteration on interior surfaces and a one-node problem on boundary faces, so every surface carries a corrected coupling. The boundary update is under-relaxed by `Settings.boundary_relaxation`, without which a group whose boundary flux is small next to its within-node source drives the update into a two-cycle. A node spanning the core along an axis keeps the finite difference coupling on both of its faces there, having no interior surface to take information from. |
 | FR-SOL-5 | done | Power iteration with a capped Wielandt shift; BiCGSTAB with ILU0. |
 | FR-SOL-6 | done | Criteria on k, node-wise fission source and iteration count; `ConvergenceError` carries the count and the residual. |
-| FR-SOL-7 | partial | OpenMP over nodes and surfaces in the two-node update, the matrix-vector product and the source assembly. The triangular solves in ILU0 are serial. |
+| FR-SOL-7 | partial | OpenMP over nodes and surfaces in the two-node update, the matrix-vector product and the source assembly. The triangular solves in ILU0 are serial, and that is now measured: 31% of the runtime is effectively serial by Amdahl on eight threads, so parallel efficiency is 32% where NFR-PERF-7 asks for 60%. The eigenvalue is bit-identical on every thread count. See `benchmarks/performance/`. |
 | FR-SOL-8 | done | Run-time selection; one build runs all three. |
 
 ## 4.5 Calculation modes (FR-MODE)
@@ -124,7 +124,7 @@ like it.
 |---|---|---|
 | FR-OPT-1 | done | No filesystem access anywhere in build/solve/read/mutate/re-solve. |
 | FR-OPT-2 | done | The GIL is released for the whole solve. |
-| FR-OPT-3 | partial | Warm start works and reduces the outer count. The ≥2× speedup on a shuffled loading pattern is not measured. |
+| FR-OPT-3 | partial | Warm start works and reduces the outer count dramatically where it applies: re-solving an unchanged model takes 2 outers instead of 24. It gives **nothing** on a perturbed solve, which is what the requirement asks for, because any change to the model needs `Model.refresh()` and `refresh()` clears the flux. The two do not compose, so the measured speedup on a shuffled loading pattern is 0.99×, not ≥2×. Skipping the refresh is 2× faster and 366 pcm wrong. |
 | FR-OPT-4 | done | Fixed-size chunked reductions; tested bit-identical on 1, 2, 4 and 8 threads. |
 | FR-OPT-5 | done | Zero-copy numpy views with keep-alive, through pybind11 rather than xtensor. |
 | FR-OPT-6 | done | Typed exceptions on every path; nothing aborts. |
@@ -156,7 +156,13 @@ like it.
 
 | ID | State | Notes |
 |---|---|---|
-| NFR-PERF-1..7 | not measured | No performance acceptance runs have been done on the reference hardware. The IAEA-2D quarter core at one node per assembly solves in about 15 ms and the IAEA-3D core with 19 axial planes in about 150 ms, both single-threaded, which suggests the targets are reachable, but that is an observation and not an acceptance test. |
+| NFR-PERF-1 | done | 181 ms against < 1 s, single-threaded. |
+| NFR-PERF-2 | done | 1.9 s against < 10 s, single-threaded, on a synthetic eight-group library. |
+| NFR-PERF-3 | not started | Needs the coupled steady state, which needs FR-TH and FR-MODE-7. |
+| NFR-PERF-4 | not started | Names adaptive time stepping, which is not implemented. A fixed-step rod ejection can be timed but is not the stated case. |
+| NFR-PERF-5 | done | 70 MB peak resident against < 500 MB, interpreter included. |
+| NFR-PERF-6 | done | 104 ms against < 0.3 s. Passes on the clock, but see FR-OPT-3: it is not actually warm started. |
+| NFR-PERF-7 | **failed** | 32% parallel efficiency on eight threads against a 60% target, on 16200 nodes at eight groups. 25% at 28800 nodes, so not a small-problem artefact. The serial ILU0 triangular solves are the cause; see FR-SOL-7. |
 | NFR-QA-1 | partial | Catch2 for C++ and pytest for Python. Coverage is collected in CI but the 80% line coverage gate is not enforced. |
 | NFR-QA-2 | done | Every deck runs in CI. The four static decks meet the 100 pcm acceptance criterion: IAEA-2D, IAEA-3D, BIBLIS-2D and the analytic cuboid, the last against exact algebra rather than a published reference. `benchmarks/lmw` is a transient whose specification states the scenario and not the answer, so it is tested for the conventions it depends on and the shape it produces, and its power history is reported rather than scored. |
 | NFR-QA-3 | done | Linux gcc and clang, macOS clang, Python 3.10 to 3.13, all green. Windows is not built and is not documented as WSL-only. The OpenMC coupling job runs on manual dispatch only, because no stable public nuclear data URL exists to hard-code; see `tests/validation/README.md`. |
@@ -166,13 +172,19 @@ like it.
 | NFR-QA-7 | partial | [`theory.md`](theory.md) writes out every equation the code currently solves, with the discretisation. It covers only what is implemented. |
 | V-1 | done | Analytic bare cuboid, and a reflected slab against its transcendental criticality condition. |
 | V-2 | done | Method of manufactured solutions for the multi-group operator, with the observed order of accuracy of each kernel. |
-| V-3 | done | Coarse nodal against refined finite difference; SANM against NEM to 0.08 pcm. |
+| V-3 | done | Coarse nodal against refined finite difference; SANM and NEM agree to the last digit printed from four nodes per assembly onward. |
 | V-4 | done | Adjoint eigenvalue equality, and first-order perturbation theory against a direct re-solve, which tests the adjoint flux shape rather than only the operator transpose. |
 | NFR-EXT-1 | done | See FR-GEO-6. |
 | NFR-EXT-2 | done | Group count, precursor count and branch axes are all run-time. |
 | NFR-EXT-3 | partial | cp310-cp313 wheels build in CI on manylinux_2_28 and macOS arm64, with x86_64 macOS cross-compiled from the arm64 runner because GitHub is retiring the Intel one. The release pipeline is tag-triggered and uses trusted publishing, refusing to build unless the tag, `pyproject.toml` and `CMakeLists.txt` agree on the version, and there is a conda-forge recipe. No tag has been cut, so nothing is published yet. |
 | NFR-EXT-4 | done | No dependency beyond a C++17 compiler; the build fetches nothing at configure time. |
 | NFR-EXT-5 | not started | The public `extern "C"` API. |
+
+Measured on an AMD Ryzen 9 6900HX, 8 physical cores, `powersave` governor,
+Release build with OpenMP, g++. A target without a machine is not a claim, so
+any of these numbers travels with that line. `benchmarks/performance/run.py`
+re-runs them all.
+
 
 ---
 

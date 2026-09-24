@@ -6,6 +6,42 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The performance acceptance cases, run for the first time**
+  (`benchmarks/performance/`, NFR-PERF-1 to NFR-PERF-7). The specification has
+  stated numeric targets since the beginning and none of them had ever been
+  measured. The deck names the hardware, governor, build type and compiler in
+  its output, because a target without a machine is not a claim.
+
+  On an AMD Ryzen 9 6900HX, 8 physical cores, Release with OpenMP: NFR-PERF-1
+  181 ms against 1 s, NFR-PERF-2 1.9 s against 10 s, NFR-PERF-5 70 MB against
+  500 MB, NFR-PERF-6 104 ms against 0.3 s. All four pass with at least a factor
+  of five in hand.
+
+  **Two fail, and both were previously carried as unmeasured `partial`.**
+
+  NFR-PERF-7 asks for 60% parallel efficiency on eight threads and gets **32%**
+  -- 1.79x on two threads, 2.36x on four, 2.55x on eight. Amdahl implies a 31%
+  serial fraction, which is the price of the serial ILU0 triangular solves that
+  FR-SOL-7 has been calling `partial` without a number. Measured on 16200 nodes
+  at eight groups, and 25% at 28800 nodes, so it is not a small-problem
+  artefact. The eigenvalue is bit-identical on every thread count, so FR-OPT-4
+  holds.
+
+  FR-OPT-3 asks for a 2x warm-start speedup on a shuffled loading pattern and
+  gets **0.99x**. Warm start itself works, and dramatically -- re-solving an
+  unchanged model takes 2 outers instead of 24 -- but every way of changing the
+  model requires `Model.refresh()`, and `refresh()` clears the flux, so there
+  is nothing left to start from. Skipping the refresh is 2x faster and 366 pcm
+  wrong.
+
+  NFR-PERF-3 and NFR-PERF-4 cannot be run: one needs the coupled steady state,
+  the other names adaptive time stepping, and neither exists.
+
+  Not wired into CI. Timing on a shared runner is noisy enough to turn a
+  performance gate into a disabled performance gate; report first.
+
 ### Fixed
 
 - **A boundary Dhat update outside the trusted band is now discarded rather
