@@ -36,8 +36,8 @@ __all__ = [
     "external_backend",
 ]
 
-#: Specific gas constant of ordinary water, J/(kg K). IF97 Eq. (1).
 GAS_CONSTANT = 461.526
+"""Specific gas constant of ordinary water, J/(kg K). IF97 Eq. (1)."""
 
 _REGION1_PRESSURE_STAR = 16.53e6
 _REGION1_TEMPERATURE_STAR = 1386.0
@@ -106,20 +106,26 @@ _REGION4_N = np.array(
     ]
 )
 
-#: Range of validity of region 1, IF97 Eq. (7): 273.15 K to 623.15 K at
-#: pressures from the saturation line to 100 MPa.
 REGION1_TEMPERATURE_RANGE = (273.15, 623.15)
+"""Temperatures over which IF97 region 1 holds, K. IF97 Eq. (7)."""
+
 REGION1_PRESSURE_LIMIT = 100.0e6
+"""Highest pressure at which IF97 region 1 holds, Pa; the lowest is the
+saturation line rather than a constant. IF97 Eq. (7)."""
 
-#: Critical point, IF97 Eqs. (2) and (3): above this pressure there is no
-#: saturation line to cross.
 CRITICAL_TEMPERATURE = 647.096
-CRITICAL_PRESSURE = 22.064e6
+"""Critical temperature of water, K. IF97 Eq. (2)."""
 
-#: Range over which the saturation line is defined, IF97 Section 8. The lower
-#: pressure is the value Eq. (31) gives when extrapolated to 273.15 K.
+CRITICAL_PRESSURE = 22.064e6
+"""Critical pressure of water, Pa; above it there is no saturation line to
+cross. IF97 Eq. (3)."""
+
 SATURATION_TEMPERATURE_RANGE = (273.15, CRITICAL_TEMPERATURE)
+"""Temperatures over which the saturation line is defined, K. IF97 Section 8."""
+
 SATURATION_PRESSURE_RANGE = (611.213, CRITICAL_PRESSURE)
+"""Pressures over which the saturation line is defined, Pa. The lower one is
+what IF97 Eq. (31) gives when extrapolated to 273.15 K. IF97 Section 8."""
 
 
 @runtime_checkable
