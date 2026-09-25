@@ -40,8 +40,8 @@ from common import (
 
 import openndm
 
-#: Published reference eigenvalue for the benchmark as specified.
 PUBLISHED_K_EFF = 1.02903
+"""Published reference eigenvalue for the benchmark as specified."""
 
 FUEL_2 = IAEA_ORDER.index("fuel_2")
 FUEL_2_RODDED = IAEA_ORDER.index("fuel_2_rodded")
@@ -77,20 +77,20 @@ def build(dz_target: float = 20.0, subdivide: int = 1):
     rodded_position = radial == FUEL_2_RODDED
     outside = radial == openndm.INACTIVE
 
-    core = np.empty((planes, 9, 9), dtype=int)
-    # Bottom reflector: no rod reaches this far down.
-    core[0] = np.where(outside, openndm.INACTIVE, REFLECTOR)
-    # Top reflector: the rods pass through it at the rodded positions.
-    core[-1] = np.where(
+    bottom_reflector = np.where(outside, openndm.INACTIVE, REFLECTOR)
+    top_reflector = np.where(
         outside,
         openndm.INACTIVE,
         np.where(rodded_position, REFLECTOR_RODDED, REFLECTOR),
     )
+
+    core = np.empty((planes, 9, 9), dtype=int)
+    core[0] = bottom_reflector
+    core[-1] = top_reflector
     for k in range(1, planes - 1):
-        # Planes at or below the rod tip see plain fuel 2 at the rod positions.
-        below_tip = k <= n_unrodded
+        plane_is_below_the_rod_tip = k <= n_unrodded
         core[k] = np.where(
-            rodded_position & below_tip, FUEL_2, radial
+            rodded_position & plane_is_below_the_rod_tip, FUEL_2, radial
         )
 
     geometry = openndm.Geometry.from_lattice(

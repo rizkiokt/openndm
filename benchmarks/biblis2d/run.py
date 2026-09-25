@@ -32,12 +32,9 @@ from common import benchmark_settings, report
 
 import openndm
 
-#: KOMODO boundary codes to OpenNDM names.
 _BC = {0: "zero_flux", 1: "vacuum", 2: "reflective"}
+"""KOMODO boundary codes to OpenNDM names."""
 
-#: The source deck's (east, west, north, south, bottom, top) = 1 2 2 1 2 2.
-#: East and south are the outer faces, west and north the symmetry cuts, and
-#: the two axial faces are reflective, which makes the problem 2D.
 BOUNDARIES = {
     "x_max": _BC[1],
     "x_min": _BC[2],
@@ -46,15 +43,23 @@ BOUNDARIES = {
     "z_min": _BC[2],
     "z_max": _BC[2],
 }
+"""The source deck's (east, west, north, south, bottom, top) = 1 2 2 1 2 2.
+
+East and south are the outer faces, west and north the symmetry cuts, and the
+two axial faces are reflective, which makes the problem 2D.
+"""
 
 
 def biblis_library() -> openndm.XSLibrary:
+    """Two-group BIBLIS library, compositions in source-deck order.
+
+    The source deck gives the reflector a fission spectrum of 1.0 with no
+    fission source, which ``finalize()`` warns about. It is kept as the deck
+    has it: chi only ever multiplies a fission source that is zero there.
+    """
     library = openndm.XSLibrary(2, len(COMPOSITIONS))
     for index, composition in enumerate(COMPOSITIONS):
         library.set_composition(index, **composition)
-    # The source deck gives the reflector a fission spectrum of 1.0 with no
-    # fission source, which finalize() warns about. Kept as the deck has it:
-    # chi only ever multiplies a fission source that is zero there.
     library.finalize()
     return library
 

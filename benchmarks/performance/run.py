@@ -29,16 +29,21 @@ from common import (
 
 import openndm
 
-#: Axial planes of the NFR-PERF-1 problem, per the specification.
 AXIAL_PLANES = 24
+"""Axial planes of the NFR-PERF-1 problem, per the specification."""
+
 CORE_HEIGHT = 380.0
+"""Height of the NFR-PERF-1 core, cm."""
 
-#: Number of fast groups in the synthetic eight-group library.
 FAST_GROUPS = 7
+"""Number of fast groups in the synthetic eight-group library."""
 
-#: Repeats of each timed case; the median is reported, because a single run on
-#: a laptop catches whatever else the scheduler was doing.
 REPEATS = 3
+"""Repeats of each timed case.
+
+The median is reported, because a single run on a laptop catches whatever
+else the scheduler was doing.
+"""
 
 TARGETS = {
     "FR-OPT-3": ">= 2x vs cold",
@@ -266,10 +271,12 @@ def run_perf6():
     return cold / warm
 
 
-#: Radial subdivision of the thread-scaling case. NFR-PERF-7 applies above
-#: 1e5 nodes x groups, and the NFR-PERF-2 problem is only 57600, so the
-#: requirement has to be tested on a larger one than it.
 SCALING_SUBDIVIDE = 3
+"""Radial subdivision of the thread-scaling case.
+
+NFR-PERF-7 applies above 1e5 nodes x groups and the NFR-PERF-2 problem is
+only 57600, so the requirement has to be tested on a larger one than it.
+"""
 
 
 def amdahl_serial_fraction(speedup: float, threads: int) -> float:

@@ -16,6 +16,12 @@ benchmark with a published solution. All four static decks meet it. LMW is a
 transient and has no reference in the specification the deck was parsed from;
 what it is good for, and what it is not, is set out below.
 
+Every deck runs through `common.benchmark_settings`, which is tighter than the
+library defaults so that the reported eigenvalue is limited by the spatial
+discretisation rather than by the iteration. At the library defaults these
+decks sit about 0.4 pcm off their converged values, enough to blur a
+comparison quoted to five decimal places.
+
 ## analytic — exact reference
 
 The only reference here that needs no other code and no transcription: the

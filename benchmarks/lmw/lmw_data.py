@@ -15,17 +15,21 @@ from __future__ import annotations
 
 import numpy as np
 
-#: Energy groups.
 N_GROUPS = 2
+"""Energy groups."""
 
-#: Uniform node widths after the deck's assembly divisions, in cm.
 DX = 10.0
-DY = 10.0
-DZ = 5.0
-#: Axial nodes.
-N_Z = 40
+"""Node width in x after the deck's assembly divisions, cm."""
 
-#: Two-group constants per composition, KOMODO material 1..3 mapped to 0..2.
+DY = 10.0
+"""Node width in y after the deck's assembly divisions, cm."""
+
+DZ = 5.0
+"""Node width in z after the deck's assembly divisions, cm."""
+
+N_Z = 40
+"""Axial nodes."""
+
 COMPOSITIONS = [
     {
         "D": [1.423912995498584, 0.35630598346419556],
@@ -55,8 +59,8 @@ COMPOSITIONS = [
         "inv_velocity": [8e-08, 4e-06],
     },
 ]
+"""Two-group constants per composition, KOMODO material 1..3 mapped to 0..2."""
 
-#: Cross section increments a fully rodded node takes, per composition.
 ROD_DELTA = [
     {
         "transport": [0.0, 0.0],
@@ -77,9 +81,8 @@ ROD_DELTA = [
         "kappa_fission": [0.0, 0.0],
     },
 ]
+"""Cross section increments a fully rodded node takes, per composition."""
 
-#: Radial composition map of each planar type, on the node mesh,
-#: south row first. 0 marks a lattice position outside the core.
 PLANAR_TYPES = np.array([
     [
         [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
@@ -108,14 +111,17 @@ PLANAR_TYPES = np.array([
         [3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 0],
     ],
 ])
+"""Radial composition map of each planar type, on the node mesh.
 
-#: Planar type of each axial node, bottom to top.
+South row first; 0 marks a lattice position outside the core.
+"""
+
 PLANE_ASSIGNMENT = [
     0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,
 ]
+"""Planar type of each axial node, bottom to top."""
 
-#: Bank occupying each lattice position on the node mesh, 0 for none.
 BANK_MAP = np.array([
     [1, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -129,35 +135,46 @@ BANK_MAP = np.array([
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 ])
+"""Bank occupying each lattice position on the node mesh, 0 for none."""
 
-#: Boundary codes as the deck gives them: east, west, north, south,
-#: bottom, top. 0 zero flux, 1 zero incoming current, 2 reflective.
 BOUNDARY_CODES = [1, 2, 1, 2, 1, 1]
+"""Boundary codes in the deck's order: east, west, north, south, bottom, top.
 
-#: Rod travel: cm per step, tip height at step 0, and the step cap.
+0 is zero flux, 1 zero incoming current, 2 reflective.
+"""
+
 STEP_SIZE = 1.0
-ZERO_POSITION = 0.0
-MAX_STEPS = 180
+"""Rod travel per step, cm."""
 
-#: Bank position in steps at t = 0.
+ZERO_POSITION = 0.0
+"""Rod tip height at step 0, cm."""
+
+MAX_STEPS = 180
+"""Step cap on rod travel."""
+
 INITIAL_POSITION = {
     "bank_1": 180.0,
     "bank_2": 100.0,
 }
+"""Bank position in steps at t = 0."""
 
-#: Bank motion: final position in steps, when it starts, steps per second.
 MOTION = {
     "bank_1": {"final": 60.0, "start": 7.5, "speed": 3.0},
     "bank_2": {"final": 180.0, "start": 0.0, "speed": 3.0},
 }
+"""Bank motion: final position in steps, when it starts, steps per second."""
 
-#: Transient duration and the deck's time step, in seconds.
 TOTAL_TIME = 60.0
+"""Transient duration, s."""
+
 TIME_STEP = 0.25
+"""The deck's time step, s."""
 
-#: Delayed neutron fraction and decay constant per precursor group.
 BETA = [0.00025, 0.00138, 0.00122, 0.00265, 0.00083, 0.00017]
-DECAY_CONSTANT = [0.0127, 0.0317, 0.115, 0.311, 1.4, 3.87]
+"""Delayed neutron fraction per precursor group."""
 
-#: Time integration weight the deck asks for.
+DECAY_CONSTANT = [0.0127, 0.0317, 0.115, 0.311, 1.4, 3.87]
+"""Precursor decay constant per group, s^-1."""
+
 THETA = 0.5
+"""Time integration weight the deck asks for."""
