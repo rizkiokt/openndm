@@ -947,6 +947,38 @@ temperature-dependent and citing one is your call, not ours. A constant is
 exact at any ring count; a callable is evaluated at each ring's outer boundary,
 which is first order in `n_rings`, so mesh accordingly.
 
+### Boiling
+
+A PWR channel stays liquid. A BWR one does not, and `two_phase=True` lets it
+boil:
+
+```python
+channel = openndm.ChannelModel(
+    geom, pins, mass_flow=15.0, inlet_temperature=550.0,
+    pressure=7.0e6, two_phase=True,
+)
+channel.quality          # equilibrium steam quality per node
+channel.void_fraction    # void fraction per node
+```
+
+Nothing about the enthalpy integration changes. Only its inversion does: above
+the saturated liquid enthalpy the temperature stops at the boiling point and
+the surplus becomes quality and void, and `moderator_density` becomes the
+mixture density. **A channel that stays subcooled gives bit-identical answers
+with and without the flag**, so turning it on extends the range of validity
+rather than switching model.
+
+The backend has to know both sides of the saturation line, so `ConstantWater`
+is refused here and `IF97Water` is not. A channel driven past the saturated
+vapour enthalpy raises rather than reporting superheated steam, which is not
+modelled.
+
+`slip_ratio` defaults to 1, which is the homogeneous equilibrium model proper
+and makes the mixture density exactly the inverse of the mass-weighted
+specific volume. Anything else is a correlation you are choosing; **no
+published slip correlation ships with OpenNDM**, for the same reason no
+conductivity correlation does.
+
 ### Cross sections live per composition
 
 This is the constraint the whole coupled mode is shaped around. A temperature

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from .exceptions import InputError
-from .water import IF97Water
+from .water import IF97Water, SaturationProperties
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -144,6 +144,10 @@ class ChannelModel:
     power between the coolant and the pin, and so sets
     :attr:`linear_heat_rate`, which is what a conduction model consumes.
 
+    With ``two_phase`` the enthalpy integration is unchanged and only its
+    inversion differs: above the saturated liquid enthalpy the temperature
+    stops at the boiling point and the surplus becomes quality and void.
+
     Parameters
     ----------
     geometry : Geometry
@@ -168,6 +172,15 @@ class ChannelModel:
         Radial pin conduction (FR-TH-2). Without it the model reports the
         coolant alone; with it, also the fuel and Doppler temperatures. It
         must carry the same ``pins``.
+    two_phase : bool, optional
+        Allow the coolant to boil (FR-TH-5). The backend must then satisfy
+        :class:`~openndm.SaturationProperties`. A channel that stays
+        subcooled gives bit-identical answers either way, so this extends the
+        range of validity rather than changing the model.
+    slip_ratio : float, optional
+        Ratio of vapour to liquid velocity in the void fraction. One is the
+        homogeneous equilibrium model and the default; anything else is a
+        correlation the caller is choosing.
 
     Attributes
     ----------
@@ -212,6 +225,8 @@ class ChannelModel:
         direct_heating: float = 0.0,
         water: WaterProperties | None = None,
         conduction: PinConduction | None = None,
+        two_phase: bool = False,
+        slip_ratio: float = 1.0,
     ):
         if not inlet_temperature > 0.0:
             raise InputError(
@@ -231,6 +246,8 @@ class ChannelModel:
                 "the conduction model was built on different pin dimensions "
                 "from the channel"
             )
+        if not slip_ratio > 0.0:
+            raise InputError(f"slip_ratio must be positive, got {slip_ratio}")
 
         self._geometry = geometry
         self.pins = pins
@@ -238,8 +255,15 @@ class ChannelModel:
         self.inlet_temperature = float(inlet_temperature)
         self.direct_heating = float(direct_heating)
         self._water = IF97Water() if water is None else water
+        if two_phase and not isinstance(self._water, SaturationProperties):
+            raise InputError(
+                "a two-phase channel needs a backend giving both sides of the "
+                "saturation line; ConstantWater does not, IF97Water does"
+            )
         self._conduction = conduction
         self._pin_state = None
+        self.two_phase = bool(two_phase)
+        self.slip_ratio = float(slip_ratio)
 
         self._nodes = _channel_columns(geometry)
         self._active = self._nodes >= 0
@@ -285,6 +309,20 @@ class ChannelModel:
     def mass_flux(self) -> np.ndarray:
         """Coolant mass flux per channel, kg/(m^2 s)."""
         return self._mass_flow / self.pins.flow_area
+
+    @property
+    def quality(self) -> np.ndarray:
+        """Equilibrium steam quality per node, shape ``(n_nodes,)``.
+
+        Zero everywhere in a single-phase channel, and zero at and below the
+        saturated liquid enthalpy in a two-phase one. A copy.
+        """
+        return self._quality.copy()
+
+    @property
+    def void_fraction(self) -> np.ndarray:
+        """Void fraction per node, shape ``(n_nodes,)``. A copy."""
+        return self._void_fraction.copy()
 
     @property
     def pin_state(self) -> PinState | None:
@@ -337,16 +375,102 @@ class ChannelModel:
         average = inlet + rise - 0.5 * per_channel / self._mass_flow[:, np.newaxis]
         self._outlet_enthalpy = inlet + rise[:, -1]
         self._enthalpy = self._scatter(average, fill=inlet)
-        self._temperature = np.asarray(
-            self._water.temperature(self.pressure, self._enthalpy), dtype=float
-        )
-        self._density = np.asarray(
-            self._water.density(self.pressure, self._temperature), dtype=float
-        )
+        (
+            self._temperature,
+            self._density,
+            self._quality,
+            self._void_fraction,
+        ) = self._invert(self._enthalpy)
         if self._conduction is not None:
             self._pin_state = self._conduction.solve(
                 self.linear_heat_rate, self._temperature
             )
+
+    def _invert(self, enthalpy: np.ndarray):
+        """Temperature, density, quality and void fraction from enthalpy.
+
+        Single phase is the whole story unless ``two_phase`` is set. When it
+        is, the subcooled nodes take exactly the same path they would have
+        taken without it, so a channel that never reaches saturation gives
+        bit-identical answers either way.
+        """
+        if not self.two_phase:
+            temperature = np.asarray(
+                self._water.temperature(self.pressure, enthalpy), dtype=float
+            )
+            density = np.asarray(
+                self._water.density(self.pressure, temperature), dtype=float
+            )
+            zero = np.zeros_like(temperature)
+            return temperature, density, zero, zero.copy()
+
+        liquid_enthalpy = float(
+            self._water.saturated_liquid_enthalpy(self.pressure)
+        )
+        vapour_enthalpy = float(
+            self._water.saturated_vapour_enthalpy(self.pressure)
+        )
+        if np.any(enthalpy > vapour_enthalpy):
+            hottest = float(enthalpy.max())
+            raise InputError(
+                f"the channel boils dry: node enthalpy reaches {hottest} J/kg "
+                f"against a saturated vapour enthalpy of {vapour_enthalpy} "
+                f"J/kg. Superheated steam is not modelled"
+            )
+
+        boiling = enthalpy > liquid_enthalpy
+        temperature = np.empty_like(enthalpy)
+        density = np.empty_like(enthalpy)
+        quality = np.zeros_like(enthalpy)
+
+        subcooled = ~boiling
+        if subcooled.any():
+            temperature[subcooled] = self._water.temperature(
+                self.pressure, enthalpy[subcooled]
+            )
+            density[subcooled] = self._water.density(
+                self.pressure, temperature[subcooled]
+            )
+        if boiling.any():
+            temperature[boiling] = self._water.saturation_temperature(
+                self.pressure
+            )
+            quality[boiling] = (enthalpy[boiling] - liquid_enthalpy) / (
+                vapour_enthalpy - liquid_enthalpy
+            )
+
+        void_fraction = self._void_from_quality(quality)
+        liquid_density = float(
+            self._water.saturated_liquid_density(self.pressure)
+        )
+        vapour_density = float(
+            self._water.saturated_vapour_density(self.pressure)
+        )
+        density[boiling] = (
+            void_fraction[boiling] * vapour_density
+            + (1.0 - void_fraction[boiling]) * liquid_density
+        )
+        return temperature, density, quality, void_fraction
+
+    def _void_from_quality(self, quality: np.ndarray) -> np.ndarray:
+        """Void fraction of a homogeneous mixture at a given quality.
+
+        At ``slip_ratio`` one this is the homogeneous equilibrium model, where
+        the mixture density it implies is exactly the inverse of the
+        mass-weighted specific volume. A larger slip ratio is the caller's
+        correlation, not this model's.
+        """
+        density_ratio = float(
+            self._water.saturated_vapour_density(self.pressure)
+        ) / float(self._water.saturated_liquid_density(self.pressure))
+        void = np.zeros_like(quality)
+        flowing = quality > 0.0
+        if flowing.any():
+            x = quality[flowing]
+            void[flowing] = 1.0 / (
+                1.0 + (1.0 - x) / x * density_ratio * self.slip_ratio
+            )
+        return void
 
     def get_temperatures(self) -> Mapping[str, np.ndarray]:
         """Temperature per node in K, keyed by field.
