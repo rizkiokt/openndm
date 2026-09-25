@@ -55,7 +55,12 @@ from .thermal import (
     ThermalSolver,
 )
 from .vtk import write_vtk
-from .water import ConstantWater, IF97Water, WaterProperties
+from .water import (
+    ConstantWater,
+    IF97Water,
+    SaturationProperties,
+    WaterProperties,
+)
 from .xslib import XSLibrary, rotate_adf, rotated_face
 
 __version__ = _core.__version__
@@ -86,6 +91,7 @@ __all__ = [
     "PinState",
     "Result",
     "RodWorth",
+    "SaturationProperties",
     "Settings",
     "StatePoint",
     "ThermalSolver",
