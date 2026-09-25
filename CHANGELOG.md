@@ -8,6 +8,29 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Single-phase closed-channel coolant model** (`openndm.ChannelModel`,
+  FR-TH-1, FR-TH-6). One channel per radial column of the core map, carrying a
+  fixed mass flow at constant pressure, so the only conservation law left is
+  energy. Enthalpy is integrated up the channel and inverted through the
+  `WaterProperties` backend for temperature and density, reported per node as
+  `moderator_temperature` and `moderator_density`. It is a `ThermalSolver`, so
+  it drives `PicardCoupling` exactly as an external solver would.
+
+  Against `ConstantWater` the channel has a closed-form answer and matches it
+  to 1e-12 relative, for uniform power and for a cosine shape. Against
+  `IF97Water` the enthalpy rise carries the power put in to 1e-9 relative, and
+  the outlet temperature is identical at 5, 10 and 40 axial nodes.
+
+  The fraction of heat deposited directly in the coolant does **not** change
+  the outlet temperature: in steady state every watt reaches the coolant
+  whichever route it takes. It splits the power between coolant and pin, and so
+  sets `linear_heat_rate`, which is what a conduction model consumes.
+
+  `PinGeometry` holds the fuel radius, gap, cladding, pitch and rod counts and
+  derives the flow area, the heated and wetted perimeters and the hydraulic
+  diameter. `absolute_power` turns `Result.power`, which is normalised to a
+  mean of one, into watts per node.
+
 - **The performance acceptance cases, run for the first time**
   (`benchmarks/performance/`, NFR-PERF-1 to NFR-PERF-7). The specification has
   stated numeric targets since the beginning and none of them had ever been
