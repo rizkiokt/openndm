@@ -28,8 +28,8 @@ from common import (
 
 import openndm
 
-#: Published fine-mesh eigenvalue for the benchmark as specified.
 PUBLISHED_K_EFF = 1.02959
+"""Published fine-mesh eigenvalue for the benchmark as specified."""
 
 
 def build(subdivide: int = 1) -> tuple[openndm.Geometry, openndm.XSLibrary]:

@@ -68,12 +68,9 @@ from lmw_data import (
 
 import openndm
 
-#: KOMODO boundary codes to OpenNDM names.
 _BC = {0: "zero_flux", 1: "vacuum", 2: "reflective"}
+"""KOMODO boundary codes to OpenNDM names."""
 
-#: The deck gives boundaries as east, west, north, south, bottom, top.
-#: ``1 2 1 2 1 1`` makes west and south the symmetry cuts, which is what the
-#: half-width first assembly on each of those axes is for.
 BOUNDARIES = dict(
     zip(
         ("x_max", "x_min", "y_max", "y_min", "z_min", "z_max"),
@@ -81,9 +78,14 @@ BOUNDARIES = dict(
         strict=True,
     )
 )
+"""The deck gives boundaries as east, west, north, south, bottom, top.
 
-#: Bank names in the order the deck numbers them.
+``1 2 1 2 1 1`` makes west and south the symmetry cuts, which is what the
+half-width first assembly on each of those axes is for.
+"""
+
 BANK_NAMES = tuple(INITIAL_POSITION)
+"""Bank names in the order the deck numbers them."""
 
 
 def node_map() -> np.ndarray:
