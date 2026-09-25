@@ -358,3 +358,92 @@ def test_a_solved_channel_drives_the_picard_loop():
     assert result.iterations == 1
     assert seen["moderator_temperature"].min() > INLET
     assert seen["moderator_density"].max() < 800.0
+
+
+#: NEACRP-L-335 Table 2.7 gives the guide tube its own diameter, 12.259 mm.
+NEACRP_GUIDE_TUBE_RADIUS = 12.259e-3 / 2
+NEACRP_SPEC_PINS = PinGeometry(
+    fuel_radius=4.11950e-3,
+    gap_thickness=6.8e-5,
+    clad_thickness=5.71e-4,
+    pin_pitch=1.2655e-2,
+    n_pins=264,
+    n_guide_tubes=25,
+    guide_tube_radius=NEACRP_GUIDE_TUBE_RADIUS,
+)
+
+
+def test_a_guide_tube_defaults_to_the_cladding_radius():
+    assert NEACRP_PINS.guide_tube_radius is None
+    assert NEACRP_PINS.guide_tube_outer_radius == NEACRP_PINS.clad_outer_radius
+
+
+def test_the_default_leaves_every_derived_quantity_where_it_was():
+    cell = 1.2655e-2**2 - np.pi * 4.75850e-3**2
+    circumference = 2.0 * np.pi * 4.75850e-3
+    assert NEACRP_PINS.flow_area == pytest.approx(289 * cell)
+    assert NEACRP_PINS.wetted_perimeter == pytest.approx(289 * circumference)
+
+
+def test_a_fatter_guide_tube_displaces_more_coolant():
+    assert NEACRP_SPEC_PINS.guide_tube_outer_radius == pytest.approx(
+        NEACRP_GUIDE_TUBE_RADIUS
+    )
+    assert NEACRP_SPEC_PINS.flow_area < NEACRP_PINS.flow_area
+    assert NEACRP_SPEC_PINS.wetted_perimeter > NEACRP_PINS.wetted_perimeter
+    assert NEACRP_SPEC_PINS.hydraulic_diameter < NEACRP_PINS.hydraulic_diameter
+
+
+def test_the_specification_geometry_gives_the_area_the_specification_states():
+    assert NEACRP_SPEC_PINS.flow_area * 1.0e4 == pytest.approx(245.523, abs=1.0e-3)
+    assert NEACRP_SPEC_PINS.hydraulic_diameter * 1.0e3 == pytest.approx(
+        11.0895, abs=1.0e-4
+    )
+
+
+def test_only_the_fuel_pins_are_heated_whatever_the_guide_tube_is():
+    assert NEACRP_SPEC_PINS.heated_perimeter == pytest.approx(
+        NEACRP_PINS.heated_perimeter
+    )
+
+
+def test_the_two_rod_populations_are_counted_separately():
+    pins = 264 * (1.2655e-2**2 - np.pi * 4.75850e-3**2)
+    tubes = 25 * (1.2655e-2**2 - np.pi * NEACRP_GUIDE_TUBE_RADIUS**2)
+    assert NEACRP_SPEC_PINS.flow_area == pytest.approx(pins + tubes)
+
+    wetted = 2.0 * np.pi * (264 * 4.75850e-3 + 25 * NEACRP_GUIDE_TUBE_RADIUS)
+    assert NEACRP_SPEC_PINS.wetted_perimeter == pytest.approx(wetted)
+
+
+def test_a_channel_with_no_guide_tubes_does_not_care_about_their_radius():
+    bare = PinGeometry(4.11950e-3, 6.8e-5, 5.71e-4, 1.2655e-2, 264, 0)
+    fat = PinGeometry(
+        4.11950e-3, 6.8e-5, 5.71e-4, 1.2655e-2, 264, 0, guide_tube_radius=6.0e-3
+    )
+    assert fat.flow_area == bare.flow_area
+    assert fat.wetted_perimeter == bare.wetted_perimeter
+    assert fat.hydraulic_diameter == bare.hydraulic_diameter
+
+
+@pytest.mark.parametrize("radius", [0.0, -1.0e-3, 7.0e-3])
+def test_an_impossible_guide_tube_is_an_error(radius):
+    with pytest.raises(openndm.InputError):
+        PinGeometry(
+            4.11950e-3, 6.8e-5, 5.71e-4, 1.2655e-2, 264, 25,
+            guide_tube_radius=radius,
+        )
+
+
+def test_a_channel_accepts_the_specification_geometry():
+    geometry = single_channel()
+    model = ChannelModel(
+        geometry,
+        NEACRP_SPEC_PINS,
+        mass_flow=82.12102,
+        inlet_temperature=INLET,
+        pressure=PRESSURE,
+        water=constant_water(),
+    )
+    expected = 82.12102 / NEACRP_SPEC_PINS.flow_area
+    assert float(model.mass_flux[0]) == pytest.approx(expected)

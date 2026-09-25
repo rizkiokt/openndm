@@ -36,9 +36,9 @@ CM_PER_M = 100.0
 class PinGeometry:
     """Pin and assembly dimensions of one coolant channel.
 
-    Guide tubes displace coolant and carry no heat. They are taken to have
-    the cladding's outer radius, because the input set carries no separate
-    dimension for them.
+    Guide tubes displace coolant and carry no heat. They take the cladding's
+    outer radius unless ``guide_tube_radius`` says otherwise, which is what a
+    deck whose input set carries no guide tube dimension leaves them at.
 
     Attributes
     ----------
@@ -54,17 +54,25 @@ class PinGeometry:
         Heated fuel pins in the channel.
     n_guide_tubes : int
         Unheated guide tubes in the channel.
+    guide_tube_radius : float or None, optional
+        Guide tube outer radius, m. ``None`` falls back to the cladding's
+        outer radius, so a deck that does not measure them separately is
+        unchanged. A guide tube is usually the fatter of the two and
+        displaces more coolant.
 
     Raises
     ------
     InputError
-        On a non-positive dimension or a channel with no fuel pins.
+        On a non-positive dimension, a channel with no fuel pins, or a rod
+        that does not fit its lattice cell.
 
     Examples
     --------
     >>> pins = PinGeometry(4.1195e-3, 6.8e-5, 5.71e-4, 1.2655e-2, 264, 25)
     >>> pins.n_rods
     289
+    >>> round(pins.guide_tube_outer_radius, 6) == round(pins.clad_outer_radius, 6)
+    True
     """
 
     fuel_radius: float
@@ -73,6 +81,7 @@ class PinGeometry:
     pin_pitch: float
     n_pins: int
     n_guide_tubes: int
+    guide_tube_radius: float | None = None
 
     def __post_init__(self):
         for name in ("fuel_radius", "gap_thickness", "clad_thickness", "pin_pitch"):
@@ -85,11 +94,19 @@ class PinGeometry:
             raise InputError(
                 f"n_guide_tubes cannot be negative, got {self.n_guide_tubes}"
             )
-        if self.clad_outer_radius >= 0.5 * self.pin_pitch:
+        if self.guide_tube_radius is not None and not self.guide_tube_radius > 0.0:
             raise InputError(
-                f"a pin of outer radius {self.clad_outer_radius} m does not fit "
-                f"in a lattice cell of pitch {self.pin_pitch} m"
+                f"guide_tube_radius must be positive, got {self.guide_tube_radius}"
             )
+        for name, radius in (
+            ("a pin", self.clad_outer_radius),
+            ("a guide tube", self.guide_tube_outer_radius),
+        ):
+            if radius >= 0.5 * self.pin_pitch:
+                raise InputError(
+                    f"{name} of outer radius {radius} m does not fit in a "
+                    f"lattice cell of pitch {self.pin_pitch} m"
+                )
 
     @property
     def clad_inner_radius(self) -> float:
@@ -102,6 +119,13 @@ class PinGeometry:
         return self.clad_inner_radius + self.clad_thickness
 
     @property
+    def guide_tube_outer_radius(self) -> float:
+        """Guide tube outer radius, m. The cladding's unless one was given."""
+        if self.guide_tube_radius is None:
+            return self.clad_outer_radius
+        return float(self.guide_tube_radius)
+
+    @property
     def n_rods(self) -> int:
         """Lattice positions the channel's coolant flows past."""
         return self.n_pins + self.n_guide_tubes
@@ -110,10 +134,15 @@ class PinGeometry:
     def flow_area(self) -> float:
         """Free coolant area of the channel, m^2.
 
-        The lattice cells the rods occupy, less the rods themselves.
+        The lattice cells the rods occupy, less the rods themselves. Pins and
+        guide tubes are counted separately, because a guide tube is generally
+        the fatter of the two.
         """
-        cell = self.pin_pitch**2 - np.pi * self.clad_outer_radius**2
-        return float(self.n_rods * cell)
+        pins = self.n_pins * (self.pin_pitch**2 - np.pi * self.clad_outer_radius**2)
+        tubes = self.n_guide_tubes * (
+            self.pin_pitch**2 - np.pi * self.guide_tube_outer_radius**2
+        )
+        return float(pins + tubes)
 
     @property
     def heated_perimeter(self) -> float:
@@ -123,7 +152,14 @@ class PinGeometry:
     @property
     def wetted_perimeter(self) -> float:
         """Perimeter in contact with coolant, m. Pins and guide tubes."""
-        return float(self.n_rods * 2.0 * np.pi * self.clad_outer_radius)
+        return float(
+            2.0
+            * np.pi
+            * (
+                self.n_pins * self.clad_outer_radius
+                + self.n_guide_tubes * self.guide_tube_outer_radius
+            )
+        )
 
     @property
     def hydraulic_diameter(self) -> float:
