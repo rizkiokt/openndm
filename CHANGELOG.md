@@ -8,6 +8,32 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Homogeneous equilibrium two-phase channel** (`ChannelModel(two_phase=True)`,
+  FR-TH-5). The enthalpy integration does not change; only its inversion does.
+  Above the saturated liquid enthalpy the coolant temperature stops at the
+  boiling point and the surplus enthalpy becomes equilibrium quality, void
+  fraction and a mixture density, reported through the existing
+  `moderator_temperature` and `moderator_density` fields plus new `quality`
+  and `void_fraction` accessors.
+
+  **A channel that stays subcooled is bit-identical with and without it.** The
+  subcooled nodes take the same code path they always did, so this extends the
+  range of validity rather than changing the model. That is the check the
+  issue asked for and it holds with `==`, not a tolerance.
+
+  At unit slip the void fraction is the homogeneous relation and the mixture
+  density it implies is exactly the inverse of the mass-weighted specific
+  volume, verified to 1e-12. Quality and void are zero at and below the
+  saturated liquid enthalpy and rise monotonically above it; the mixture
+  density is bracketed by the two phase densities everywhere.
+
+  `slip_ratio` is injectable for a caller wanting a drift-flux correction, and
+  **no published slip correlation ships**, on the same grounds as the fuel
+  conductivities. A channel driven past the saturated vapour enthalpy raises
+  and says it has boiled dry, rather than reporting superheated steam it does
+  not model. The backend must satisfy `SaturationProperties`, so a two-phase
+  channel on `ConstantWater` is refused at construction.
+
 - **IAPWS-IF97 region 2 and both sides of the saturation line** (FR-TH-3).
   `IF97Water` gains `vapour_specific_volume`, `vapour_density`,
   `vapour_enthalpy` and `vapour_specific_heat` for steam, `region23_pressure`
