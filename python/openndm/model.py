@@ -8,12 +8,14 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import _core
+from .channel import absolute_power
 from .exceptions import ConvergenceError, InputError
 from .geometry import Geometry
 from .settings import Settings
+from .thermal import PicardCoupling
 from .xslib import XSLibrary
 
-__all__ = ["BoronSearchResult", "Model", "Result"]
+__all__ = ["BoronSearchResult", "CoupledResult", "Model", "Result"]
 
 _SECANT_SEED_STEP_PPM = 100.0
 """Offset from the initial guess to the second point of the secant, in ppm."""
@@ -155,6 +157,54 @@ class BoronSearchResult:
         return (
             f"<BoronSearchResult boron={self.boron:.1f} ppm "
             f"k_eff={self.k_eff:.6f} iterations={self.iterations}>"
+        )
+
+
+class CoupledResult:
+    """Outcome of a coupled steady state (FR-MODE-6).
+
+    Attributes
+    ----------
+    result : Result
+        The final neutronics solve, the one whose power the reported
+        temperatures are in equilibrium with.
+    power : ndarray, shape (n_nodes,)
+        Node power that solve produced, in W. Sums to the thermal power
+        asked for.
+    temperatures : dict of str to ndarray
+        Per node, in K, as the thermal solver last reported them.
+    densities : dict of str to ndarray
+        Per node, in kg/m^3.
+    iterations : int
+        Picard iterations performed.
+    power_change : float
+        Relative power change at the last iteration, below the tolerance.
+    history : list of CouplingStep
+        One entry per iteration, carrying the eigenvalue of each.
+    """
+
+    def __init__(
+        self, result, power, temperatures, densities, iterations, power_change,
+        history,
+    ):
+        self.result = result
+        self.power = power
+        self.temperatures = temperatures
+        self.densities = densities
+        self.iterations = iterations
+        self.power_change = power_change
+        self.history = history
+
+    @property
+    def k_eff(self) -> float:
+        """Eigenvalue of the converged state."""
+        return self.result.k_eff
+
+    def __repr__(self) -> str:
+        return (
+            f"<CoupledResult k_eff={self.k_eff:.6f} "
+            f"iterations={self.iterations} "
+            f"power_change={self.power_change:.2e}>"
         )
 
 
@@ -433,6 +483,114 @@ class Model:
             f"{max_iterations} iterations",
             iterations=max_iterations,
             residual=abs(f1),
+        )
+
+    def solve_coupled(
+        self,
+        thermal,
+        apply_state: Callable[[dict, dict], None],
+        *,
+        total_power: float,
+        percent: float = 100.0,
+        relaxation: float = 1.0,
+        tolerance: float = 1.0e-5,
+        max_iterations: int = 50,
+        settings: Settings | None = None,
+        **overrides,
+    ) -> CoupledResult:
+        """Steady state with thermal-hydraulic feedback (FR-MODE-6).
+
+        Solve, hand the power to the thermal model, push what comes back into
+        the cross sections, solve again, until the power stops moving. The
+        feedback model stays in the caller's hands, the way
+        :meth:`search_boron` keeps the boron model there: nothing here reads
+        a temperature or knows what a branch axis is.
+
+        Parameters
+        ----------
+        thermal : ThermalSolver
+            Anything satisfying the protocol, built-in or external.
+        apply_state : callable
+            ``apply_state(temperatures, densities)``, given what the thermal
+            solver produced, per node. It must write the new state into
+            ``self.library`` **in place** and re-finalize, because the solver
+            holds a reference to that library object rather than a copy. See
+            :meth:`~openndm.XSLibrary.interpolate_by_composition` and its
+            ``out`` argument, or
+            :meth:`~openndm.CompositionMapping.average` for reducing a node
+            field onto compositions.
+        total_power : float
+            Thermal power of the modelled geometry at full power, W. A
+            quarter core carries a quarter of the core's power.
+        percent : float, optional
+            Percent of full power.
+        relaxation : float, optional
+            Under-relaxation on the power, in ``(0, 1]``.
+        tolerance : float, optional
+            Relative power change below which the loop stops.
+        max_iterations : int, optional
+            Picard iteration cap.
+        settings : Settings, optional
+            Overrides the model's settings for every solve in the loop.
+        **overrides
+            Individual settings overridden the same way.
+
+        Returns
+        -------
+        CoupledResult
+
+        Raises
+        ------
+        ConvergenceError
+            If the power is still moving after ``max_iterations``, or if any
+            neutronics solve fails to converge.
+        InputError
+            If ``apply_state`` leaves the library unfinalized, or replaces it
+            rather than writing into it.
+
+        Notes
+        -----
+        Every iteration calls :meth:`refresh`, which discards the flux, so
+        each solve starts cold. That is the same cost :meth:`search_boron`
+        pays and the reason issue #82 matters here.
+        """
+        latest: dict[str, Result] = {}
+        library = self.library
+
+        def power_source() -> np.ndarray:
+            if self.library is not library:
+                raise InputError(
+                    "apply_state replaced the model's library; write into it "
+                    "in place instead, so the solver keeps its reference"
+                )
+            self.refresh()
+            result = self.solve(settings, **overrides)
+            latest["result"] = result
+            return absolute_power(
+                result.power, self.geometry.volumes, total_power, percent
+            )
+
+        coupling = PicardCoupling(
+            thermal,
+            apply_state,
+            relaxation=relaxation,
+            tolerance=tolerance,
+            max_iterations=max_iterations,
+        )
+        outcome = coupling.solve(
+            power_source, k_eff_source=lambda: latest["result"].k_eff
+        )
+        result = latest["result"]
+        return CoupledResult(
+            result=result,
+            power=absolute_power(
+                result.power, self.geometry.volumes, total_power, percent
+            ),
+            temperatures=outcome.temperatures,
+            densities=outcome.densities,
+            iterations=outcome.iterations,
+            power_change=outcome.history[-1].power_change,
+            history=outcome.history,
         )
 
     def sweep(

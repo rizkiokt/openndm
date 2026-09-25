@@ -8,6 +8,42 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Coupled steady state with thermal-hydraulic feedback**
+  (`Model.solve_coupled`, FR-MODE-6). Solve, hand the node power to a
+  `ThermalSolver`, push the temperatures and densities back into the cross
+  sections, repeat until the power stops moving. The feedback model stays in
+  the caller's `apply_state`, the way `search_boron` keeps the boron model
+  there: nothing in the driver reads a temperature or knows what a branch axis
+  is. Returns a `CoupledResult` carrying the final `Result`, the node power in
+  watts, the converged fields and the per-iteration history.
+
+  A library with no temperature dependence returns the uncoupled eigenvalue to
+  1e-12 in a single Picard iteration. On a test slab with a 5% Doppler swing
+  the loop converges in 10 iterations and moves `k_eff` by -3590 pcm,
+  monotonically in power. An exhausted iteration cap raises rather than
+  returning an unconverged state.
+
+- **`CompositionMapping`** (`openndm.CompositionMapping`, FR-TH-7), reducing a
+  per-node field onto the compositions that carry it, weighted by volume or by
+  anything else the caller supplies -- node power is the other useful choice,
+  since the Doppler temperature that matters is where the fissions are. This
+  is where the constraint that cross sections live per composition is made
+  explicit rather than left implicit in the core map.
+
+- **`XSLibrary.interpolate_by_composition`**, collapsing a branch grid with a
+  *different state per composition*, which `interpolate` cannot do and which a
+  coupled solve cannot do without. `out=` writes into an existing library in
+  place, which is what `solve_coupled` needs: the solver holds a reference to
+  its library, so replacing the object would strand it. The grid is
+  interpolated once per distinct state row.
+
+- **The user guide's thermal-hydraulics section, rewritten around what now
+  exists.** It said "there is no built-in thermal-hydraulics model yet" and
+  "there is no channel model yet", both untrue since the channel and pin
+  models landed. It now covers the coupled steady state end to end, including
+  the per-composition constraint and what `direct_heating` does and does not
+  change.
+
 - **Radial fuel pin conduction and the Doppler temperature**
   (`openndm.PinConduction`, FR-TH-2, FR-TH-4). A radial mesh across the pellet,
   then the pellet-to-clad gap, the cladding and the film in series. Attach one

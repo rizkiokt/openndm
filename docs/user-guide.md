@@ -869,9 +869,112 @@ shape moves; FDM has nothing to freeze.
 
 ## Thermal-hydraulic coupling
 
-There is no built-in thermal-hydraulics model yet. What exists is the place to
-attach one: an interface, a Picard driver and a mesh mapping, none of which
-know any physics.
+A closed-channel coolant model and radial pin conduction are built in, and
+`Model.solve_coupled` runs the Picard loop over them. Everything behind the
+loop is replaceable: the interface, the driver and the mesh mapping know no
+physics, so an external solver attaches in the same place.
+
+### A coupled steady state
+
+```python
+pins = openndm.PinGeometry(
+    fuel_radius=4.1195e-3, gap_thickness=6.8e-5, clad_thickness=5.71e-4,
+    pin_pitch=1.2655e-2, n_pins=264, n_guide_tubes=25,
+)
+conduction = openndm.PinConduction(
+    pins, fuel_conductivity=3.0, clad_conductivity=15.0,
+    gap_conductance=1.0e4, film_coefficient=3.0e4, doppler_weight=0.7,
+)
+channel = openndm.ChannelModel(
+    geom, pins, mass_flow=82.12, inlet_temperature=559.15,
+    pressure=15.5e6, direct_heating=0.019, conduction=conduction,
+)
+
+mapping = openndm.CompositionMapping(geom)
+
+def apply_state(temperatures, densities):
+    branch.interpolate_by_composition(
+        {
+            "fuel_temperature": mapping.average(temperatures["doppler_temperature"]),
+            "moderator_temperature": mapping.average(temperatures["moderator_temperature"]),
+            "coolant_density": mapping.average(densities["moderator_density"]),
+        },
+        out=model.library,
+    )
+
+coupled = model.solve_coupled(channel, apply_state, total_power=693.75e6)
+print(coupled.k_eff, coupled.iterations)
+print(coupled.temperatures["fuel_temperature"])
+```
+
+`total_power` is the thermal power of the geometry you modelled, so a quarter
+core carries a quarter of the core's power. `percent` scales it. The relative
+power the solver reports is turned into watts per node by volume weighting;
+`openndm.absolute_power` does that on its own if you need it elsewhere.
+
+### The channel
+
+One channel per radial column of the core map, at fixed mass flow and constant
+pressure, so energy is the only conservation law left. Enthalpy integrates up
+the channel and inverts through the water backend for temperature and density.
+
+`mass_flow` and the pin counts are **per channel, not per assembly**. If you
+used `subdivide`, one assembly is several columns and both must be scaled.
+
+`direct_heating` does **not** change the outlet temperature. In steady state
+every watt reaches the coolant whichever route it takes; the fraction splits
+the power between coolant and pin and so sets the linear heat rate the pin
+sees. Raising it lowers the fuel temperature and leaves the outlet alone.
+
+### The pin
+
+`PinConduction` meshes the pellet radially and puts the gap, the cladding and
+the film in series behind it. It reports `fuel_temperature`, the volume-average
+pellet temperature, and `doppler_temperature`, weighted `doppler_weight` on the
+surface and the rest on the centreline. The default 0.7/0.3 is a convention,
+not a law; at 0.5 you get the volume average exactly.
+
+Conductivities are yours to supply, as a constant or a callable `k(T)`:
+
+```python
+conduction = openndm.PinConduction(pins, fuel_conductivity=lambda t: 3.0 + 0.0,
+                                   clad_conductivity=15.0, gap_conductance=1.0e4,
+                                   film_coefficient=3.0e4, n_rings=20)
+```
+
+**No conductivity correlation ships with OpenNDM.** The published ones are
+temperature-dependent and citing one is your call, not ours. A constant is
+exact at any ring count; a callable is evaluated at each ring's outer boundary,
+which is first order in `n_rings`, so mesh accordingly.
+
+### Cross sections live per composition
+
+This is the constraint the whole coupled mode is shaped around. A temperature
+varies node to node; cross sections do not. A distribution you want resolved
+therefore needs one composition per region that can differ, which is a property
+of your core map and nothing the code can invent for you.
+
+`CompositionMapping` is where the two meet, explicitly:
+
+```python
+mapping = openndm.CompositionMapping(geom)              # volume-weighted
+by_power = openndm.CompositionMapping(geom, weights=result.power)
+states = mapping.average(temperatures["doppler_temperature"])   # (n_compositions,)
+```
+
+Weighting by power rather than volume is often the better choice for a Doppler
+temperature: the one that matters is where the fissions are.
+
+`XSLibrary.interpolate_by_composition` then collapses the branch grid with a
+different state per composition, which `interpolate` cannot do. Pass
+`out=model.library` so it writes in place: the solver holds a reference to that
+library object, and replacing it would strand the solver on the old one.
+`solve_coupled` raises if you replace it.
+
+The grid is interpolated once per *distinct* state row, so compositions sitting
+at the same condition cost one interpolation between them.
+
+### Attaching your own solver
 
 A thermal solver is anything with four methods:
 
@@ -885,34 +988,15 @@ class Channel:
 
 `isinstance(channel, openndm.ThermalSolver)` checks it. The field names are
 yours, and the point of that is that they can be the axis names of a branch
-library, so the state the solver reports feeds `lib.interpolate` unchanged.
+library, so the state the solver reports feeds the library unchanged.
 
-`PicardCoupling` runs the loop. It takes the solver, a callback that pushes
-the reported state into the cross sections, and a callable that runs whatever
-neutronics you want and returns the node power in watts:
+`PicardCoupling` is the loop on its own, if you want to drive the neutronics
+yourself rather than through `solve_coupled`:
 
 ```python
-doppler = openndm.DopplerFeedback(lib, range(lib.n_compositions),
-                                  gamma=2.5e-3, reference_temperature=560.0)
-last = {}
-
-def apply_state(temperatures, densities):
-    doppler.apply(temperatures["fuel_temperature"])
-    model.refresh()
-
-def node_power():
-    last["result"] = model.solve()
-    relative = last["result"].power
-    return relative * (TOTAL_POWER / relative.sum())
-
 coupling = openndm.PicardCoupling(channel, apply_state, relaxation=0.7)
 result = coupling.solve(node_power, k_eff_source=lambda: last["result"].k_eff)
 ```
-
-`DopplerFeedback` is the stand-in here because cross sections live per
-composition: a temperature that varies node to node needs one composition per
-node that can differ. A branch library and `lib.interpolate(**state)` is the
-better route where you have one.
 
 The loop stops when the node power moves by less than `tolerance` relative to
 the mean power, and raises `ConvergenceError` if it is still moving after
@@ -920,13 +1004,16 @@ the mean power, and raises `ConvergenceError` if it is still moving after
 if it oscillates: a coupling whose power falls off temperature steeply enough
 to diverge at `relaxation=1.0` usually converges in a few iterations at 0.25.
 
-`result.history` holds one `CouplingStep` per iteration with the power change
-and, if you supplied `k_eff_source`, the eigenvalue.
+`coupled.history` holds one `CouplingStep` per iteration with the power change
+and the eigenvalue.
+
+Every iteration calls `model.refresh()`, which discards the flux, so each solve
+in the loop starts cold. That is the same cost `search_boron` pays.
 
 ### Water properties
 
-There is no channel model yet, but the properties one needs are here, behind
-the same kind of protocol:
+The channel model reads its properties through a protocol, so you can swap
+the backend:
 
 ```python
 water = openndm.IF97Water()
@@ -945,9 +1032,9 @@ of a BWR is not covered. A state outside region 1 raises rather than returning
 a number the equation does not stand behind.
 
 `ConstantWater` has fixed density and specific heat. Use it to verify a
-channel model, not to run one: with constant properties the axial enthalpy
-rise is exactly the integral of the heat input, so there is a closed-form
-answer to check against.
+channel, not to run one: with constant properties the axial enthalpy rise is
+exactly the integral of the heat input, so there is a closed-form answer to
+check against. That is how the channel model here is verified, to 1e-12.
 
 `openndm.water.external_backend()` adapts the `iapws` package or CoolProp if
 you have one installed, which is how you make properties agree with an

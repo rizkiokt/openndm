@@ -34,13 +34,21 @@ from .exceptions import (
 )
 from .feedback import DopplerFeedback
 from .geometry import INACTIVE, Geometry
-from .model import BoronSearchResult, Model, Result, Transient, TransientStep
+from .model import (
+    BoronSearchResult,
+    CoupledResult,
+    Model,
+    Result,
+    Transient,
+    TransientStep,
+)
 from .pin import PinConduction, PinState
 from .rods import ControlRodBank, ControlRods, RodWorth
 from .settings import Settings
 from .statepoint import StatePoint, write_statepoint
 from .thermal import (
     AxialMapping,
+    CompositionMapping,
     CouplingResult,
     CouplingStep,
     PicardCoupling,
@@ -57,10 +65,12 @@ __all__ = [
     "AxialMapping",
     "BoronSearchResult",
     "ChannelModel",
+    "CompositionMapping",
     "ConstantWater",
     "ControlRodBank",
     "ControlRods",
     "ConvergenceError",
+    "CoupledResult",
     "CouplingResult",
     "CouplingStep",
     "DopplerFeedback",

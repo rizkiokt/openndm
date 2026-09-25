@@ -397,6 +397,122 @@ class XSLibrary:
         out._lib = self._lib.interpolate([float(state[n]) for n in names])
         return out
 
+    def interpolate_by_composition(self, state, *, out: XSLibrary | None = None):
+        """Collapse the branch grid with a different state per composition.
+
+        :meth:`interpolate` puts every composition at one state point, which a
+        coupled solve cannot use: cross sections live per composition, so a
+        temperature distribution is expressed by giving each region that can
+        differ its own composition index and its own state.
+
+        The grid is interpolated once per *distinct* state row, so a core with
+        many compositions all at the same condition costs one interpolation,
+        and one whose every composition differs costs one each.
+
+        Parameters
+        ----------
+        state : mapping of str to array_like
+            One entry per branch axis, each a scalar or one value per
+            composition. Scalars broadcast.
+        out : XSLibrary, optional
+            Written in place and re-finalized, instead of a new library being
+            built. This is what a coupled solve wants: the solver holds a
+            reference to its library, so replacing the object would strand it.
+
+        Returns
+        -------
+        XSLibrary
+            Finalized and single-state. ``out`` itself when given.
+
+        Raises
+        ------
+        InputError
+            On a state that does not name exactly the branch axes, a value
+            that is neither a scalar nor one per composition, or an ``out``
+            library of a different shape.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> lib = XSLibrary(1, 2)
+        >>> lib.set_axes([("fuel_temperature", [500.0, 1000.0])])
+        >>> for s, a in enumerate([0.08, 0.09]):
+        ...     for c in range(2):
+        ...         lib.set_composition(c, state=s, D=[1.0], absorption=[a],
+        ...                             nu_fission=[0.1], kappa_fission=[0.1],
+        ...                             chi=[1.0], scatter=[[0.0]])
+        >>> _ = lib.finalize()
+        >>> hot = lib.interpolate_by_composition(
+        ...     {"fuel_temperature": [500.0, 1000.0]})
+        >>> [round(hot.composition(c).absorption[0], 4) for c in range(2)]
+        [0.08, 0.09]
+        """
+        names = [a.name for a in self.axes]
+        if not names:
+            raise InputError("the library has no branch axes to interpolate")
+        missing = set(names) - set(state)
+        extra = set(state) - set(names)
+        if missing or extra:
+            raise InputError(
+                f"branch state mismatch: missing {sorted(missing)}, "
+                f"unexpected {sorted(extra)}; axes are {names}"
+            )
+
+        n_comps = self.n_compositions
+        columns = []
+        for name in names:
+            values = np.asarray(state[name], dtype=float)
+            if values.ndim == 0:
+                values = np.full(n_comps, float(values))
+            if values.shape != (n_comps,):
+                raise InputError(
+                    f"branch axis {name!r} needs a scalar or one value per "
+                    f"each of {n_comps} compositions, got shape {values.shape}"
+                )
+            columns.append(values)
+
+        rows = np.stack(columns, axis=1)
+        distinct, inverse = np.unique(rows, axis=0, return_inverse=True)
+        collapsed = [
+            self.interpolate(**dict(zip(names, row, strict=True)))
+            for row in distinct
+        ]
+
+        target = self._collapse_target(out)
+        for index in range(n_comps):
+            _copy_composition(collapsed[int(inverse[index])], target, index)
+        for index in range(n_comps):
+            target.set_adf(index, self.adf(index))
+        delayed = self._lib.delayed
+        if delayed.beta:
+            target.set_delayed(
+                delayed.beta,
+                delayed.lambda_,
+                np.asarray(delayed.chi_delayed).reshape(
+                    delayed.n_precursors, self.n_groups
+                )
+                if delayed.chi_delayed
+                else None,
+            )
+        target.finalize(warn=False)
+        return target
+
+    def _collapse_target(self, out: XSLibrary | None) -> XSLibrary:
+        """The library a per-composition collapse writes into."""
+        if out is None:
+            return XSLibrary(self.n_groups, self.n_compositions)
+        if (out.n_groups, out.n_compositions) != (
+            self.n_groups,
+            self.n_compositions,
+        ):
+            raise InputError(
+                f"out holds {out.n_groups} groups and {out.n_compositions} "
+                f"compositions, not {self.n_groups} and {self.n_compositions}"
+            )
+        if out.n_states > 1:
+            raise InputError("out must be single-state, not branch-parameterised")
+        return out
+
     def array(self, field: str, state: int = 0) -> np.ndarray:
         """Stack one field across compositions.
 
@@ -571,3 +687,25 @@ class XSLibrary:
                 f"{name} must have {G} entries, got {arr.size}"
             )
         return arr
+
+
+def _copy_composition(source: XSLibrary, target: XSLibrary, index: int) -> None:
+    """Write one composition's group constants from one library into another."""
+    record = source.composition(index)
+    groups = source.n_groups
+    std = {}
+    for name in ("D", "absorption", "nu_fission", "scatter"):
+        values = getattr(record, f"{name}_std", None)
+        if values:
+            std[name] = np.asarray(values, dtype=float)
+    target.set_composition(
+        index,
+        D=record.D,
+        absorption=record.absorption,
+        nu_fission=record.nu_fission,
+        kappa_fission=record.kappa_fission,
+        chi=record.chi,
+        scatter=np.asarray(record.scatter, dtype=float).reshape(groups, groups),
+        inv_velocity=record.inv_velocity,
+        std=std or None,
+    )
