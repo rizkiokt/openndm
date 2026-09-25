@@ -25,6 +25,7 @@ the only part of the package that needs OpenMC installed (FR-OMC-14).
 from __future__ import annotations
 
 from . import _core
+from .channel import ChannelModel, PinGeometry, absolute_power
 from .exceptions import (
     ConvergenceError,
     InputError,
@@ -54,6 +55,7 @@ __all__ = [
     "INACTIVE",
     "AxialMapping",
     "BoronSearchResult",
+    "ChannelModel",
     "ConstantWater",
     "ControlRodBank",
     "ControlRods",
@@ -68,6 +70,7 @@ __all__ = [
     "Model",
     "OpenNDMError",
     "PicardCoupling",
+    "PinGeometry",
     "Result",
     "RodWorth",
     "Settings",
@@ -78,6 +81,7 @@ __all__ = [
     "WaterProperties",
     "XSLibrary",
     "__version__",
+    "absolute_power",
     "rotate_adf",
     "rotated_face",
     "write_statepoint",

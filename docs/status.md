@@ -104,16 +104,16 @@ inhour equation to 0.2%, and the observed order in time. See
 
 | ID | State | Notes |
 |---|---|---|
-| FR-TH-1 | not started | No channel model. |
+| FR-TH-1 | done | `ChannelModel`, one closed channel per radial column of the core map, at constant mass flow and constant pressure. Enthalpy is integrated up the channel and inverted through the property backend for temperature and density. Against `ConstantWater` the answer is closed form and the tests match it to 1e-12 relative for uniform and for cosine power; against `IF97Water` the enthalpy rise carries the power put in to 1e-9, and the outlet is identical at 5, 10 and 40 axial nodes. `PinGeometry` holds the pin dimensions and derives the flow area, the heated and wetted perimeters and the hydraulic diameter. Cross-flow, a momentum equation and boiling are all absent, the last being FR-TH-5. |
 | FR-TH-2 | not started | No pin conduction model. |
 | FR-TH-3 | partial | `IF97Water` implements IAPWS-IF97 region 1 (compressed liquid, 273.15 K to 623.15 K, saturation line to 100 MPa) and region 4 (the saturation line), from the coefficient tables of R7-97(2012). Verified against the release's own program-verification values, Tables 5, 35 and 36, to the nine significant figures they are printed to, and cross-checked against the independent `iapws` package to 4e-16 over the PWR range. Region 2 (vapour) is **not** implemented, so the steam side of a BWR is not covered; that is what FR-TH-5 needs. `ConstantWater` gives fixed properties, which is what makes a channel model analytically verifiable. |
 | FR-TH-4 | not started | Needs FR-TH-2. |
-| FR-TH-5 | not started | Needs FR-TH-1. |
-| FR-TH-6 | partial | `ThermalSolver` is a runtime-checkable protocol over `set_heat_source`, `solve`, `get_temperatures` and `get_densities`, and no kernel calls anything behind it: nothing in `src/` refers to temperature or density. The built-in channel model that is meant to be one implementation of it does not exist yet. |
+| FR-TH-5 | not started | Needs saturated vapour properties, which means IF97 region 2; see FR-TH-3. |
+| FR-TH-6 | done | `ThermalSolver` is a runtime-checkable protocol over `set_heat_source`, `solve`, `get_temperatures` and `get_densities`, and no kernel calls anything behind it: nothing in `src/` refers to temperature or density. `ChannelModel` is one implementation of it and reaches the neutronics only through `PicardCoupling`, the same way an external solver would. |
 | FR-TH-7 | done | `PicardCoupling` owns the iteration, the under-relaxation and the convergence test, and reaches the thermal model only through the protocol. `AxialMapping` maps volume-conservatively in both directions: `distribute` for an extensive field, `average` for an intensive one. Transfer is numpy arrays throughout; nothing in the module touches the filesystem. |
 | FR-TH-8 | done | `WaterProperties` is a runtime-checkable protocol and `external_backend()` adapts the `iapws` package or CoolProp when one is installed, neither being a dependency. The `iapws` adapter is verified against the built-in formulation; the CoolProp one is written to `PropsSI` and is untested here, since CoolProp is not installed. |
 
-The interface and the driver exist before any physics does, deliberately. Had
+The interface and the driver were built before any physics, deliberately. Had
 the channel model come first, the channel model would have become the shape of
 the coupling, and FR-TH-7's v1.1 external solver would have had to be shaped
 like it.
