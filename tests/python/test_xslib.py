@@ -257,3 +257,144 @@ def test_a_complete_composition_finalizes_without_warnings():
         scatter=[[0.0, 0.02], [0.0, 0.0]],
     )
     assert lib.finalize() == []
+
+
+def branch_over_temperature(n_compositions=3, points=(500.0, 1500.0)):
+    """One axis, absorption rising linearly along it, same for every mixture."""
+    lib = openndm.XSLibrary(2, n_compositions)
+    lib.set_axes([("fuel_temperature", list(points))])
+    for state, factor in enumerate(1.0 + 0.1 * np.arange(len(points))):
+        for index in range(n_compositions):
+            lib.set_composition(
+                index,
+                state=state,
+                D=[1.5, 0.4],
+                absorption=[0.010 * factor, 0.080 * factor * (1 + index)],
+                nu_fission=[0.0, 0.135],
+                kappa_fission=[0.0, 0.135],
+                chi=[1.0, 0.0],
+                scatter=[[0.0, 0.020], [0.0, 0.0]],
+            )
+    lib.finalize(warn=False)
+    return lib
+
+
+def test_a_uniform_state_matches_the_whole_library_interpolation():
+    branch = branch_over_temperature()
+    together = branch.interpolate(fuel_temperature=900.0)
+    apart = branch.interpolate_by_composition({"fuel_temperature": 900.0})
+
+    for index in range(branch.n_compositions):
+        assert apart.composition(index).absorption == pytest.approx(
+            together.composition(index).absorption
+        )
+
+
+def test_each_composition_lands_on_its_own_state():
+    branch = branch_over_temperature()
+    states = [500.0, 1000.0, 1500.0]
+    collapsed = branch.interpolate_by_composition({"fuel_temperature": states})
+
+    for index, temperature in enumerate(states):
+        expected = branch.interpolate(fuel_temperature=temperature)
+        assert collapsed.composition(index).absorption == pytest.approx(
+            expected.composition(index).absorption
+        )
+
+
+def test_a_collapse_lands_on_the_grid_points_it_is_given():
+    branch = branch_over_temperature()
+    collapsed = branch.interpolate_by_composition(
+        {"fuel_temperature": [500.0, 500.0, 1500.0]}
+    )
+    assert collapsed.composition(0).absorption[0] == pytest.approx(0.010)
+    assert collapsed.composition(2).absorption[0] == pytest.approx(0.011)
+
+
+def test_the_collapsed_library_is_single_state_and_finalized():
+    collapsed = branch_over_temperature().interpolate_by_composition(
+        {"fuel_temperature": [500.0, 1000.0, 1500.0]}
+    )
+    assert collapsed.n_states == 1
+    assert collapsed.finalized
+    assert collapsed.axes == []
+
+
+def test_a_collapse_writes_into_an_existing_library_when_asked():
+    branch = branch_over_temperature()
+    target = branch.interpolate(fuel_temperature=500.0)
+    before = id(target._lib)
+
+    returned = branch.interpolate_by_composition(
+        {"fuel_temperature": [1500.0, 1500.0, 1500.0]}, out=target
+    )
+
+    assert returned is target
+    assert id(target._lib) == before
+    assert target.composition(0).absorption[0] == pytest.approx(0.011)
+
+
+def test_a_collapse_carries_the_discontinuity_factors_across():
+    branch = branch_over_temperature()
+    factors = np.arange(12, dtype=float).reshape(6, 2)
+    branch.set_adf(1, factors)
+
+    collapsed = branch.interpolate_by_composition({"fuel_temperature": 900.0})
+    assert collapsed.adf(1) == pytest.approx(factors)
+
+
+def test_a_collapse_carries_the_delayed_data_across():
+    branch = branch_over_temperature()
+    branch.set_delayed([0.0002, 0.001], [0.0124, 0.0305])
+
+    collapsed = branch.interpolate_by_composition({"fuel_temperature": 900.0})
+    assert collapsed._lib.delayed.beta == pytest.approx([0.0002, 0.001])
+    assert collapsed._lib.delayed.lambda_ == pytest.approx([0.0124, 0.0305])
+
+
+def test_repeated_states_cost_one_interpolation_each():
+    branch = branch_over_temperature(n_compositions=6)
+    collapsed = branch.interpolate_by_composition(
+        {"fuel_temperature": [500.0] * 3 + [1500.0] * 3}
+    )
+    for index in range(3):
+        assert collapsed.composition(index).absorption[0] == pytest.approx(0.010)
+    for index in range(3, 6):
+        assert collapsed.composition(index).absorption[0] == pytest.approx(0.011)
+
+
+def test_collapsing_a_library_with_no_axes_is_an_error():
+    lib = openndm.XSLibrary(1, 1)
+    lib.set_composition(
+        0, D=[1.0], absorption=[0.08], nu_fission=[0.1],
+        kappa_fission=[0.1], chi=[1.0], scatter=[[0.0]],
+    )
+    lib.finalize()
+    with pytest.raises(openndm.InputError, match="no branch axes"):
+        lib.interpolate_by_composition({"fuel_temperature": 900.0})
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        {},
+        {"boron": 900.0},
+        {"fuel_temperature": 900.0, "boron": 500.0},
+        {"fuel_temperature": [900.0, 900.0]},
+    ],
+)
+def test_a_state_that_does_not_match_the_axes_is_an_error(state):
+    with pytest.raises(openndm.InputError):
+        branch_over_temperature().interpolate_by_composition(state)
+
+
+def test_an_out_library_of_the_wrong_shape_is_an_error():
+    branch = branch_over_temperature()
+    with pytest.raises(openndm.InputError, match="compositions"):
+        branch.interpolate_by_composition(
+            {"fuel_temperature": 900.0}, out=openndm.XSLibrary(2, 5)
+        )
+    with pytest.raises(openndm.InputError, match="not branch-parameterised"):
+        branch.interpolate_by_composition(
+            {"fuel_temperature": 900.0}, out=branch_over_temperature()
+        )

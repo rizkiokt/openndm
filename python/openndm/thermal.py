@@ -22,6 +22,7 @@ from .exceptions import ConvergenceError, InputError
 
 __all__ = [
     "AxialMapping",
+    "CompositionMapping",
     "CouplingResult",
     "CouplingStep",
     "PicardCoupling",
@@ -405,3 +406,144 @@ class AxialMapping:
 
     def __repr__(self) -> str:
         return f"<AxialMapping {self.n_source} -> {self.n_target} cells>"
+
+
+class CompositionMapping:
+    """Reduce a per-node field onto the compositions that carry it (FR-TH-7).
+
+    A thermal solver reports a temperature per node; cross sections live per
+    composition. The two meet here, and nowhere implicitly: every node sharing
+    a composition index contributes to that composition's state, weighted by
+    volume unless the caller says otherwise. A distribution that must be
+    resolved therefore needs one composition per region that can differ, which
+    is a property of the core map rather than something this class can invent.
+
+    Parameters
+    ----------
+    geometry : Geometry
+        Supplies the composition index and volume of every node.
+    weights : array_like, shape (n_nodes,), optional
+        What to average with. Node volumes by default; node power is the other
+        useful choice, since a Doppler temperature that matters is the one
+        where the fissions are.
+
+    Attributes
+    ----------
+    compositions : ndarray of int, shape (n_nodes,)
+        Composition index per node.
+    occupied : ndarray of bool, shape (n_compositions,)
+        Which compositions any node actually carries.
+
+    Raises
+    ------
+    InputError
+        On weights of the wrong length, or any negative weight.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from openndm import Geometry
+    >>> core = np.array([[[0, 1]]])
+    >>> mapping = CompositionMapping(Geometry.from_lattice(core, pitch=20.0))
+    >>> mapping.average([600.0, 900.0]).tolist()
+    [600.0, 900.0]
+    """
+
+    def __init__(self, geometry, weights=None):
+        self._n_compositions = geometry.n_compositions
+        self.compositions = np.asarray(geometry.compositions, dtype=int)
+        if weights is None:
+            weights = geometry.volumes
+        self._weights = self._checked(weights)
+        self._totals = np.bincount(
+            self.compositions, weights=self._weights, minlength=self._n_compositions
+        )
+        self.occupied = (
+            np.bincount(self.compositions, minlength=self._n_compositions) > 0
+        )
+
+    @property
+    def n_compositions(self) -> int:
+        """Compositions the library holds, occupied or not."""
+        return self._n_compositions
+
+    @property
+    def weights(self) -> np.ndarray:
+        """Weight per node. A copy."""
+        return self._weights.copy()
+
+    def average(self, node_values) -> np.ndarray:
+        """Weighted mean of a node field over each composition.
+
+        Parameters
+        ----------
+        node_values : array_like, shape (n_nodes,)
+            Temperature, density or any intensive field.
+
+        Returns
+        -------
+        ndarray, shape (n_compositions,)
+            A composition no node carries, or whose weights sum to zero,
+            takes the weighted mean of the whole field, so the result is
+            always a usable branch coordinate.
+
+        Raises
+        ------
+        InputError
+            If the field is not one value per node.
+        """
+        values = np.asarray(node_values, dtype=float)
+        if values.shape != self.compositions.shape:
+            raise InputError(
+                f"expected one value per each of {self.compositions.size} "
+                f"nodes, got shape {values.shape}"
+            )
+        weighted = np.bincount(
+            self.compositions,
+            weights=self._weights * values,
+            minlength=self._n_compositions,
+        )
+        total = float(self._weights.sum())
+        fallback = float(weighted.sum() / total) if total > 0.0 else 0.0
+        usable = self._totals > 0.0
+        out = np.full(self._n_compositions, fallback, dtype=float)
+        out[usable] = weighted[usable] / self._totals[usable]
+        return out
+
+    def expand(self, composition_values) -> np.ndarray:
+        """Scatter a per-composition field back onto the nodes.
+
+        Parameters
+        ----------
+        composition_values : array_like, shape (n_compositions,)
+
+        Returns
+        -------
+        ndarray, shape (n_nodes,)
+            A new array.
+        """
+        values = np.asarray(composition_values, dtype=float)
+        if values.shape != (self._n_compositions,):
+            raise InputError(
+                f"expected one value per each of {self._n_compositions} "
+                f"compositions, got shape {values.shape}"
+            )
+        return values[self.compositions]
+
+    def _checked(self, weights) -> np.ndarray:
+        arr = np.asarray(weights, dtype=float)
+        if arr.shape != self.compositions.shape:
+            raise InputError(
+                f"expected one weight per each of {self.compositions.size} "
+                f"nodes, got shape {arr.shape}"
+            )
+        if np.any(arr < 0.0):
+            raise InputError("weights cannot be negative")
+        return arr
+
+    def __repr__(self) -> str:
+        return (
+            f"<CompositionMapping {self.compositions.size} nodes -> "
+            f"{int(self.occupied.sum())} of {self._n_compositions} "
+            f"compositions>"
+        )

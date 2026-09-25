@@ -6,7 +6,12 @@ import numpy as np
 import pytest
 
 import openndm
-from openndm.thermal import AxialMapping, PicardCoupling, ThermalSolver
+from openndm.thermal import (
+    AxialMapping,
+    CompositionMapping,
+    PicardCoupling,
+    ThermalSolver,
+)
 
 INLET = 560.0
 HEATING = 1.0e-4
@@ -356,3 +361,93 @@ def test_a_field_of_the_wrong_length_is_an_error():
         mapping.distribute([1.0, 2.0])
     with pytest.raises(openndm.InputError, match="source cells"):
         mapping.average(np.ones((2, 5)))
+
+
+def two_composition_geometry(widths=(20.0, 20.0)):
+    """One plane, two positions, so composition 0 and 1 hold one node each."""
+    return openndm.Geometry.from_lattice(
+        np.array([[[0, 1]]]), pitch=20.0, dx=list(widths)
+    )
+
+
+def test_a_composition_holding_one_node_takes_that_nodes_value():
+    mapping = CompositionMapping(two_composition_geometry())
+    assert mapping.average([600.0, 900.0]).tolist() == [600.0, 900.0]
+
+
+def test_nodes_sharing_a_composition_are_averaged_by_volume():
+    geometry = openndm.Geometry.from_lattice(
+        np.array([[[0, 0]]]), pitch=20.0, dx=[10.0, 30.0]
+    )
+    mapping = CompositionMapping(geometry)
+    assert float(mapping.average([600.0, 1000.0])[0]) == pytest.approx(900.0)
+
+
+def test_a_uniform_field_survives_the_reduction_whatever_the_weights():
+    geometry = openndm.Geometry.from_lattice(
+        np.array([[[0, 0, 1]]]), pitch=20.0, dx=[10.0, 30.0, 5.0]
+    )
+    mapping = CompositionMapping(geometry)
+    assert mapping.average(np.full(3, 700.0)) == pytest.approx(np.full(2, 700.0))
+
+
+def test_the_weighting_is_the_callers_to_choose():
+    geometry = openndm.Geometry.from_lattice(np.array([[[0, 0]]]), pitch=20.0)
+    by_power = CompositionMapping(geometry, weights=[3.0, 1.0])
+    assert float(by_power.average([600.0, 1000.0])[0]) == pytest.approx(700.0)
+
+
+def test_a_composition_no_node_carries_still_gets_a_usable_coordinate():
+    geometry = openndm.Geometry.from_lattice(np.array([[[0, 2]]]), pitch=20.0)
+    mapping = CompositionMapping(geometry)
+
+    assert mapping.n_compositions == 3
+    assert mapping.occupied.tolist() == [True, False, True]
+
+    states = mapping.average([600.0, 900.0])
+    assert np.all(np.isfinite(states))
+    assert states.tolist() == [600.0, 750.0, 900.0]
+
+
+def test_expanding_a_composition_field_puts_it_back_on_the_nodes():
+    mapping = CompositionMapping(two_composition_geometry())
+    assert mapping.expand([600.0, 900.0]).tolist() == [600.0, 900.0]
+
+
+def test_a_reduction_followed_by_an_expansion_is_a_projection():
+    geometry = openndm.Geometry.from_lattice(
+        np.array([[[0, 0, 1]]]), pitch=20.0
+    )
+    mapping = CompositionMapping(geometry)
+    once = mapping.expand(mapping.average([600.0, 1000.0, 800.0]))
+    twice = mapping.expand(mapping.average(once))
+    assert twice == pytest.approx(once)
+
+
+def test_the_reduction_is_volume_conservative():
+    geometry = openndm.Geometry.from_lattice(
+        np.array([[[0, 0, 1]]]), pitch=20.0, dx=[10.0, 30.0, 5.0]
+    )
+    mapping = CompositionMapping(geometry)
+    field = np.array([600.0, 1000.0, 800.0])
+    volumes = geometry.volumes
+    reduced = mapping.expand(mapping.average(field))
+    assert float(reduced @ volumes) == pytest.approx(float(field @ volumes))
+
+
+def test_a_composition_mapping_rejects_impossible_input():
+    mapping = CompositionMapping(two_composition_geometry())
+    with pytest.raises(openndm.InputError, match="nodes"):
+        mapping.average([600.0])
+    with pytest.raises(openndm.InputError, match="compositions"):
+        mapping.expand([600.0, 700.0, 800.0])
+    with pytest.raises(openndm.InputError, match="negative"):
+        CompositionMapping(two_composition_geometry(), weights=[-1.0, 1.0])
+    with pytest.raises(openndm.InputError, match="weight"):
+        CompositionMapping(two_composition_geometry(), weights=[1.0])
+
+
+def test_a_composition_mapping_is_described_by_its_repr():
+    text = repr(CompositionMapping(two_composition_geometry()))
+    assert "2 nodes" in text
+    assert "2 of 2 compositions" in text
