@@ -15,6 +15,7 @@ OpenMC-dependent group constant generation path and is imported explicitly.
    feedback
    thermal
    channel
+   pin
    water
    settings
    statepoint
