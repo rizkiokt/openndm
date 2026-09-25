@@ -1026,10 +1026,38 @@ water.saturation_temperature(15.5e6)       # K, ~618
 Pressures are Pa, temperatures K, enthalpies J/kg and densities kg/m^3, and
 everything broadcasts over arrays.
 
-`IF97Water` is IAPWS-IF97 region 1 (compressed liquid) and region 4 (the
-saturation line). **Region 2 (vapour) is not implemented**, so the steam side
-of a BWR is not covered. A state outside region 1 raises rather than returning
-a number the equation does not stand behind.
+`IF97Water` is IAPWS-IF97 region 1 (compressed liquid), region 2 (vapour) and
+region 4 (the saturation line). Steam comes from the `vapour_` methods:
+
+```python
+water.vapour_density(7.0e6, 600.0)         # kg/m^3
+water.vapour_enthalpy(7.0e6, 600.0)        # J/kg
+water.region23_pressure(700.0)             # Pa, the region 2/3 boundary
+```
+
+Both sides of the saturation line, which is what a two-phase model needs:
+
+```python
+water.saturated_liquid_enthalpy(7.0e6)     # J/kg, ~1.267e6
+water.saturated_vapour_enthalpy(7.0e6)     # J/kg, ~2.773e6
+water.saturated_liquid_density(7.0e6)      # kg/m^3, ~740
+water.saturated_vapour_density(7.0e6)      # kg/m^3, ~36.5
+water.latent_heat(7.0e6)                   # J/kg, the gap between them
+```
+
+Those four are `SaturationProperties`, a protocol of their own rather than
+part of `WaterProperties`. A single-phase channel never asks for them, and
+`ConstantWater` does not provide them, so a two-phase model checks
+`isinstance(water, openndm.SaturationProperties)` before it starts.
+
+**Region 3 is not implemented**, the dense fluid around the critical point.
+The practical consequence is that the saturation line is reachable only up to
+`openndm.water.SATURATION_REGION3_PRESSURE`, 16.529 MPa, where it runs into
+the region 2/3 boundary. A PWR at 15.5 MPa is below that and a BWR at 7 MPa
+far below. Above it the saturated accessors raise.
+
+A state outside the implemented regions raises rather than returning a number
+the equation does not stand behind.
 
 `ConstantWater` has fixed density and specific heat. Use it to verify a
 channel, not to run one: with constant properties the axial enthalpy rise is

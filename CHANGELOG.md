@@ -8,6 +8,37 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **IAPWS-IF97 region 2 and both sides of the saturation line** (FR-TH-3).
+  `IF97Water` gains `vapour_specific_volume`, `vapour_density`,
+  `vapour_enthalpy` and `vapour_specific_heat` for steam, `region23_pressure`
+  for the B23 boundary, and `saturated_liquid_enthalpy`,
+  `saturated_vapour_enthalpy`, `saturated_liquid_density`,
+  `saturated_vapour_density` and `latent_heat` for the line itself. That is
+  what a two-phase channel needs and what region 1 alone could not give.
+
+  Verified against the release's own program-verification values: Table 15 for
+  region 2, to the nine significant figures it prints, and the B23 point of
+  Section 4. Cross-checked against the independent `iapws` package to 1e-9
+  over 60 pressures along the saturation line.
+
+  The 52 coefficients of Tables 10 and 11 were recovered from the R7-97(2012)
+  PDF positionally, because the exponents are superscript glyphs that plain
+  text extraction silently drops -- `× 10⁻²` comes out as `10`. Table 15 is
+  what proves they came across intact.
+
+  `SaturationProperties` is a **separate** runtime-checkable protocol rather
+  than four more methods on `WaterProperties`. A single-phase channel never
+  asks for these, and folding them in would make `ConstantWater` and every
+  external adapter incomplete for no gain. A two-phase model tests
+  `isinstance(water, SaturationProperties)` before it starts.
+
+  **Region 3 is not implemented.** The saturation line is therefore reachable
+  only up to `SATURATION_REGION3_PRESSURE`, 16.529 MPa, where it meets the B23
+  boundary and both phases become region 3. A PWR at 15.5 MPa is below that
+  and a BWR at 7 MPa far below. Above it the accessors raise and say why,
+  rather than extrapolating regions 1 and 2 into a range they were not fitted
+  for.
+
 - **Coupled steady state with thermal-hydraulic feedback**
   (`Model.solve_coupled`, FR-MODE-6). Solve, hand the node power to a
   `ThermalSolver`, push the temperatures and densities back into the cross
@@ -133,6 +164,15 @@ All notable changes to OpenNDM are recorded here. The format follows
   performance gate into a disabled performance gate; report first.
 
 ### Fixed
+
+- **A state on the saturation line no longer fails the region checks.**
+  Eq. (30) and Eq. (31) invert each other to about a part in 1e10 rather
+  than exactly, so a state built as
+  `(p, water.saturation_temperature(p))` -- which is what the library's
+  own round trip produces -- landed a hair on the wrong side of the
+  boundary and raised. Both phases are defined there, so the region checks
+  now carry a 1e-9 relative slack and the boiling temperature is held
+  inside region 1's range.
 
 - **A boundary Dhat update outside the trusted band is now discarded rather
   than clamped**, which is what actually fixes the multi-group convergence the

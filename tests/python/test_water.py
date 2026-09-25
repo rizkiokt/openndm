@@ -289,3 +289,178 @@ def test_the_external_backend_agrees_with_the_built_in_formulation():
         builtin.saturation_temperature(pressures),
         rtol=1e-9,
     )
+
+
+#: IAPWS R7-97(2012) Table 15, region 2:
+#: (T [K], p [Pa], v [m^3/kg], h [kJ/kg], cp [kJ/kg K]).
+IF97_TABLE15 = [
+    (300.0, 0.0035e6, 0.394913866e2, 0.254991145e4, 0.191300162e1),
+    (700.0, 0.0035e6, 0.923015898e2, 0.333568375e4, 0.208141274e1),
+    (700.0, 30.0e6, 0.542946619e-2, 0.263149474e4, 0.103505092e2),
+]
+
+#: IAPWS R7-97(2012) Section 4: the B23 boundary must pass through this point.
+B23_VERIFICATION = (0.623150000e3, 0.165291643e2)
+
+
+@pytest.mark.parametrize(("temperature", "pressure", "v", "h", "cp"), IF97_TABLE15)
+def test_if97_reproduces_the_region_two_verification_values(
+    temperature, pressure, v, h, cp
+):
+    """IAPWS R7-97(2012) Table 15, the release's own verification values.
+
+    Printed to nine significant figures, so one wrong digit anywhere in the
+    fifty-two coefficients of Tables 10 and 11 moves one of these.
+    """
+    water = openndm.IF97Water()
+    assert float(
+        water.vapour_specific_volume(pressure, temperature)
+    ) == pytest.approx(v, rel=1e-8)
+    assert float(water.vapour_enthalpy(pressure, temperature)) == pytest.approx(
+        h * 1e3, rel=1e-8
+    )
+    assert float(
+        water.vapour_specific_heat(pressure, temperature)
+    ) == pytest.approx(cp * 1e3, rel=1e-8)
+
+
+def test_the_region_boundary_passes_through_its_verification_point():
+    temperature, pressure_mpa = B23_VERIFICATION
+    boundary = float(openndm.IF97Water().region23_pressure(temperature))
+    assert boundary == pytest.approx(pressure_mpa * 1e6, rel=1e-8)
+
+
+def test_the_region_boundary_spans_the_range_the_release_states():
+    water = openndm.IF97Water()
+    low, high = openndm.water.REGION23_TEMPERATURE_RANGE
+    assert float(water.region23_pressure(low)) == pytest.approx(16.5292e6, rel=1e-5)
+    assert float(water.region23_pressure(high)) == pytest.approx(100.0e6, rel=1e-6)
+
+
+@pytest.mark.parametrize("temperature", [623.14, 863.16, 300.0, 1073.15])
+def test_the_region_boundary_refuses_temperatures_it_does_not_span(temperature):
+    with pytest.raises(openndm.InputError, match="region 2/3 boundary"):
+        openndm.IF97Water().region23_pressure(temperature)
+
+
+def test_the_region_three_pressure_is_the_saturation_line_at_region_ones_ceiling():
+    water = openndm.IF97Water()
+    ceiling = openndm.water.REGION1_TEMPERATURE_RANGE[1]
+    assert float(water.saturation_pressure(ceiling)) == pytest.approx(
+        openndm.water.SATURATION_REGION3_PRESSURE, rel=1e-12
+    )
+    assert openndm.water.SATURATION_REGION3_PRESSURE == pytest.approx(
+        B23_VERIFICATION[1] * 1e6, rel=1e-8
+    )
+
+
+@pytest.mark.parametrize(
+    ("pressure", "temperature"),
+    [
+        (0.0035e6, 272.0),
+        (0.0035e6, 1074.0),
+        (101.0e6, 900.0),
+        (0.0, 700.0),
+        (15.5e6, 500.0),
+        (30.0e6, 640.0),
+    ],
+)
+def test_if97_refuses_states_outside_region_two(pressure, temperature):
+    with pytest.raises(openndm.InputError):
+        openndm.IF97Water().vapour_density(pressure, temperature)
+
+
+def test_steam_is_lighter_and_hotter_in_enthalpy_than_its_liquid():
+    water = openndm.IF97Water()
+    for pressure in (0.1e6, 1.0e6, 7.0e6, 15.5e6):
+        assert float(water.saturated_vapour_enthalpy(pressure)) > float(
+            water.saturated_liquid_enthalpy(pressure)
+        )
+        assert float(water.saturated_liquid_density(pressure)) > float(
+            water.saturated_vapour_density(pressure)
+        )
+        assert float(water.latent_heat(pressure)) > 0.0
+
+
+def test_the_latent_heat_shrinks_as_the_critical_point_is_approached():
+    water = openndm.IF97Water()
+    pressures = np.geomspace(0.1e6, openndm.water.SATURATION_REGION3_PRESSURE, 12)
+    assert np.all(np.diff(water.latent_heat(pressures)) < 0.0)
+
+
+def test_the_saturated_phases_are_the_two_regions_at_the_boiling_point():
+    water = openndm.IF97Water()
+    pressure = 7.0e6
+    boiling = float(water.saturation_temperature(pressure))
+
+    assert float(water.saturated_liquid_enthalpy(pressure)) == pytest.approx(
+        float(water.enthalpy(pressure, boiling)), rel=1e-9
+    )
+    assert float(water.saturated_vapour_enthalpy(pressure)) == pytest.approx(
+        float(water.vapour_enthalpy(pressure, boiling)), rel=1e-9
+    )
+
+
+def test_a_pwr_and_a_bwr_sit_where_they_should_on_the_saturation_line():
+    water = openndm.IF97Water()
+    assert 615.0 < float(water.saturation_temperature(PWR_PRESSURE)) < 620.0
+    assert 555.0 < float(water.saturation_temperature(7.0e6)) < 562.0
+    assert 30.0 < float(water.saturated_vapour_density(7.0e6)) < 40.0
+    assert 700.0 < float(water.saturated_liquid_density(7.0e6)) < 780.0
+
+
+@pytest.mark.parametrize("pressure", [20.0e6, 22.0e6, 30.0e6])
+def test_the_saturation_line_stops_where_region_three_starts(pressure):
+    water = openndm.IF97Water()
+    for accessor in (
+        water.saturated_liquid_enthalpy,
+        water.saturated_vapour_enthalpy,
+        water.saturated_liquid_density,
+        water.saturated_vapour_density,
+    ):
+        with pytest.raises(openndm.InputError, match="region 3"):
+            accessor(pressure)
+
+
+def test_the_saturated_accessors_broadcast_and_keep_shape():
+    water = openndm.IF97Water()
+    pressures = np.array([[1.0e6, 3.0e6], [7.0e6, 15.0e6]])
+    for values in (
+        water.saturated_liquid_enthalpy(pressures),
+        water.saturated_vapour_density(pressures),
+        water.latent_heat(pressures),
+    ):
+        assert values.shape == pressures.shape
+        assert np.all(np.isfinite(values))
+
+
+def test_only_a_backend_with_both_phases_satisfies_the_saturation_protocol():
+    assert isinstance(openndm.IF97Water(), openndm.water.SaturationProperties)
+    assert not isinstance(ConstantWater(), openndm.water.SaturationProperties)
+    assert isinstance(ConstantWater(), WaterProperties)
+    assert openndm.SaturationProperties is openndm.water.SaturationProperties
+
+
+def test_the_repr_says_which_regions_are_covered():
+    assert "regions 1 and 2" in repr(openndm.IF97Water())
+
+
+@pytest.mark.skipif(
+    not has_external_backend(), reason="needs iapws or CoolProp installed"
+)
+def test_the_saturation_line_agrees_with_the_external_package():
+    iapws = pytest.importorskip("iapws")
+    water = openndm.IF97Water()
+    pressures = np.geomspace(
+        1.0e4, openndm.water.SATURATION_REGION3_PRESSURE, 25
+    )
+    liquid = [iapws.IAPWS97(P=float(p) / 1e6, x=0.0) for p in pressures]
+    vapour = [iapws.IAPWS97(P=float(p) / 1e6, x=1.0) for p in pressures]
+
+    for ours, theirs in (
+        (water.saturated_liquid_enthalpy(pressures) / 1e3, [s.h for s in liquid]),
+        (water.saturated_vapour_enthalpy(pressures) / 1e3, [s.h for s in vapour]),
+        (water.saturated_liquid_density(pressures), [s.rho for s in liquid]),
+        (water.saturated_vapour_density(pressures), [s.rho for s in vapour]),
+    ):
+        assert ours == pytest.approx(np.array(theirs), rel=1e-8)
