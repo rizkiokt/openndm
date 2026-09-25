@@ -8,6 +8,41 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **The NEACRP thermophysical correlations, cited and opt-in**
+  (`openndm.neacrp_fuel_conductivity` and three companions). #70 shipped no
+  conductivity correlation on purpose: the published ones are
+  temperature-dependent and writing one from memory is the failure
+  `benchmarks/README.md` records. The benchmark specification supplies them,
+  so they can be transcribed from a source rather than invented.
+
+  NEACRP-L-335 Section 2.7, "Participants of the benchmark should use the
+  following reference relations":
+
+  ```
+  lambda_UO2        = 1.05 + 2150 / (T - 73.15)
+  lambda_Zircaloy-4 = 7.51 + 2.09e-2 T - 1.45e-5 T^2 + 7.67e-9 T^3
+  cp_UO2            = 162.3 + 0.3038 T - 2.391e-4 T^2 + 6.404e-8 T^3
+  cp_Zircaloy-4     = 252.54 + 0.11474 T
+  ```
+
+  They drop straight into `PinConduction(fuel_conductivity=...,
+  clad_conductivity=...)` and remain something a caller opts into, never a
+  default. The fuel conductivity refuses its own pole at 73.15 K rather than
+  returning a negative number. The two heat capacities have no consumer --
+  steady conduction does not read a heat capacity -- and ship anyway because
+  they are printed beside the other two and a later trip back to the
+  specification is a worse outcome than four unused lines.
+
+  The four relations sit in the page's image layer, not its text layer, so
+  they were read from a render of the page rather than extracted.
+
+  **Correction to the issue that asked for this.** It originally proposed the
+  gap conductance correlation `0.044 P^2 + 0.68 P + 5561.0` from the 1991
+  *draft*, NEACRP-A-1122. The final specification supersedes it with a
+  constant, `k_gap = 1e4 W/m^2 K`, which `gap_conductance=1.0e4` already
+  expresses. Draft and final also disagree on the radial power profile in the
+  pin: the draft shapes it with `gamma = 1.05`, the final says flat.
+
 - **Homogeneous equilibrium two-phase channel** (`ChannelModel(two_phase=True)`,
   FR-TH-5). The enthalpy integration does not change; only its inversion does.
   Above the saturated liquid enthalpy the coolant temperature stops at the

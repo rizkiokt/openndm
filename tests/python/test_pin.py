@@ -322,3 +322,125 @@ def test_the_coupled_fields_drive_the_picard_loop():
     assert result.converged
     assert seen["doppler_temperature"].min() > 560.0
     assert "fuel_temperature" in result.temperatures
+
+
+def test_the_neacrp_correlations_are_importable_from_the_package():
+    assert openndm.neacrp_fuel_conductivity is not None
+    assert openndm.neacrp_clad_conductivity is not None
+    assert openndm.neacrp_fuel_heat_capacity is not None
+    assert openndm.neacrp_clad_heat_capacity is not None
+
+
+@pytest.mark.parametrize(
+    ("temperature", "expected"),
+    [(300.0, 10.528), (800.0, 4.008), (1200.0, 2.958), (2000.0, 2.166)],
+)
+def test_the_neacrp_fuel_conductivity_is_its_stated_relation(temperature, expected):
+    """NEACRP-L-335 Section 2.7: lambda = 1.05 + 2150 / (T - 73.15)."""
+    assert float(openndm.neacrp_fuel_conductivity(temperature)) == pytest.approx(
+        1.05 + 2150.0 / (temperature - 73.15)
+    )
+    assert float(openndm.neacrp_fuel_conductivity(temperature)) == pytest.approx(
+        expected, abs=5.0e-4
+    )
+
+
+def test_the_neacrp_fuel_conductivity_falls_with_temperature():
+    temperatures = np.linspace(300.0, 2000.0, 200)
+    values = openndm.neacrp_fuel_conductivity(temperatures)
+    assert np.all(np.diff(values) < 0.0)
+    assert np.all(values > 1.05)
+
+
+@pytest.mark.parametrize("temperature", [73.15, 70.0, 0.0, -100.0])
+def test_the_neacrp_fuel_conductivity_refuses_its_own_pole(temperature):
+    with pytest.raises(openndm.InputError, match="diverges"):
+        openndm.neacrp_fuel_conductivity(temperature)
+
+
+@pytest.mark.parametrize(
+    ("temperature", "expected"),
+    [(300.0, 12.682), (600.0, 16.487), (1000.0, 21.580)],
+)
+def test_the_neacrp_clad_conductivity_is_its_stated_relation(temperature, expected):
+    t = temperature
+    stated = 7.51 + 2.09e-2 * t - 1.45e-5 * t**2 + 7.67e-9 * t**3
+    assert float(openndm.neacrp_clad_conductivity(t)) == pytest.approx(stated)
+    assert float(openndm.neacrp_clad_conductivity(t)) == pytest.approx(
+        expected, abs=1.0e-3
+    )
+
+
+def test_the_neacrp_clad_conductivity_rises_over_the_reactor_range():
+    temperatures = np.linspace(300.0, 1000.0, 200)
+    values = openndm.neacrp_clad_conductivity(temperatures)
+    assert np.all(np.diff(values) > 0.0)
+    assert np.all((values > 12.0) & (values < 22.0))
+
+
+@pytest.mark.parametrize(
+    ("temperature", "expected"), [(300.0, 233.7), (800.0, 285.1), (1200.0, 293.2)]
+)
+def test_the_neacrp_fuel_heat_capacity_is_its_stated_relation(
+    temperature, expected
+):
+    t = temperature
+    stated = 162.3 + 0.3038 * t - 2.391e-4 * t**2 + 6.404e-8 * t**3
+    assert float(openndm.neacrp_fuel_heat_capacity(t)) == pytest.approx(stated)
+    assert float(openndm.neacrp_fuel_heat_capacity(t)) == pytest.approx(
+        expected, abs=0.05
+    )
+
+
+@pytest.mark.parametrize(
+    ("temperature", "expected"), [(300.0, 286.96), (600.0, 321.38)]
+)
+def test_the_neacrp_clad_heat_capacity_is_linear(temperature, expected):
+    assert float(openndm.neacrp_clad_heat_capacity(temperature)) == pytest.approx(
+        252.54 + 0.11474 * temperature
+    )
+    assert float(openndm.neacrp_clad_heat_capacity(temperature)) == pytest.approx(
+        expected, abs=5.0e-3
+    )
+
+
+def test_the_correlations_broadcast_over_arrays():
+    temperatures = np.array([[400.0, 800.0], [1200.0, 1600.0]])
+    for correlation in (
+        openndm.neacrp_fuel_conductivity,
+        openndm.neacrp_clad_conductivity,
+        openndm.neacrp_fuel_heat_capacity,
+        openndm.neacrp_clad_heat_capacity,
+    ):
+        values = correlation(temperatures)
+        assert values.shape == temperatures.shape
+        assert np.all(np.isfinite(values))
+
+
+def test_a_pin_driven_by_the_neacrp_correlations_runs_cooler_at_the_centre():
+    """The fuel is more conductive below 1200 K than the 3.0 stand-in."""
+    constant = conduction(fuel_conductivity=FUEL_K, n_rings=64)
+    cited = conduction(
+        fuel_conductivity=openndm.neacrp_fuel_conductivity,
+        clad_conductivity=openndm.neacrp_clad_conductivity,
+        n_rings=64,
+    )
+    hot = solved(constant)
+    real = solved(cited)
+
+    assert float(real.centre[0]) < float(hot.centre[0])
+    assert float(real.surface[0]) < float(hot.surface[0])
+    assert float(real.centre[0]) > COOLANT
+
+
+def test_the_correlations_converge_with_the_ring_count():
+    def centre(n_rings):
+        model = conduction(
+            fuel_conductivity=openndm.neacrp_fuel_conductivity, n_rings=n_rings
+        )
+        return float(solved(model).centre[0])
+
+    reference = centre(4000)
+    coarse = abs(centre(25) - reference)
+    fine = abs(centre(50) - reference)
+    assert coarse / fine == pytest.approx(2.0, rel=0.1)
