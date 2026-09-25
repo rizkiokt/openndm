@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from .geometry import Geometry
+    from .pin import PinConduction, PinState
     from .water import WaterProperties
 
 __all__ = ["ChannelModel", "PinGeometry", "absolute_power"]
@@ -163,6 +164,10 @@ class ChannelModel:
         than raised in the fuel, in ``[0, 1]``.
     water : WaterProperties, optional
         Property backend. :class:`~openndm.IF97Water` by default.
+    conduction : PinConduction, optional
+        Radial pin conduction (FR-TH-2). Without it the model reports the
+        coolant alone; with it, also the fuel and Doppler temperatures. It
+        must carry the same ``pins``.
 
     Attributes
     ----------
@@ -206,6 +211,7 @@ class ChannelModel:
         pressure: float = 15.5e6,
         direct_heating: float = 0.0,
         water: WaterProperties | None = None,
+        conduction: PinConduction | None = None,
     ):
         if not inlet_temperature > 0.0:
             raise InputError(
@@ -220,12 +226,20 @@ class ChannelModel:
                 f"{direct_heating}"
             )
 
+        if conduction is not None and conduction.pins != pins:
+            raise InputError(
+                "the conduction model was built on different pin dimensions "
+                "from the channel"
+            )
+
         self._geometry = geometry
         self.pins = pins
         self.pressure = float(pressure)
         self.inlet_temperature = float(inlet_temperature)
         self.direct_heating = float(direct_heating)
         self._water = IF97Water() if water is None else water
+        self._conduction = conduction
+        self._pin_state = None
 
         self._nodes = _channel_columns(geometry)
         self._active = self._nodes >= 0
@@ -234,12 +248,7 @@ class ChannelModel:
 
         self._mass_flow = self._checked_mass_flow(mass_flow)
         self._power = np.zeros(geometry.n_nodes, dtype=float)
-        self._enthalpy = np.full(geometry.n_nodes, self._inlet_enthalpy())
-        self._outlet_enthalpy = np.full(self.n_channels, self._inlet_enthalpy())
-        self._temperature = np.full(geometry.n_nodes, self.inlet_temperature)
-        self._density = np.asarray(
-            self._water.density(self.pressure, self._temperature), dtype=float
-        )
+        self.solve()
 
     @property
     def n_channels(self) -> int:
@@ -276,6 +285,11 @@ class ChannelModel:
     def mass_flux(self) -> np.ndarray:
         """Coolant mass flux per channel, kg/(m^2 s)."""
         return self._mass_flow / self.pins.flow_area
+
+    @property
+    def pin_state(self) -> PinState | None:
+        """Pin temperatures from the last solve, or None without conduction."""
+        return self._pin_state
 
     @property
     def linear_heat_rate(self) -> np.ndarray:
@@ -329,16 +343,28 @@ class ChannelModel:
         self._density = np.asarray(
             self._water.density(self.pressure, self._temperature), dtype=float
         )
+        if self._conduction is not None:
+            self._pin_state = self._conduction.solve(
+                self.linear_heat_rate, self._temperature
+            )
 
     def get_temperatures(self) -> Mapping[str, np.ndarray]:
-        """Coolant temperature per node in K, keyed ``'moderator_temperature'``.
+        """Temperature per node in K, keyed by field.
+
+        Always ``'moderator_temperature'``. With a conduction model attached,
+        also ``'fuel_temperature'``, the volume-average pellet temperature,
+        and ``'doppler_temperature'``, the weighted one of FR-TH-4.
 
         Returns
         -------
         dict of str to ndarray
             Copies, not views onto the model's own buffers.
         """
-        return {"moderator_temperature": self._temperature.copy()}
+        fields = {"moderator_temperature": self._temperature.copy()}
+        if self._pin_state is not None:
+            fields["fuel_temperature"] = self._pin_state.average.copy()
+            fields["doppler_temperature"] = self._pin_state.doppler.copy()
+        return fields
 
     def get_densities(self) -> Mapping[str, np.ndarray]:
         """Coolant density per node in kg/m^3, keyed ``'moderator_density'``.

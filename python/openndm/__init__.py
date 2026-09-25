@@ -35,6 +35,7 @@ from .exceptions import (
 from .feedback import DopplerFeedback
 from .geometry import INACTIVE, Geometry
 from .model import BoronSearchResult, Model, Result, Transient, TransientStep
+from .pin import PinConduction, PinState
 from .rods import ControlRodBank, ControlRods, RodWorth
 from .settings import Settings
 from .statepoint import StatePoint, write_statepoint
@@ -70,7 +71,9 @@ __all__ = [
     "Model",
     "OpenNDMError",
     "PicardCoupling",
+    "PinConduction",
     "PinGeometry",
+    "PinState",
     "Result",
     "RodWorth",
     "Settings",

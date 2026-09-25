@@ -8,6 +8,37 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Radial fuel pin conduction and the Doppler temperature**
+  (`openndm.PinConduction`, FR-TH-2, FR-TH-4). A radial mesh across the pellet,
+  then the pellet-to-clad gap, the cladding and the film in series. Attach one
+  to a `ChannelModel` with `conduction=` and it reports `fuel_temperature`, the
+  volume-average pellet temperature, and `doppler_temperature` alongside the
+  coolant.
+
+  The conduction equation is integrated exactly across each ring, so a constant
+  conductivity reproduces the analytic parabola `T(r) = T_s + q'''(R^2 -
+  r^2)/(4k)` at every ring boundary, to 4e-16 relative at ring counts from 1 to
+  200. The volume average is integrated on `r^2`, on which that profile is
+  linear, so it is exact as well and lands exactly midway between centre and
+  surface. Gap, cladding and film each carry their closed-form drop to 1e-13.
+
+  `doppler_weight` is the weight on the pellet surface, defaulting to the 0.7
+  surface / 0.3 centre convention FR-TH-4 names. At 0.5 it reproduces the
+  volume average exactly.
+
+  **No conductivity correlation is written here.** Fuel and cladding
+  conductivities, the gap conductance and the film coefficient are all
+  injected, as a constant or a callable, the way `WaterProperties` backends
+  are. The published correlations are temperature-dependent and a correlation
+  written from memory is a failure this project has already paid for once. A
+  callable is evaluated at each ring's outer boundary, which converges first
+  order in the ring count -- 3.02 K, 1.49 K and 0.74 K at 25, 50 and 100 rings
+  on a test correlation -- where a constant is exact at any count.
+
+  This also closes the other half of the direct-heating check from #85: raising
+  the fraction deposited straight in the coolant lowers the fuel temperature
+  while the outlet temperature does not move.
+
 - **Single-phase closed-channel coolant model** (`openndm.ChannelModel`,
   FR-TH-1, FR-TH-6). One channel per radial column of the core map, carrying a
   fixed mass flow at constant pressure, so the only conservation law left is
