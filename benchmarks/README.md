@@ -10,6 +10,7 @@ own directory.
 | `iaea3d/` | 2-group PWR, quarter core, 3D | Published `k_eff = 1.02903` | SANM +44.7 pcm at 20 cm axial mesh | **Verified** |
 | `biblis2d/` | 2-group PWR, quarter core, 2D, 8 compositions | Published `k_eff = 1.02511` | SANM −2.1 pcm at one node per assembly | **Verified** |
 | `lmw/` | 2-group PWR rod transient, 3D | None in the specification | Power history, converged in mesh, not in time step | **Reported, not compared** |
+| `neacrp/` | 2-group PWR rod ejection, 3D, 11 compositions, coupled | Published critical boron, NEA/NSC/DOC(93)25 Table 3.1 | HZP boron within **3.5 ppm** on all three cases | **Verified on boron; peaking open** |
 
 The specification's acceptance criterion is 100 pcm on `k_eff` for a static
 benchmark with a published solution. All four static decks meet it. LMW is a
@@ -368,3 +369,53 @@ imports the first one's data. Both of these were called `data.py` until they
 existed at the same time, at which point the second deck to be imported got
 the first deck's core map. `tests/python/test_benchmarks.py` already loads
 each `run.py` under a unique name for the same reason.
+
+
+## neacrp — published reference, first coupled comparison
+
+The NEACRP 3-D LWR core transient benchmark, initial steady state. Six cases
+over two geometries: A and B are quarter cores with rotational symmetry, C is
+a half core. This deck runs the three hot zero power cases, where the coolant
+carries no heat and the coupling has nothing to do, so the geometry, the cross
+section expansion, the rod banks and the boron search are tested on their own.
+
+```
+case   critical boron, ppm      F_xy            F_Q (volume mean)
+       OpenNDM  reference        OpenNDM  ref    OpenNDM  ref
+A1       564.9      567.7   -2.8   2.006  1.909   3.175  2.874
+B1      1251.4     1254.6   -3.2   1.335  1.276   2.120  1.932
+C1      1131.8     1135.3   -3.5   1.550  1.445   2.464  2.187
+```
+
+**The boron is the result worth having.** Within 3.5 ppm on every case, all
+three the same sign and much the same size, across two different geometries.
+For comparison the NODAL3 code reports a maximum deviation of 10.1 ppm against
+the same reference. A systematic -3 ppm says a small consistent difference in
+the model, not a mistake in it.
+
+**The peaking factors are not verified.** F_xy is 4.6 to 7.3 percent high and
+F_Q 9.8 to 12.7 percent high, consistently across the three cases. Two things
+are unresolved and neither has been chased:
+
+NEACRP-L-335 Section 4 asks for B3, "maximum power peaking factor", which is
+F_Q. It does not define F_xy; that column comes from the results document. The
+row above states an inferred correspondence to the radial peaking OpenNDM
+calls F_dH, not a verified one.
+
+The reference runs 4 radial nodes per assembly, as this deck does, so the mesh
+is not the difference. A peaking factor reported per assembly rather than per
+node would be lower by about the right amount, but that is a guess and it has
+not been checked against the source.
+
+**`Result.f_q` is not a core-average peaking on this mesh.** It normalises to
+an arithmetic mean over powered nodes, which equals the volume-weighted mean
+only when every node has the same volume. This deck's axial layers run from
+7.7 cm to 30 cm, and the two means differ by 27 percent: `Result.f_q` gives
+4.03 for A1 where the volume-weighted figure is 3.18. The deck reports both
+and compares the volume-weighted one. See the issue this raised.
+
+### What is not here
+
+The three full power cases, A2, B2 and C2, which are what actually exercise
+the thermal-hydraulic coupling. The rod worths in Table 3.1, which need the
+ejected assembly identified from Figures 3.1 to 3.6 of the specification.
