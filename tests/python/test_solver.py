@@ -72,25 +72,66 @@ def test_repeated_solves_are_reproducible(iaea_model):
     assert first == second
 
 
-def test_warm_start_reaches_the_same_answer_in_fewer_outers(tight):
-    """FR-OPT-3: a perturbed re-solve should reuse the previous solution."""
-    model = openndm.Model(iaea_geometry(), iaea_library(), tight)
-    cold = model.solve()
+IDENTICAL_ASSEMBLIES = (1, 3)
+UNLIKE_ASSEMBLIES = (4, 5)
+RODDED_CENTRE_AGAINST_OUTER_FUEL = (0, 63)
 
-    # Perturb by swapping two assemblies, then solve both ways.
-    model.swap_assemblies(1, 3)
+
+def _swapped_model(settings, swap, *, solve_first=True):
+    """IAEA core with two assemblies swapped and the model refreshed."""
+    model = openndm.Model(iaea_geometry(), iaea_library(), settings)
+    if solve_first:
+        model.solve()
+    model.swap_assemblies(*swap)
     model.refresh()
-    perturbed_cold = model.solve(warm_start=False)
+    return model
 
-    model_warm = openndm.Model(iaea_geometry(), iaea_library(), tight)
-    model_warm.solve()
-    model_warm.swap_assemblies(1, 3)
-    model_warm.refresh()
-    model_warm.solve()
-    warm = model_warm.solve(warm_start=True)
 
-    assert warm.k_eff == pytest.approx(perturbed_cold.k_eff, abs=1.0e-7)
-    assert warm.outer_iterations < cold.outer_iterations
+def test_refresh_keeps_the_flux_for_a_warm_start(tight):
+    """FR-OPT-3: ``refresh`` used to clear the flux, so a warm start after any
+    change to the model took as many outers as a cold one: 104 here.
+    """
+    cold = _swapped_model(tight, IDENTICAL_ASSEMBLIES).solve(warm_start=False)
+    warm = _swapped_model(tight, IDENTICAL_ASSEMBLIES).solve(warm_start=True)
+    assert warm.k_eff == pytest.approx(cold.k_eff, abs=1.0e-9)
+    assert warm.outer_iterations < cold.outer_iterations / 10
+
+
+def test_warm_start_after_a_real_swap_reaches_the_cold_answer(tight):
+    """The retained Dhat belongs to the old loading pattern; the nodal update
+    must still converge it to the new one.
+    """
+    cold = _swapped_model(tight, UNLIKE_ASSEMBLIES).solve(warm_start=False)
+    warm = _swapped_model(tight, UNLIKE_ASSEMBLIES).solve(warm_start=True)
+    assert warm.k_eff == pytest.approx(cold.k_eff, abs=1.0e-8)
+
+
+def test_cold_solve_after_refresh_matches_a_fresh_model(tight):
+    """A cold solve discards what refresh kept, so it retraces a fresh solve."""
+    refreshed = _swapped_model(tight, UNLIKE_ASSEMBLIES).solve(warm_start=False)
+    fresh = _swapped_model(tight, UNLIKE_ASSEMBLIES, solve_first=False).solve()
+    assert refreshed.k_eff == fresh.k_eff
+    assert refreshed.outer_iterations == fresh.outer_iterations
+    assert np.array_equal(np.asarray(refreshed.flux), np.asarray(fresh.flux))
+
+
+def test_adjoint_after_refresh_reconverges_the_forward_coupling(tight):
+    """The adjoint reuses the forward Dhat, which belongs to the old model.
+
+    Keeping it through a swap of the rodded centre with outer fuel left the
+    adjoint eigenvalue 569 pcm away from the forward one.
+    """
+    model = openndm.Model(iaea_geometry(), iaea_library(), tight)
+    model.solve()
+    model.solve_adjoint()
+    model.swap_assemblies(*RODDED_CENTRE_AGAINST_OUTER_FUEL)
+    model.refresh()
+    adjoint = model.solve_adjoint(warm_start=True)
+
+    fresh = _swapped_model(
+        tight, RODDED_CENTRE_AGAINST_OUTER_FUEL, solve_first=False
+    ).solve()
+    assert adjoint.k_eff == pytest.approx(fresh.k_eff, abs=1.0e-6)
 
 
 def test_swapping_identical_assemblies_leaves_k_unchanged(tight):
@@ -471,10 +512,11 @@ def test_a_change_in_diffusion_reaches_the_next_step(tight):
 
 
 def test_refreshing_during_a_transient_is_refused(tight):
-    """``refresh`` clears the flux, and the next step would run on an empty one.
+    """``refresh`` is refused while a transient runs.
 
-    It returned plausible-looking power instead of failing, because the step
-    read past the end of the emptied vector.
+    It once emptied the flux, and the next step returned plausible-looking
+    power by reading past the end of the vector. A step re-reads the model by
+    itself, so there is nothing for ``refresh`` to do.
     """
     model, _ = _kinetic_model(tight)
     model.solve()

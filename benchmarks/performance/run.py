@@ -356,12 +356,11 @@ def main() -> int:
         "  not implemented; a fixed-step rod ejection can be timed but it is not\n"
         "  the case the specification states.\n"
         "\n"
-        "  FR-OPT-3 fails for a reason worth knowing. Warm start itself works:\n"
-        "  re-solving an unchanged model takes 2 outers instead of 24, a 38x\n"
-        "  saving. But any change to the model needs refresh(), and refresh()\n"
-        "  clears the flux, so there is nothing left to warm start from. The two\n"
-        "  features do not compose, and a perturbed solve takes the same number\n"
-        "  of outers whether warm start is on or off."
+        "  FR-OPT-3 falls short for a reason worth knowing. refresh() keeps the\n"
+        "  flux, so the warm start begins an order of magnitude closer than a\n"
+        "  cold one. But the outer error falls only by about 0.65 per iteration,\n"
+        "  so that decade saves a few outers out of twenty. A 2x speedup needs\n"
+        "  faster outer convergence rather than a better initial guess."
     )
     return 0
 

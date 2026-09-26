@@ -805,10 +805,8 @@ step = transient.step(1.0e-3)
 ```
 
 **Do not call `model.refresh()` between steps.** A step re-reads the cross
-sections, the node compositions and the coupling coefficients by itself, and
-`refresh()` discards the retained flux — which is the transient's state, not a
-cache. It raises during a transient rather than letting the next step run on
-an empty one.
+sections, the node compositions and the coupling coefficients by itself, so
+`refresh()` raises during a transient.
 
 Re-finalize the library after writing a composition, as for any other
 mutation — see [Solving](#solving). That is still required; it is `refresh`
@@ -1039,8 +1037,8 @@ to diverge at `relaxation=1.0` usually converges in a few iterations at 0.25.
 `coupled.history` holds one `CouplingStep` per iteration with the power change
 and the eigenvalue.
 
-Every iteration calls `model.refresh()`, which discards the flux, so each solve
-in the loop starts cold. That is the same cost `search_boron` pays.
+Every iteration calls `model.refresh()`, which keeps the flux, so passing
+`warm_start=True` starts each solve from the previous iteration's.
 
 ### Water properties
 

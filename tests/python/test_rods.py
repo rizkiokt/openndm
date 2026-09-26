@@ -303,6 +303,13 @@ def test_bank_reproduces_the_iaea3d_deck_node_for_node():
 # ------------------------------------------------------------------ cusping
 CUSP = 2
 
+WARM_SWEEP_REPEAT_PCM = 1.0e-4
+"""Worth at the reference position, when a warm-started sweep solves it again.
+
+The sweep reaches it from a neighbouring point, so it agrees with the cold
+reference solve to the iteration tolerance, not bit for bit.
+"""
+
 
 def cusp_library():
     library = openndm.XSLibrary(1, 3)
@@ -517,7 +524,7 @@ def test_worth_curve_matches_two_direct_solves(tight):
     direct = 1.0e5 * (1.0 / inserted - 1.0 / withdrawn)
 
     assert curve.integral[0] == pytest.approx(direct, abs=0.01)
-    assert curve.integral[-1] == pytest.approx(0.0, abs=1.0e-9)
+    assert curve.integral[-1] == pytest.approx(0.0, abs=WARM_SWEEP_REPEAT_PCM)
 
 
 def test_inserting_gives_positive_worth(tight):
@@ -585,7 +592,7 @@ def test_worth_curve_takes_an_explicit_reference(tight):
     geometry, library, rods = cusp_core()
     model = openndm.Model(geometry, library, tight)
     curve = rods.worth_curve(model, "A", [0.0, 50.0], reference=50.0)
-    assert curve.integral[-1] == pytest.approx(0.0, abs=1.0e-9)
+    assert curve.integral[-1] == pytest.approx(0.0, abs=WARM_SWEEP_REPEAT_PCM)
     assert curve.integral[0] > 0.0
 
 

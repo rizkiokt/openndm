@@ -354,6 +354,7 @@ PYBIND11_MODULE(_core, m)
             return py::array_t<double>({n, d}, data.data());
           })
       .def("reset", &Solver::reset)
+      .def("refresh", &Solver::refresh)
       .def("surface_currents",
           [](const Solver& s) {
             const auto data = s.surface_currents();

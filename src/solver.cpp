@@ -86,7 +86,7 @@ void Solver::normalise_to_unit_mean_flux()
   for (auto& f : flux_) f *= norm;
 }
 
-void Solver::reset()
+void Solver::require_no_transient() const
 {
   if (in_transient_) {
     throw InputError(
@@ -95,6 +95,22 @@ void Solver::reset()
         "step() already re-reads the cross sections, the node compositions "
         "and the coupling, so nothing needs refreshing between steps");
   }
+}
+
+void Solver::refresh()
+{
+  require_no_transient();
+  if (cmfd_.adjoint()) {
+    cmfd_.set_adjoint(false);
+    has_solution_ = false;
+  }
+  cmfd_.refresh_cross_sections();
+  cmfd_.refresh_coupling();
+}
+
+void Solver::reset()
+{
+  require_no_transient();
   has_solution_ = false;
   flux_.clear();
   k_eff_ = 1.0;

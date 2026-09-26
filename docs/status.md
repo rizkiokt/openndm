@@ -124,7 +124,7 @@ like it.
 |---|---|---|
 | FR-OPT-1 | done | No filesystem access anywhere in build/solve/read/mutate/re-solve. |
 | FR-OPT-2 | done | The GIL is released for the whole solve. |
-| FR-OPT-3 | partial | Warm start works and reduces the outer count dramatically where it applies: re-solving an unchanged model takes 2 outers instead of 24. It gives **nothing** on a perturbed solve, which is what the requirement asks for, because any change to the model needs `Model.refresh()` and `refresh()` clears the flux. The two do not compose, so the measured speedup on a shuffled loading pattern is 0.99×, not ≥2×. Skipping the refresh is 2× faster and 366 pcm wrong. |
+| FR-OPT-3 | partial | `Model.refresh()` keeps the flux and `D̂`, so warm start survives a perturbation. On a shuffled loading pattern that changes k by 371 pcm it takes 18 outers against 20 cold, **1.15×**, not ≥2×. Eight single swaps of 110–710 pcm give 1.0–1.6×. The warm start begins an order of magnitude closer, but the outer error falls only by about 0.65 per iteration, so one decade saves few outers. Reaching 2× needs faster outer convergence, not a better guess. |
 | FR-OPT-4 | done | Fixed-size chunked reductions; tested bit-identical on 1, 2, 4 and 8 threads. |
 | FR-OPT-5 | done | Zero-copy numpy views with keep-alive, through pybind11 rather than xtensor. |
 | FR-OPT-6 | done | Typed exceptions on every path; nothing aborts. |
@@ -161,7 +161,7 @@ like it.
 | NFR-PERF-3 | not started | Needs the coupled steady state, which needs FR-TH and FR-MODE-7. |
 | NFR-PERF-4 | not started | Names adaptive time stepping, which is not implemented. A fixed-step rod ejection can be timed but is not the stated case. |
 | NFR-PERF-5 | done | 70 MB peak resident against < 500 MB, interpreter included. |
-| NFR-PERF-6 | done | 104 ms against < 0.3 s. Passes on the clock, but see FR-OPT-3: it is not actually warm started. |
+| NFR-PERF-6 | done | 104 ms against < 0.3 s. Passes on the clock; warm started since #82, see FR-OPT-3. |
 | NFR-PERF-7 | **failed** | 32% parallel efficiency on eight threads against a 60% target, on 16200 nodes at eight groups. 25% at 28800 nodes, so not a small-problem artefact. The serial ILU0 triangular solves are the cause; see FR-SOL-7. |
 | NFR-QA-1 | partial | Catch2 for C++ and pytest for Python. Coverage is collected in CI but the 80% line coverage gate is not enforced. |
 | NFR-QA-2 | done | Every deck runs in CI. The four static decks meet the 100 pcm acceptance criterion: IAEA-2D, IAEA-3D, BIBLIS-2D and the analytic cuboid, the last against exact algebra rather than a published reference. `benchmarks/lmw` is a transient whose specification states the scenario and not the answer, so it is tested for the conventions it depends on and the shape it produces, and its power history is reported rather than scored. |
