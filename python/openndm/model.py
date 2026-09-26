@@ -407,6 +407,7 @@ class Model:
         bracket: tuple[float, float] = (0.0, 3000.0),
         tolerance: float = 1.0e-6,
         max_iterations: int = 20,
+        evaluate_state: Callable[[], Result] | None = None,
         **overrides,
     ) -> BoronSearchResult:
         """Critical boron search (FR-MODE-4).
@@ -428,6 +429,14 @@ class Model:
             Starting concentration in ppm.
         bracket : (float, float)
             Hard limits on the search.
+        evaluate_state : callable, optional
+            ``evaluate_state()`` returning the :class:`Result` at the current
+            boron, in place of a single static solve. This is what couples
+            the search to thermal-hydraulic feedback: pass a closure running
+            :meth:`solve_coupled` and each boron step is searched against a
+            converged coupled state rather than an isolated one. It is
+            called after ``apply_boron`` and is responsible for its own
+            refresh.
 
         Returns
         -------
@@ -447,8 +456,11 @@ class Model:
 
         def evaluate(ppm: float) -> tuple[float, Result]:
             apply_boron(self.library, ppm)
-            self._solver.reset()
-            result = self.solve(**overrides)
+            if evaluate_state is None:
+                self._solver.reset()
+                result = self.solve(**overrides)
+            else:
+                result = evaluate_state()
             history.append((ppm, result.k_eff))
             return result.k_eff - target_k, result
 
