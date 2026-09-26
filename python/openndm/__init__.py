@@ -42,7 +42,14 @@ from .model import (
     Transient,
     TransientStep,
 )
-from .pin import PinConduction, PinState
+from .pin import (
+    PinConduction,
+    PinState,
+    neacrp_clad_conductivity,
+    neacrp_clad_heat_capacity,
+    neacrp_fuel_conductivity,
+    neacrp_fuel_heat_capacity,
+)
 from .rods import ControlRodBank, ControlRods, RodWorth
 from .settings import Settings
 from .statepoint import StatePoint, write_statepoint
@@ -101,6 +108,10 @@ __all__ = [
     "XSLibrary",
     "__version__",
     "absolute_power",
+    "neacrp_clad_conductivity",
+    "neacrp_clad_heat_capacity",
+    "neacrp_fuel_conductivity",
+    "neacrp_fuel_heat_capacity",
     "rotate_adf",
     "rotated_face",
     "write_statepoint",

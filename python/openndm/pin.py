@@ -5,12 +5,17 @@ coolant, across four resistances in series: the pellet, the pellet-to-clad
 gap, the cladding, and the film. The pellet is meshed radially; the other
 three are single resistances, having no internal generation.
 
-No conductivity correlation is written here. Conductivities and coefficients
-are injected the way :class:`~openndm.WaterProperties` backends are, because
-the published correlations are temperature-dependent and a correlation
+No conductivity correlation is *invented* here. Conductivities and
+coefficients are injected the way :class:`~openndm.WaterProperties` backends
+are, because the published correlations are temperature-dependent and one
 written from memory is the failure mode this project has already paid for
 once. Every check the model is verified against holds at constant
 conductivity.
+
+The ``neacrp_`` functions are the exception that proves the rule: they are
+the four relations NEACRP-L-335 Section 2.7 tells participants to use,
+transcribed from the specification and cited to it, and they are ordinary
+callables a caller opts into rather than a default.
 
 Lengths are metres, temperatures K, linear heat rates W/m, conductivities
 W/(m K) and the gap and film coefficients W/(m^2 K).
@@ -29,7 +34,18 @@ if TYPE_CHECKING:
 
     from .channel import PinGeometry
 
-__all__ = ["PinConduction", "PinState"]
+__all__ = [
+    "NEACRP_FUEL_CONDUCTIVITY_POLE",
+    "PinConduction",
+    "PinState",
+    "neacrp_clad_conductivity",
+    "neacrp_clad_heat_capacity",
+    "neacrp_fuel_conductivity",
+    "neacrp_fuel_heat_capacity",
+]
+
+NEACRP_FUEL_CONDUCTIVITY_POLE = 73.15
+"""Temperature at which the NEACRP fuel conductivity diverges, K."""
 
 
 class PinState:
@@ -279,3 +295,122 @@ def _checked_conductivity(name: str, value) -> Callable[[np.ndarray], np.ndarray
     return lambda temperature: np.full_like(
         np.asarray(temperature, dtype=float), conductivity
     )
+
+
+def neacrp_fuel_conductivity(temperature) -> np.ndarray:
+    """UO2 heat conductivity in W/(m K), NEACRP-L-335 Section 2.7.
+
+    .. math:: \\lambda_{UO_2} = 1.05 + \\frac{2150}{T - 73.15}
+
+    Falls from about 10.5 W/(m K) at 300 K to 3.0 at 1200 K. The
+    specification states no validity range; the pole at 73.15 K is refused
+    because below it the expression turns negative.
+
+    Parameters
+    ----------
+    temperature : array_like
+        Fuel temperature, K.
+
+    Returns
+    -------
+    ndarray
+
+    Raises
+    ------
+    InputError
+        At or below :data:`NEACRP_FUEL_CONDUCTIVITY_POLE`.
+
+    Examples
+    --------
+    >>> round(float(neacrp_fuel_conductivity(1200.0)), 3)
+    2.958
+    """
+    t = np.asarray(temperature, dtype=float)
+    if np.any(t <= NEACRP_FUEL_CONDUCTIVITY_POLE):
+        raise InputError(
+            f"the NEACRP fuel conductivity diverges at "
+            f"{NEACRP_FUEL_CONDUCTIVITY_POLE} K; got {float(np.min(t))} K"
+        )
+    return 1.05 + 2150.0 / (t - NEACRP_FUEL_CONDUCTIVITY_POLE)
+
+
+def neacrp_clad_conductivity(temperature) -> np.ndarray:
+    """Zircaloy-4 heat conductivity in W/(m K), NEACRP-L-335 Section 2.7.
+
+    .. math:: \\lambda_{Zr} = 7.51 + 2.09\\times10^{-2} T
+              - 1.45\\times10^{-5} T^2 + 7.67\\times10^{-9} T^3
+
+    Rises from about 12.7 W/(m K) at 300 K to 21.6 at 1000 K. The cubic
+    climbs steeply beyond that and the specification states no upper bound,
+    so treat it with suspicion above the cladding's melting point.
+
+    Parameters
+    ----------
+    temperature : array_like
+        Cladding temperature, K.
+
+    Returns
+    -------
+    ndarray
+
+    Examples
+    --------
+    >>> round(float(neacrp_clad_conductivity(600.0)), 3)
+    16.487
+    """
+    t = np.asarray(temperature, dtype=float)
+    return 7.51 + 2.09e-2 * t - 1.45e-5 * t**2 + 7.67e-9 * t**3
+
+
+def neacrp_fuel_heat_capacity(temperature) -> np.ndarray:
+    """UO2 specific heat capacity in J/(kg K), NEACRP-L-335 Section 2.7.
+
+    .. math:: c_{p,UO_2} = 162.3 + 0.3038 T - 2.391\\times10^{-4} T^2
+              + 6.404\\times10^{-8} T^3
+
+    Nothing reads this yet. Steady conduction does not need a heat capacity;
+    a transient one will, and it belongs with the three relations printed
+    beside it rather than in a later trip back to the specification.
+
+    Parameters
+    ----------
+    temperature : array_like
+        Fuel temperature, K.
+
+    Returns
+    -------
+    ndarray
+
+    Examples
+    --------
+    >>> round(float(neacrp_fuel_heat_capacity(800.0)), 1)
+    285.1
+    """
+    t = np.asarray(temperature, dtype=float)
+    return 162.3 + 0.3038 * t - 2.391e-4 * t**2 + 6.404e-8 * t**3
+
+
+def neacrp_clad_heat_capacity(temperature) -> np.ndarray:
+    """Zircaloy-4 specific heat capacity in J/(kg K), NEACRP-L-335 Section 2.7.
+
+    .. math:: c_{p,Zr} = 252.54 + 0.11474 T
+
+    Nothing reads this yet, for the same reason as
+    :func:`neacrp_fuel_heat_capacity`.
+
+    Parameters
+    ----------
+    temperature : array_like
+        Cladding temperature, K.
+
+    Returns
+    -------
+    ndarray
+
+    Examples
+    --------
+    >>> round(float(neacrp_clad_heat_capacity(600.0)), 2)
+    321.38
+    """
+    t = np.asarray(temperature, dtype=float)
+    return 252.54 + 0.11474 * t
