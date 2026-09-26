@@ -316,3 +316,116 @@ def test_settings_overrides_reach_every_solve_in_the_loop():
         thermal, apply_state, total_power=TOTAL_POWER, kernel="fdm"
     )
     assert coupled.result.kernel == "fdm"
+
+
+
+def boron_case(doppler=0.05, boron_worth=2.0e-5):
+    """A coupled model whose library answers to boron and to temperature.
+
+    Both feedbacks write the same thermal absorption, so a single writer
+    applies the pair from a shared state rather than letting one overwrite
+    the other.
+    """
+    geometry = slab_geometry()
+    branch = branch_library(doppler)
+    model = openndm.Model(
+        geometry, branch.interpolate(fuel_temperature=COLD), settings()
+    )
+    thermal = Recorder(thermal_model(geometry))
+    mapping = CompositionMapping(geometry)
+    state = {"ppm": 0.0, "fuel": np.full(geometry.n_compositions, COLD)}
+
+    def write_library():
+        branch.interpolate_by_composition(
+            {"fuel_temperature": state["fuel"]}, out=model.library
+        )
+        for index in range(model.library.n_compositions):
+            fast, thermal_absorption = model.library.composition(index).absorption
+            model.library.set_composition(
+                index,
+                absorption=[
+                    fast,
+                    thermal_absorption + boron_worth * state["ppm"],
+                ],
+            )
+        model.library.finalize(warn=False)
+
+    def apply_boron(library, ppm):
+        state["ppm"] = ppm
+        write_library()
+
+    def apply_state(temperatures, densities):
+        state["fuel"] = mapping.average(temperatures["doppler_temperature"])
+        write_library()
+
+    return model, thermal, apply_boron, apply_state
+
+
+def test_a_boron_search_still_runs_a_plain_solve_by_default():
+    model, _, apply_boron, _ = boron_case()
+    search = model.search_boron(apply_boron, target_k=1.0, guess=500.0)
+    assert search.result.k_eff == pytest.approx(1.0, abs=1.0e-5)
+    assert 0.0 < search.boron < 3000.0
+
+
+def test_the_evaluation_hook_replaces_the_static_solve():
+    model, thermal, apply_boron, apply_state = boron_case()
+    calls = {"n": 0}
+
+    def evaluate_state():
+        calls["n"] += 1
+        return model.solve_coupled(
+            thermal, apply_state, total_power=TOTAL_POWER
+        ).result
+
+    search = model.search_boron(
+        apply_boron, target_k=1.0, guess=500.0, evaluate_state=evaluate_state
+    )
+    assert calls["n"] == len(search.history)
+    assert search.result.k_eff == pytest.approx(1.0, abs=1.0e-5)
+
+
+def test_a_coupled_search_needs_less_boron_than_a_cold_one():
+    """Doppler already holds k down, so less boron reaches criticality."""
+    model, thermal, apply_boron, apply_state = boron_case()
+
+    def coupled():
+        return model.solve_coupled(
+            thermal, apply_state, total_power=TOTAL_POWER
+        ).result
+
+    hot = model.search_boron(
+        apply_boron, target_k=1.0, guess=500.0, evaluate_state=coupled
+    )
+
+    cold_model, _, cold_boron, _ = boron_case()
+
+    def uncoupled():
+        cold_model.refresh()
+        return cold_model.solve()
+
+    cold = cold_model.search_boron(
+        cold_boron, target_k=1.0, guess=500.0, evaluate_state=uncoupled
+    )
+
+    assert hot.boron < cold.boron
+    assert hot.result.k_eff == pytest.approx(1.0, abs=1.0e-5)
+    assert cold.result.k_eff == pytest.approx(1.0, abs=1.0e-5)
+
+
+def test_the_hook_owns_its_own_refresh():
+    """Nothing refreshes behind the hook, so it is responsible for its own."""
+    model, thermal, apply_boron, apply_state = boron_case()
+    seen = []
+
+    def evaluate_state():
+        outcome = model.solve_coupled(
+            thermal, apply_state, total_power=TOTAL_POWER
+        )
+        seen.append(outcome.iterations)
+        return outcome.result
+
+    model.search_boron(
+        apply_boron, target_k=1.0, guess=500.0, evaluate_state=evaluate_state
+    )
+    assert seen and all(count >= 1 for count in seen)
