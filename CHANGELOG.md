@@ -6,6 +6,24 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Guide tubes no longer borrow the fuel pin's radius.** `PinGeometry` took
+  a guide tube to be a fuel pin with the heat turned off, because KOMODO's
+  `%THER` card gives one set of radii and a guide tube count and nothing else.
+  NEACRP-L-335 Table 2.7 does give one: a guide tube is 12.259 mm across where
+  a fuel pin is 9.517 mm, so it displaces 1.66 times the coolant.
+
+  `guide_tube_radius` is optional and defaults to the cladding's outer radius,
+  so a deck that does not measure them separately is unchanged bit for bit.
+  With the NEACRP value the assembly flow area falls from 257.247 cm^2 to
+  245.523 cm^2 (**-4.6%**) and the hydraulic diameter from 11.9087 mm to
+  11.0895 mm (**-6.9%**).
+
+  No result on `main` moves: nothing in the solver reads either quantity yet.
+  They feed `mass_flux` and whatever film correlation eventually lands, which
+  is when this would have started quietly biasing a heat transfer coefficient.
+
 ### Added
 
 - **Homogeneous equilibrium two-phase channel** (`ChannelModel(two_phase=True)`,
