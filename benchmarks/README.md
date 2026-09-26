@@ -10,7 +10,7 @@ own directory.
 | `iaea3d/` | 2-group PWR, quarter core, 3D | Published `k_eff = 1.02903` | SANM +44.7 pcm at 20 cm axial mesh | **Verified** |
 | `biblis2d/` | 2-group PWR, quarter core, 2D, 8 compositions | Published `k_eff = 1.02511` | SANM −2.1 pcm at one node per assembly | **Verified** |
 | `lmw/` | 2-group PWR rod transient, 3D | None in the specification | Power history, converged in mesh, not in time step | **Reported, not compared** |
-| `neacrp/` | 2-group PWR rod ejection, 3D, 11 compositions, coupled | Published critical boron, NEA/NSC/DOC(93)25 Table 3.1 | HZP boron within **3.5 ppm** on all three cases | **Verified on boron; peaking open** |
+| `neacrp/` | 2-group PWR rod ejection, 3D, 11 compositions, coupled | Published critical boron, NEA/NSC/DOC(93)25 Table 3.1 | Boron within **3.5 ppm** cold and **1.7 ppm** coupled; Doppler within **0.7 K** | **Verified on boron and temperature; peaking open** |
 
 The specification's acceptance criterion is 100 pcm on `k_eff` for a static
 benchmark with a published solution. All four static decks meet it. LMW is a
@@ -414,8 +414,68 @@ only when every node has the same volume. This deck's axial layers run from
 4.03 for A1 where the volume-weighted figure is 3.18. The deck reports both
 and compares the volume-weighted one. See the issue this raised.
 
-### What is not here
+## neacrp at full power — the coupled comparison
 
-The three full power cases, A2, B2 and C2, which are what actually exercise
-the thermal-hydraulic coupling. The rod worths in Table 3.1, which need the
-ejected assembly identified from Figures 3.1 to 3.6 of the specification.
+A2, B2 and C2 run the same boron search against a converged thermal-hydraulic
+state rather than an isolated solve. These are what exercise the coupling.
+
+```
+case   critical boron, ppm     F_xy          T_Doppler, C    T_centre peak, C
+       OpenNDM  reference       OpenNDM  ref   OpenNDM  ref     OpenNDM  ref
+A2      1158.9     1160.6  -1.7   1.208 1.198    546.8 546.1     1755.3 1671.9
+B2      1190.6     1189.4  +1.2   1.193 1.170    544.2 543.7     1623.2 1576.6
+C2      1158.9     1160.6  -1.7   1.208 1.198    546.8 546.1     1755.3 1671.9
+```
+
+**Boron within 1.7 ppm and the core-average Doppler temperature within 0.7 K**
+on every case. The coupled cases are closer than the cold ones, which is the
+right way round: at hot zero power the boron carries the whole reactivity
+balance alone, while at full power the temperature feedback the deck models
+takes part of it.
+
+**C2 reproduces A2 to every digit shown.** That is what the reference says
+should happen -- Table 3.1 gives the two identical boron, F_xy, F_Q, T_Dop and
+T_centre, differing only in rod worth -- and it is worth more than it looks.
+C2 is a half core of 7956 nodes with eight banks and A2 a quarter core of 3978
+with seven. Two meshes, two symmetry treatments, one answer.
+
+### Two corrections the run forced, both found by a crash
+
+**Assemblies on a symmetry face were running far too cold.** They are modelled
+as a half or a quarter of themselves and carry that fraction of the power, but
+the channel model gives every channel one assembly's mass flow and one
+assembly's pins. Scaling each channel's power up to a whole assembly's worth
+fixes it: power and flow scale together, so a half assembly at half power
+against half the flow sees the same enthalpy rise and the same per-pin linear
+heat rate as a whole one. Boron went from +21.6 ppm to -1.7 and the average
+Doppler temperature from -28.1 K to +0.7.
+
+**The coupled loop oscillates undamped at full power.** Correcting the
+symmetry assemblies made them hot enough to reach saturation transiently, and
+void feedback on the coolant density is a steep enough reactivity term that an
+undamped iteration will not settle. The deck runs at `relaxation=0.4`, which
+changes the path to the fixed point and not the fixed point. The converged
+state does not boil anywhere, so the answer is single phase as a PWR should
+be; `two_phase=True` is left on because it costs nothing when nothing boils
+and it is what let the iteration survive the excursion.
+
+### What is still open
+
+**F_Q is 6 to 9 percent high** at full power and 10 to 13 percent cold, and the
+definition is not settled -- see the section above. The same offset cold and
+hot says it is not the coupling.
+
+**The peak centreline temperature is 47 to 83 K high.** This is where the one
+input the specification does not give has real leverage: Section 2.10 fixes
+the gap conductance and says nothing about heat transfer to the coolant, and
+`run.py` uses 3.0e4 W/(m^2 K) as a stated choice. Lowering it would raise the
+surface temperature and move the peak further out, raising it would pull the
+peak in and push the average Doppler temperature off the 0.7 K it currently
+sits at. **It has not been adjusted to improve any of these numbers**, and it
+should not be: the average Doppler temperature agreeing to under a kelvin
+while the peak is 80 K out is information about the model, and tuning a free
+parameter until both look better would destroy it.
+
+**Rod worth is absent.** Table 3.1 gives it for all six cases, and it needs the
+ejected assembly identified from Figures 3.1 to 3.6, which are images in the
+specification.

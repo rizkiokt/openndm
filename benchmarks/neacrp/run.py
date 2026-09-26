@@ -30,10 +30,35 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import neacrp_build as build
 import neacrp_data as deck
 import neacrp_reference as reference
+import numpy as np
 
 import openndm
 
 HZP_CASES = ("A1", "B1", "C1")
+FP_CASES = ("A2", "B2", "C2")
+
+GUIDE_TUBE_RADIUS = 12.259e-3 / 2.0
+"""Guide tube outer radius, m. NEACRP-L-335 Table 2.7, 12.259 mm."""
+
+GAP_CONDUCTANCE = 1.0e4
+"""Pellet-to-cladding conductance, W/(m^2 K). NEACRP-L-335 Section 2.10."""
+
+RELAXATION = 0.4
+"""Under-relaxation on the power handed to the thermal solver.
+
+At full power the hot assemblies reach saturation, and void feedback on the
+coolant density is steep enough that an undamped loop oscillates rather than
+converging. This is the remedy the coupling documents, and it changes the
+path to the fixed point rather than the fixed point.
+"""
+
+FILM_COEFFICIENT = 3.0e4
+"""Cladding-to-coolant coefficient, W/(m^2 K).
+
+The specification does not give one. Section 2.10 fixes only the gap, and the
+draft says in as many words that the treatment of heat transfer to the
+coolant is left to each participant. This is a choice, not a citation.
+"""
 
 SETTINGS = openndm.Settings(
     verbosity=0,
@@ -88,6 +113,132 @@ def volume_weighted_peaking(result, geometry):
     return float(power.max()) / average
 
 
+def thermal_model(case, fine):
+    """The assembly-wise channel and pin conduction for one case."""
+    card = deck.CASES[case]
+    pins = openndm.PinGeometry(
+        fuel_radius=card["fuel_radius"],
+        gap_thickness=card["gap_thickness"],
+        clad_thickness=card["clad_thickness"],
+        pin_pitch=card["pin_pitch"],
+        n_pins=card["n_pins"],
+        n_guide_tubes=card["n_guide_tubes"],
+        guide_tube_radius=GUIDE_TUBE_RADIUS,
+    )
+    conduction = openndm.PinConduction(
+        pins,
+        fuel_conductivity=openndm.neacrp_fuel_conductivity,
+        clad_conductivity=openndm.neacrp_clad_conductivity,
+        gap_conductance=GAP_CONDUCTANCE,
+        film_coefficient=FILM_COEFFICIENT,
+        doppler_weight=build.DOPPLER_WEIGHT,
+    )
+    coarse = build.coarse_geometry(case)
+    channel = openndm.ChannelModel(
+        coarse,
+        pins,
+        mass_flow=card["mass_flow"],
+        inlet_temperature=card["inlet_temperature"],
+        pressure=build.PRESSURE,
+        direct_heating=card["direct_heating"],
+        conduction=conduction,
+        two_phase=True,
+    )
+    return build.AssemblyChannels(case, fine, coarse, channel)
+
+
+def solve_coupled_case(case, settings=SETTINGS):
+    """Search the critical boron of one full power case, with feedback.
+
+    Returns
+    -------
+    (BoronSearchResult, Geometry, AssemblyChannels)
+    """
+    card = deck.CASES[case]
+    geometry, base = build.per_node_geometry(case)
+    fuel, moderator, density = build.hzp_state()
+    library = build.build_node_library(
+        case,
+        base,
+        deck.BORON_REFERENCE,
+        np.full(base.size, fuel),
+        np.full(base.size, moderator),
+        np.full(base.size, density),
+    )
+    build.build_node_rods(case, geometry, library)
+    model = openndm.Model(geometry, library, settings)
+    thermal = thermal_model(case, geometry)
+    state = {"ppm": deck.BORON_REFERENCE}
+
+    def apply_state(temperatures, densities):
+        build.build_node_library(
+            case,
+            base,
+            state["ppm"],
+            temperatures["doppler_temperature"],
+            temperatures["moderator_temperature"],
+            densities["moderator_density"] / 1000.0,
+            out=model.library,
+        )
+
+    def apply_boron(target, ppm):
+        state["ppm"] = ppm
+
+    def evaluate_state():
+        return model.solve_coupled(
+            thermal,
+            apply_state,
+            total_power=card["power"],
+            percent=card["percent"],
+            tolerance=1.0e-6,
+            max_iterations=120,
+            relaxation=RELAXATION,
+        ).result
+
+    search = model.search_boron(
+        apply_boron,
+        target_k=1.0,
+        guess=deck.BORON_REFERENCE,
+        bracket=(0.0, 3000.0),
+        tolerance=1.0e-7,
+        evaluate_state=evaluate_state,
+    )
+    return search, geometry, thermal
+
+
+def report_coupled(case, search, geometry, thermal):
+    """Print one full power case, adding the temperatures to the comparison."""
+    expected = reference.INITIAL_STEADY_STATE[case]
+    result = search.result
+    doppler = thermal.average_doppler(case) - 273.15
+    centre = float(np.max(thermal.channel.pin_state.centre)) - 273.15
+
+    print(f"\n{case}  ({deck.CASES[case]['geometry'].lower()} core, "
+          f"{geometry.n_nodes} nodes, coupled)")
+    print(f"  {'quantity':<22}{'OpenNDM':>12}{'reference':>12}{'difference':>14}")
+    print(f"  {'critical boron, ppm':<22}{search.boron:12.1f}"
+          f"{expected['boron_ppm']:12.1f}"
+          f"{search.boron - expected['boron_ppm']:+13.1f} ")
+    peaking = volume_weighted_peaking(result, geometry)
+    print(f"  {'F_Q (volume mean)':<22}{peaking:12.3f}{expected['f_q']:12.3f}"
+          f"{100.0 * (peaking / expected['f_q'] - 1.0):+13.2f}%")
+    print(f"  {'F_xy (as F_dH)':<22}{result.f_dh:12.3f}{expected['f_xy']:12.3f}"
+          f"{100.0 * (result.f_dh / expected['f_xy'] - 1.0):+13.2f}%")
+    print(f"  {'T_Doppler, C':<22}{doppler:12.1f}{expected['t_doppler']:12.1f}"
+          f"{doppler - expected['t_doppler']:+13.1f} ")
+    print(f"  {'T_centre peak, C':<22}{centre:12.1f}{expected['t_centre']:12.1f}"
+          f"{centre - expected['t_centre']:+13.1f} ")
+    void = thermal.channel.void_fraction
+    if void.max() > 0.0:
+        boiling = int((void > 0.0).sum())
+        print(f"  {boiling} of {void.size} channel nodes reach saturation, "
+              f"peak void {void.max():.3f}")
+    else:
+        print("  no channel node reaches saturation")
+    print(f"  search took {search.iterations} coupled evaluations")
+    return search.boron - expected["boron_ppm"]
+
+
 def report(case, search, geometry):
     """Print one case against the reference, in pcm and in percent."""
     expected = reference.INITIAL_STEADY_STATE[case]
@@ -114,17 +265,30 @@ def report(case, search, geometry):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--case", choices=HZP_CASES, help="run one case")
+    parser.add_argument(
+        "--case", choices=HZP_CASES + FP_CASES, help="run one case"
+    )
+    parser.add_argument(
+        "--full-power", action="store_true", help="run A2, B2 and C2"
+    )
     args = parser.parse_args()
 
-    cases = [args.case] if args.case else list(HZP_CASES)
-    print("NEACRP PWR rod ejection benchmark, initial steady state at HZP")
+    if args.case:
+        cases = [args.case]
+    elif args.full_power:
+        cases = list(FP_CASES)
+    else:
+        cases = list(HZP_CASES)
+    print("NEACRP PWR rod ejection benchmark, initial steady state")
     print("Reference: NEA/NSC/DOC(93)25 Table 3.1, PANTHER at 4x16 nodes "
           "per assembly")
 
     errors = {}
     for case in cases:
-        errors[case] = report(case, *solve_case(case))
+        if case in FP_CASES:
+            errors[case] = report_coupled(case, *solve_coupled_case(case))
+        else:
+            errors[case] = report(case, *solve_case(case))
 
     print("\ncritical boron error, ppm")
     for case, error in errors.items():
