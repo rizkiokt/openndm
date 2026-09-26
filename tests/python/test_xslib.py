@@ -11,7 +11,11 @@ from conftest import iaea_library
 
 
 def test_scatter_matrix_orientation_is_from_to():
-    """scatter[from][to]: an error here silently reverses the spectrum."""
+    """scatter[from][to]: an error here silently reverses the spectrum.
+
+    Removal is absorption plus out-scatter, so with scattering written from
+    the fast row into the thermal column only the fast group loses to it.
+    """
     lib = openndm.XSLibrary(2, 1)
     lib.set_composition(
         0,
@@ -21,8 +25,6 @@ def test_scatter_matrix_orientation_is_from_to():
     )
     lib.finalize()
     comp = lib.composition(0)
-    # Removal = absorption + out-scatter, so only the fast group loses to
-    # scattering when the matrix means "from row to column".
     assert comp.removal[0] == pytest.approx(0.03)
     assert comp.removal[1] == pytest.approx(0.08)
 
@@ -87,7 +89,6 @@ def test_discontinuity_factors_default_to_one_and_round_trip():
     values = np.arange(12, dtype=float).reshape(6, 2) / 10.0 + 0.9
     lib.set_adf(0, values)
     assert np.allclose(lib.adf(0), values)
-    # Untouched compositions keep the default.
     assert np.allclose(lib.adf(1), 1.0)
 
 

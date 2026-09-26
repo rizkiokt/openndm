@@ -9,13 +9,16 @@ import openndm
 
 from conftest import IAEA_MAP, iaea_geometry, one_group_library
 
+OUTSIDE_THE_CORE = 0
+
 
 def test_uniform_lattice_node_and_surface_counts():
     core = np.zeros((4, 3, 2), dtype=int)
     g = openndm.Geometry.from_lattice(core, pitch=10.0)
     assert g.n_nodes == 24
-    # Interior faces plus boundary faces: 3 * n + faces on the outside.
-    expected = 3 * 24 + (3 * 4 + 2 * 4 + 2 * 3)
+    faces_below_each_node = 3 * 24
+    faces_on_the_high_boundary = 3 * 4 + 2 * 4 + 2 * 3
+    expected = faces_below_each_node + faces_on_the_high_boundary
     assert g.n_surfaces == expected
     assert g.total_volume == pytest.approx(24 * 1000.0)
 
@@ -74,7 +77,7 @@ def test_expand_scatters_node_values_back_onto_the_lattice():
     values = np.arange(g.n_nodes, dtype=float)
     lattice = g.expand(values, fill=-1.0)
     assert lattice.shape == g.shape
-    assert (lattice[0] == -1.0).sum() == int((IAEA_MAP == 0).sum())
+    assert (lattice[0] == -1.0).sum() == int((IAEA_MAP == OUTSIDE_THE_CORE).sum())
     assert lattice[lattice >= 0].sum() == pytest.approx(values.sum())
 
 
@@ -117,8 +120,8 @@ def test_negative_width_is_rejected():
 
 def test_iaea_map_has_the_expected_active_count():
     g = iaea_geometry()
-    assert g.n_nodes == int((IAEA_MAP != 0).sum())
-    assert g.n_compositions == 4  # the rodded reflector is unused in 2D
+    assert g.n_nodes == int((IAEA_MAP != OUTSIDE_THE_CORE).sum())
+    assert g.n_compositions == len(np.unique(IAEA_MAP[IAEA_MAP != OUTSIDE_THE_CORE]))
 
 
 @pytest.mark.parametrize("sub", [1, 2, 3, 4])

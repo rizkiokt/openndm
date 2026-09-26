@@ -51,9 +51,10 @@ def test_statepoint_records_extra_metadata(tmp_path, iaea_model):
 def test_reading_a_foreign_file_is_rejected(tmp_path):
     import h5py
 
+    openmc_filetype = "statepoint"
     path = tmp_path / "not_ours.h5"
     with h5py.File(path, "w") as f:
-        f.attrs["filetype"] = np.bytes_("statepoint")  # an OpenMC statepoint
+        f.attrs["filetype"] = np.bytes_(openmc_filetype)
     with pytest.raises(openndm.InputError, match="not an OpenNDM statepoint"):
         openndm.StatePoint(path)
 

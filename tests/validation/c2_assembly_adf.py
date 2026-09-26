@@ -39,9 +39,12 @@ LATTICE_SHAPE = (5, 5)
 SLAB_FRACTION = 0.05
 
 
-#: Number densities in atoms/barn-cm.
 FUEL_NUCLIDES = {"U235": 8.0e-4, "U238": 2.2e-2, "O16": 4.6e-2}
+"""Fuel number densities, atoms/barn-cm."""
+
 WATER_NUCLIDES = {"H1": 4.9e-2, "O16": 2.4e-2}
+"""Water number densities, atoms/barn-cm."""
+
 PIN_RADIUS = 0.41
 
 
@@ -180,7 +183,6 @@ def main() -> int:
     sigma = float(homogeneous.std_dev[radial].max())
     print(f"\nhomogeneous: worst deviation from 1.0 = {worst:.5f} "
           f"({worst / max(sigma, 1e-12):.2f} sigma)")
-    # Group 0 is the fast group, matching from_mgxs_library and the solver.
     fast = heterogeneous.values[radial, 0]
     thermal = heterogeneous.values[radial, 1]
     print(f"heterogeneous: thermal {thermal.min():.4f}..{thermal.max():.4f}, "

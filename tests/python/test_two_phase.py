@@ -11,8 +11,8 @@ from openndm.channel import ChannelModel, PinGeometry
 BWR_PRESSURE = 7.0e6
 INLET = 550.0
 N_PLANES = 10
-#: Per-node power that leaves the outlet below the saturated liquid enthalpy.
 SUBCOOLED_POWER = 2.0e4
+"""Per-node power that leaves the outlet below the saturated liquid enthalpy."""
 
 PINS = PinGeometry(
     fuel_radius=4.11950e-3,

@@ -9,7 +9,9 @@ which solves a single fully reflected node. The two eigenvalues must agree.
 This isolates the cross section translation path and nothing else. There is no
 spatial discretisation, no leakage, no homogenisation error and no
 discontinuity factor: any disagreement beyond the Monte Carlo uncertainty is a
-defect in the translation.
+defect in the translation. k_inf depends on absorption, production and the flux
+spectrum alone, so the diffusion coefficient must not move it at all; if it
+does, the geometry is not actually infinite.
 
 Run with::
 
@@ -30,10 +32,11 @@ import openmc.mgxs
 import openndm
 from openndm.gc import from_mgxs_library
 
-#: Two-group structure with the usual 0.625 eV thermal cutoff.
 GROUP_EDGES_2 = [0.0, 0.625, 20.0e6]
-#: Eight-group structure, for the multi-group path.
+"""Two-group structure with the usual 0.625 eV thermal cutoff, eV."""
+
 GROUP_EDGES_8 = [0.0, 0.058, 0.14, 0.28, 0.625, 4.0, 5.53e3, 8.21e5, 20.0e6]
+"""Eight-group structure for the multi-group path, eV."""
 
 
 def build_model(temperature: float = 900.0, particles: int = 20000,
@@ -66,7 +69,14 @@ def build_model(temperature: float = 900.0, particles: int = 20000,
 
 
 def build_mgxs_library(model: openmc.Model, edges) -> openmc.mgxs.Library:
-    """Instrument the model with everything OpenNDM ingests."""
+    """Instrument the model with everything OpenNDM ingests.
+
+    Both scattering matrices are tallied: their row sums differ by the (n,xn)
+    multiplicity, which OpenNDM subtracts from absorption so the extra neutrons
+    appear in the balance. Tallying only one is worth 230 pcm. The method that
+    attaches the tallies was renamed in OpenMC 0.15, so both names are tried
+    and this runs on stable and on develop.
+    """
     groups = openmc.mgxs.EnergyGroups(edges)
     library = openmc.mgxs.Library(model.geometry)
     library.energy_groups = groups
@@ -81,15 +91,11 @@ def build_mgxs_library(model: openmc.Model, edges) -> openmc.mgxs.Library:
         "transport",
         "diffusion-coefficient",
         "inverse-velocity",
-        # Both scattering matrices: their row sums differ by the (n,xn)
-        # multiplicity, which OpenNDM subtracts from absorption so the extra
-        # neutrons appear in the balance. Tallying only one is worth 230 pcm.
         "consistent nu-scatter matrix",
         "consistent scatter matrix",
     ]
     library.by_nuclide = False
     library.build_library()
-    # Renamed in OpenMC 0.15; support both so this runs on stable and develop.
     add = getattr(library, "add_to_tallies", None) or library.add_to_tallies_file
     add(model.tallies, merge=True)
     return library
@@ -127,6 +133,7 @@ def report(label, k_openndm, k_openmc, sigma):
 
 
 def main() -> int:
+    """Run the case and print the comparison against OpenMC."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--groups", type=int, default=2, choices=(2, 8))
     parser.add_argument("--particles", type=int, default=20000)
@@ -163,9 +170,6 @@ def main() -> int:
             xslib, result = solve_with_openndm(library, **kwargs)
             worst = max(worst, report(label, result.k_eff, k_openmc, sigma))
 
-        # k_inf depends only on absorption, production and the flux spectrum, so
-        # the diffusion coefficient must not move it at all. If it does, the
-        # geometry is not actually infinite.
         print()
         comp = xslib.composition(0)
 
@@ -180,7 +184,6 @@ def main() -> int:
         scatter = np.asarray(comp.scatter).reshape(xslib.n_groups, xslib.n_groups)
         print(f"  scatter[from][to]\n{np.array2string(scatter, precision=5)}")
 
-        # The analytic infinite-medium eigenvalue from the translated data.
         flux = np.asarray(result.flux).ravel()
         k_balance = float(
             np.dot(np.asarray(comp.nu_fission), flux)

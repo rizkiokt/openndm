@@ -114,20 +114,21 @@ def test_c1_diffusion_coefficient_does_not_affect_an_infinite_medium(c1):
 
 
 def test_c1_carries_uncertainties_and_a_sane_spectrum(c1):
-    """FR-XS-9 and FR-OMC-6, plus a physical sanity check on the result."""
+    """FR-XS-9 and FR-OMC-6, plus a physical sanity check on the result.
+
+    Index 0 is the fast group, so the thermal absorption is the larger of the
+    two and every fission neutron is born fast.
+    """
     library, _, _ = c1
     xslib, result = _solve(library)
     assert xslib.has_uncertainty
     comp = xslib.composition(0)
-    # Group 1 is the fast group, so thermal absorption dominates and every
-    # fission neutron is born fast.
     assert comp.absorption[1] > comp.absorption[0]
     assert comp.chi[0] == pytest.approx(1.0, abs=1.0e-6)
     flux = np.asarray(result.flux).ravel()
     assert flux[0] > flux[1] > 0.0
 
 
-# ------------------------------------------------------------------ C-2
 @pytest.fixture(scope="module")
 def c2(tmp_path_factory):
     """A small heterogeneous pin lattice, run once for the tests below."""

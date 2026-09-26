@@ -10,22 +10,22 @@ import openndm
 ALL_KERNELS = ["fdm", "nem", "sanm"]
 NODAL_KERNELS = ["nem", "sanm"]
 
-#: One-group data for the analytic bare-cuboid verification case (V-1).
 ONE_GROUP = {"D": 1.0, "absorption": 0.08, "nu_fission": 0.1}
+"""One-group data for the analytic bare-cuboid verification case (V-1)."""
 
-#: IAEA 2D PWR benchmark group constants: D1, D2, Sa1, Sa2, nuSf2, Ss12.
 IAEA_XS = [
-    (1.5, 0.4, 0.010, 0.080, 0.135, 0.020),  # fuel 1
-    (1.5, 0.4, 0.010, 0.085, 0.135, 0.020),  # fuel 2
-    (1.5, 0.4, 0.010, 0.130, 0.135, 0.020),  # fuel 2 + rod
-    (2.0, 0.3, 0.000, 0.010, 0.000, 0.040),  # reflector
-    (2.0, 0.3, 0.000, 0.055, 0.000, 0.040),  # reflector + rod
+    (1.5, 0.4, 0.010, 0.080, 0.135, 0.020),
+    (1.5, 0.4, 0.010, 0.085, 0.135, 0.020),
+    (1.5, 0.4, 0.010, 0.130, 0.135, 0.020),
+    (2.0, 0.3, 0.000, 0.010, 0.000, 0.040),
+    (2.0, 0.3, 0.000, 0.055, 0.000, 0.040),
 ]
+"""IAEA 2D PWR group constants as (D1, D2, Sa1, Sa2, nuSf2, Ss12).
 
-#: IAEA quarter-core radial map. Row 0 and column 0 lie on the symmetry lines;
-#: 0 marks an out-of-core position. Kept in step with
-#: ``benchmarks/common.IAEA_RADIAL_MAP``, which
-#: ``test_benchmarks.test_conftest_map_matches_the_benchmark_deck`` enforces.
+One row per composition, in the order the radial map indexes them: fuel 1,
+fuel 2, fuel 2 with a rod, reflector, reflector with a rod.
+"""
+
 IAEA_MAP = np.array(
     [
         [3, 2, 2, 2, 3, 2, 2, 1, 4],
@@ -39,10 +39,18 @@ IAEA_MAP = np.array(
         [4, 4, 4, 4, 4, 4, 0, 0, 0],
     ]
 )
+"""IAEA quarter-core radial map, indexing ``IAEA_XS`` from one.
 
-#: Published reference eigenvalues for the IAEA PWR benchmark.
+Row 0 and column 0 lie on the symmetry lines and 0 marks an out-of-core
+position. Kept in step with ``benchmarks/common.IAEA_RADIAL_MAP``, which
+``test_benchmarks.test_conftest_map_matches_the_benchmark_deck`` enforces.
+"""
+
 IAEA_2D_REFERENCE = 1.02959
+"""Published eigenvalue of the IAEA 2D PWR benchmark."""
+
 IAEA_3D_REFERENCE = 1.02903
+"""Published eigenvalue of the IAEA 3D PWR benchmark."""
 
 
 def analytic_k(D, absorption, nu_fission, side, n_dimensions=3):

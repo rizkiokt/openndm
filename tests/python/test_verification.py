@@ -82,15 +82,18 @@ def test_v1_nodal_kernels_beat_finite_difference(kernel, tight):
     )
 
 
-#: Mesh-converged IAEA-2D eigenvalue. SANM and NEM both sit on this to within
-#: 0.1 pcm from four nodes per assembly onward, and FDM approaches it from
-#: below at second order.
 IAEA_2D_CONVERGED = 1.0295271
+"""Mesh-converged IAEA-2D eigenvalue.
 
-#: Tolerance in pcm on how far a nodal kernel may sit from the converged
-#: eigenvalue when run at one node per assembly. Measured: SANM +27.8, NEM
-#: -83.7.
+SANM and NEM both sit on this to within 0.1 pcm from four nodes per assembly
+onward, and FDM approaches it from below at second order.
+"""
+
 COARSE_MESH_TOLERANCE = {"sanm": 35.0, "nem": 100.0}
+"""How far a nodal kernel may sit from the converged eigenvalue, pcm.
+
+At one node per assembly. Measured: SANM +27.8, NEM -83.7.
+"""
 
 
 @pytest.fixture(scope="module")
@@ -203,12 +206,13 @@ def test_adjoint_flux_is_not_the_forward_flux(tight):
 
     Without this, an adjoint that quietly ran the forward problem would pass
     the eigenvalue check above.
+
+    The shapes are compared group-wise, each normalised, so the difference
+    cannot be explained by an overall scaling.
     """
     model = openndm.Model(iaea_geometry(), iaea_library(), tight)
     forward = np.asarray(model.solve().flux)
     adjoint = np.asarray(model.solve_adjoint().flux)
-    # Compare group-wise shapes, each normalised, so the difference cannot be
-    # explained by an overall scaling.
     forward_shape = forward / forward.sum(axis=0)
     adjoint_shape = adjoint / adjoint.sum(axis=0)
     assert not np.allclose(forward_shape, adjoint_shape, atol=1.0e-4)
@@ -233,7 +237,6 @@ def test_infinite_medium_reproduces_k_infinity(tight):
     assert result.k_eff == pytest.approx(k_inf, abs=1.0e-10)
 
 
-# ------------------------------------------------- adjoint perturbation theory
 def _fission_inner_product(model, forward, adjoint):
     r"""\langle \phi^\dagger, F \phi \rangle over the whole core."""
     geometry, library = model.geometry, model.library
@@ -276,9 +279,9 @@ def test_v4_first_order_perturbation_theory_matches_a_direct_resolve(tight):
     k0 = model.solve(kernel="fdm").k_eff
     denominator = _fission_inner_product(model, forward, adjoint)
 
-    # Perturb the thermal absorption of the inner fuel, composition 1.
-    base = library.composition(1).absorption[1]
-    target = geometry.compositions == 1
+    inner_fuel = 1
+    base = library.composition(inner_fuel).absorption[1]
+    target = geometry.compositions == inner_fuel
     volume = geometry.volumes
 
     errors = []
@@ -298,8 +301,6 @@ def test_v4_first_order_perturbation_theory_matches_a_direct_resolve(tight):
 
         errors.append(abs(predicted - actual) / abs(actual - 1.0 / k0))
 
-    # First-order theory is exact to O(delta^2), so halving the perturbation
-    # must halve the relative error. A wrong adjoint shape gives a floor.
     assert errors[-1] < 0.05, errors
     for coarse, fine in itertools.pairwise(errors):
         assert fine < 0.65 * coarse, errors
@@ -319,7 +320,6 @@ def test_adjoint_weighting_differs_from_flux_weighting(tight):
     assert ratio.max() / ratio.min() > 1.05, ratio.max() / ratio.min()
 
 
-# ------------------------------------------------------ symmetry invariance
 def test_symmetric_core_map_gives_a_symmetric_power_distribution(tight):
     """The IAEA map is symmetric about the diagonal, so its power must be too.
 
@@ -360,7 +360,12 @@ def _rotation_library():
 
 @pytest.mark.parametrize("kernel", ALL_KERNELS)
 def test_rotating_the_core_rotates_the_power_and_leaves_k_unchanged(kernel, tight):
-    """Rotating the whole problem must be a relabelling and nothing more."""
+    """Rotating the whole problem must be a relabelling and nothing more.
+
+    The two solves take different iteration paths through the same problem, so
+    they agree to the outer convergence tolerance rather than to machine
+    precision. That is still 0.0001 pcm.
+    """
     library = _rotation_library()
     boundaries = dict.fromkeys(["x_min", "x_max", "y_min", "y_max"], "vacuum") | {
         "z_min": "reflective",
@@ -378,9 +383,6 @@ def test_rotating_the_core_rotates_the_power_and_leaves_k_unchanged(kernel, tigh
     k0, power0 = solve(core)
     k90, power90 = solve(np.rot90(core, k=1, axes=(1, 2)))
 
-    # The two solves take different iteration paths through the same problem,
-    # so they agree to the outer convergence tolerance rather than to machine
-    # precision. That is still 0.0001 pcm.
     assert k90 == pytest.approx(k0, abs=1.0e-9)
     assert np.allclose(np.rot90(power0, k=1), power90, atol=1.0e-7)
 
@@ -406,10 +408,6 @@ def test_mirroring_the_core_mirrors_the_power(tight):
     assert np.allclose(power0[::-1, :], power1, atol=1.0e-7)
 
 
-# --------------------------------------------------------- neutron balance
-#: The balance residual is bounded by the looser of the inner and outer
-#: criteria, so it measures the iteration rather than the discretisation
-#: unless both are driven well below the threshold asserted.
 BALANCE_TIGHT = openndm.Settings(
     verbosity=0,
     k_tolerance=1.0e-12,
@@ -418,6 +416,12 @@ BALANCE_TIGHT = openndm.Settings(
     max_inner=2000,
     max_outer=5000,
 )
+"""Settings under which a balance residual measures the discretisation.
+
+The residual is bounded by the looser of the inner and outer criteria, so it
+measures the iteration rather than the discretisation unless both are driven
+well below the threshold asserted.
+"""
 
 
 @pytest.mark.parametrize("kernel", ALL_KERNELS)
@@ -446,6 +450,9 @@ def test_global_balance_relates_leakage_absorption_and_production(tight):
 
     Summing the node balance collapses every scattering term, so this is an
     independent statement about the boundary treatment in particular.
+
+    A boundary surface's outward normal points along +axis when the node it
+    touches is on the low side of it.
     """
     geometry = iaea_geometry()
     library = iaea_library()
@@ -466,7 +473,6 @@ def test_global_balance_relates_leakage_absorption_and_production(tight):
     for index, surface in enumerate(geometry._g.surfaces):
         if not surface.is_boundary():
             continue
-        # Outward normal points along +axis when the node is on the low side.
         sign = 1.0 if surface.lo >= 0 else -1.0
         leakage += sign * float(currents[index].sum()) * surface.area
 
@@ -475,10 +481,6 @@ def test_global_balance_relates_leakage_absorption_and_production(tight):
     assert abs(balance) / production < 1.0e-9, balance / production
 
 
-# --------------------------------------------------------- V-5: point kinetics
-#: A leakage-free box reduces the spatial solve to exact point kinetics, so
-#: the transient can be checked against closed-form answers rather than
-#: against another code or a transcribed deck.
 PK = {
     "velocity": 2.2e5,
     "absorption": 0.08,
@@ -486,9 +488,19 @@ PK = {
     "beta": 0.0065,
     "lambda": 0.0785,
 }
-#: Prompt neutron generation time. With the criticality normalisation the
-#: effective production is nuSf/k = absorption, so Lambda = 1/(v * Sigma_a).
+"""One-group data for the leakage-free point-kinetics box (V-5).
+
+A leakage-free box reduces the spatial solve to exact point kinetics, so the
+transient can be checked against closed-form answers rather than against
+another code or a transcribed deck.
+"""
+
 PK_GENERATION = 1.0 / (PK["velocity"] * PK["absorption"])
+"""Prompt neutron generation time, s.
+
+With the criticality normalisation the effective production is nuSf/k =
+absorption, so Lambda = 1/(v * Sigma_a).
+"""
 REFLECTIVE = dict.fromkeys(
     ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max"), "reflective"
 )
@@ -578,7 +590,8 @@ def test_v5_prompt_jump_matches_the_closed_form():
     """After the prompt layer, power sits at beta/(beta - rho).
 
     The layer decays with time constant Lambda/(beta - rho), about 17 ms
-    here, so it has to be resolved and then waited out.
+    here, so it has to be resolved and then waited out. The slow delayed
+    growth accumulated over the 0.2 s is divided back out before comparing.
     """
     rho = 0.5 * PK["beta"]
     model, library = _point_kinetics_model(0.5)
@@ -590,7 +603,6 @@ def test_v5_prompt_jump_matches_the_closed_form():
     for _ in range(2000):
         record = transient.step(1.0e-4)
 
-    # Strip the slow delayed growth that has accumulated over the 0.2 s.
     decayed = record.total_power / base / np.exp(_inhour_omega(rho) * record.time)
     assert decayed == pytest.approx(PK["beta"] / (PK["beta"] - rho), rel=5.0e-3)
 

@@ -38,9 +38,9 @@ def test_power_is_normalised_to_a_mean_of_one(iaea_model):
 def test_reflector_nodes_carry_no_power(iaea_model):
     result = iaea_model.solve()
     compositions = iaea_model.geometry.compositions
-    # Compositions 3 and 4 are the reflector, which has no fission source.
-    assert np.all(result.power[compositions >= 3] == 0.0)
-    assert np.all(result.power[compositions < 3] > 0.0)
+    first_reflector = 3
+    assert np.all(result.power[compositions >= first_reflector] == 0.0)
+    assert np.all(result.power[compositions < first_reflector] > 0.0)
 
 
 def test_radial_and_axial_profiles_have_the_lattice_shape(iaea_model):
@@ -77,7 +77,6 @@ def test_warm_start_reaches_the_same_answer_in_fewer_outers(tight):
     model = openndm.Model(iaea_geometry(), iaea_library(), tight)
     cold = model.solve()
 
-    # Perturb by swapping two assemblies, then solve both ways.
     model.swap_assemblies(1, 3)
     model.refresh()
     perturbed_cold = model.solve(warm_start=False)
@@ -94,9 +93,9 @@ def test_warm_start_reaches_the_same_answer_in_fewer_outers(tight):
 
 
 def test_swapping_identical_assemblies_leaves_k_unchanged(tight):
+    """Positions (0, 1) and (0, 2) on the top row are both composition 1."""
     model = openndm.Model(iaea_geometry(), iaea_library(), tight)
     before = model.solve().k_eff
-    # Positions (0,1) and (0,2) on the top row are both composition 1.
     nx = model.geometry.shape[2]
     model.swap_assemblies(1, 2)
     model.refresh()
@@ -108,7 +107,8 @@ def test_swap_changes_k_when_the_compositions_differ(tight):
     model = openndm.Model(iaea_geometry(), iaea_library(), tight)
     before = model.solve().k_eff
     nx = model.geometry.shape[2]
-    model.swap_assemblies(0, 7 * nx + 0)  # rodded centre against outer fuel
+    rodded_centre, outer_fuel = 0, 7 * nx + 0
+    model.swap_assemblies(rodded_centre, outer_fuel)
     model.refresh()
     after = model.solve().k_eff
     assert abs(after - before) > 1.0e-4
@@ -234,7 +234,6 @@ def test_non_convergence_raises_a_typed_exception_and_does_not_abort(tight):
         model.solve(max_outer=2, min_outer=2, k_tolerance=1.0e-15)
     assert excinfo.value.iterations == 2
     assert excinfo.value.residual >= 0.0
-    # The interpreter is still alive and the model still usable.
     assert model.solve().converged
 
 
@@ -276,10 +275,12 @@ def test_per_call_overrides_do_not_mutate_the_model_settings(iaea_model):
 
 
 def test_critical_boron_search_finds_the_target(tight):
-    """FR-MODE-4: iterate boron to a target eigenvalue."""
+    """FR-MODE-4: iterate boron to a target eigenvalue.
+
+    ``apply_boron`` is a linear model on the thermal absorption of the fuel.
+    """
     geometry = iaea_geometry()
     library = iaea_library()
-    # A simple linear boron model on the thermal absorption of the fuel.
     base = [library.composition(c).absorption[1] for c in range(3)]
 
     def apply_boron(lib, ppm):
@@ -300,7 +301,9 @@ def test_boron_search_says_when_the_target_is_out_of_reach(tight):
     A subcritical core cannot be made critical by adding boron, and the search
     then walks to a bracket edge and evaluates the same concentration twice.
     Reporting that as insensitivity to boron sends the reader looking in the
-    wrong place, so the message names the reachable range instead.
+    wrong place, so the message names the reachable range instead. This core is
+    supercritical across the whole bracket, so no concentration in it reaches
+    the target of 0.5.
     """
     library = iaea_library()
     base = [library.composition(c).absorption[1] for c in range(3)]
@@ -312,8 +315,6 @@ def test_boron_search_says_when_the_target_is_out_of_reach(tight):
 
     model = openndm.Model(iaea_geometry(), library, tight)
     with pytest.raises(openndm.ConvergenceError, match="not reachable") as excinfo:
-        # This core is supercritical across the whole range, so a target of
-        # 0.5 cannot be met by any concentration inside the bracket.
         model.search_boron(
             apply_boron, target_k=0.5, guess=100.0, bracket=(0.0, 200.0)
         )
@@ -321,11 +322,10 @@ def test_boron_search_says_when_the_target_is_out_of_reach(tight):
 
 
 def test_boron_search_reports_failure_when_boron_has_no_effect(tight):
+    """The search must notice that k_eff does not respond, rather than spin."""
     model = openndm.Model(iaea_geometry(), iaea_library(), tight)
 
     def no_op(lib, ppm):
-        # Deliberately ignores the concentration: the search must notice that
-        # k_eff does not respond and say so rather than spin.
         return None
 
     with pytest.raises(openndm.ConvergenceError, match="did not respond") as excinfo:
@@ -334,6 +334,11 @@ def test_boron_search_reports_failure_when_boron_has_no_effect(tight):
 
 
 def test_sweep_runs_every_case(tight):
+    """Every case converges, and the rodded centre is worth something.
+
+    The cases are composition indices, so the last one is the rodded centre and
+    the first plain fuel.
+    """
     model = openndm.Model(iaea_geometry(), iaea_library(), tight)
 
     def mutate(m, case):
@@ -342,11 +347,9 @@ def test_sweep_runs_every_case(tight):
     results = model.sweep(mutate, [0, 1, 2])
     assert len(results) == 3
     assert all(r.converged for r in results)
-    # The rodded centre must be worth something.
-    assert results[2].k_eff < results[0].k_eff
+    assert results[-1].k_eff < results[0].k_eff
 
 
-# ------------------------------------------- mutating a finalized library
 def _mutable_model(absorption, tight):
     library = openndm.XSLibrary(1, 1)
     library.set_composition(
@@ -409,7 +412,6 @@ def test_refinalizing_makes_the_change_take_effect(tight):
     )
 
 
-# ------------------------------------------- changing the model mid-transient
 def _kinetic_model(tight):
     """A leaky cuboid with kinetics data, so the leakage operator matters."""
     library = openndm.XSLibrary(1, 1)

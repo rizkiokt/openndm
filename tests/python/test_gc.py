@@ -27,7 +27,6 @@ SCATTER = np.array([[0.17, 0.02], [0.0, 0.82]])
 CHI = np.array([1.0, 0.0])
 
 
-# --------------------------------------------------------------- OpenMC-free
 def test_openndm_imports_without_openmc():
     """FR-OMC-14: the solver must not depend on OpenMC at import time."""
     import sys
@@ -37,8 +36,8 @@ def test_openndm_imports_without_openmc():
 
 
 def test_b1_gamma_reduces_to_one_at_zero_buckling():
+    """One at zero buckling, and approached smoothly from both sides."""
     assert b1_gamma(0.0, TOTAL) == pytest.approx(np.ones(2))
-    # And approaches one smoothly from both sides.
     assert b1_gamma(1.0e-10, TOTAL) == pytest.approx(np.ones(2), rel=1.0e-6)
     assert b1_gamma(-1.0e-10, TOTAL) == pytest.approx(np.ones(2), rel=1.0e-6)
 
@@ -50,7 +49,7 @@ def test_b1_and_p1_agree_in_the_small_buckling_limit():
     buckling to reach criticality, which is exactly the regime where the B1
     correction factor is negligible.
     """
-    barely_supercritical = np.array([0.0, 0.1212])  # k_inf about 1.01
+    barely_supercritical = np.array([0.0, 0.1212])
     b1 = critical_spectrum(
         TOTAL, SCATTER, barely_supercritical, CHI, method="b1", tolerance=1e-14
     )
@@ -88,11 +87,15 @@ def test_critical_spectrum_is_normalised_and_positive():
 
 
 def test_b1_gives_a_larger_diffusion_coefficient_than_p1():
-    """The B1 correction factor exceeds one at positive buckling."""
+    """The B1 correction factor exceeds one at positive buckling.
+
+    B1 therefore leaks more per unit buckling, so it reaches criticality at a
+    smaller buckling than P1 does.
+    """
     b1 = critical_spectrum(TOTAL, SCATTER, np.array([0.0, 0.135]), CHI, method="b1")
     p1 = critical_spectrum(TOTAL, SCATTER, np.array([0.0, 0.135]), CHI, method="p1")
     assert np.all(b1.diffusion >= p1.diffusion)
-    assert b1.buckling < p1.buckling  # more leakage per unit buckling
+    assert b1.buckling < p1.buckling
 
 
 def test_leakage_correction_applies_to_a_library():
@@ -117,7 +120,6 @@ def test_unknown_leakage_method_is_rejected():
         critical_spectrum(TOTAL, SCATTER, np.array([0.0, 0.135]), CHI, method="b3")
 
 
-# ----------------------------------------------------------------- branching
 def test_branch_grid_orders_states_row_major():
     grid = BranchGrid(temperature=[500.0, 1000.0], boron=[0.0, 500.0, 1000.0])
     assert len(grid) == 6
@@ -239,7 +241,8 @@ def test_job_array_covers_every_branch_point(tmp_path, scheduler):
     )
     script = driver.write_job_array(tmp_path / "run.sh", scheduler=scheduler)
     text = script.read_text()
-    assert "0-5" in text  # six grid points, zero indexed
+    last_point = len(grid) - 1
+    assert f"0-{last_point}" in text
     assert str(tmp_path) in text
 
 
@@ -256,7 +259,6 @@ def test_unknown_scheduler_is_rejected(tmp_path):
         driver.write_job_array(tmp_path / "run.sh", scheduler="lsf")
 
 
-# ------------------------------------------------- MGXS ingestion, stand-ins
 class FakeMGXS:
     """Minimal stand-in for an ``openmc.mgxs.MGXS`` object.
 
@@ -322,16 +324,17 @@ REFLECTOR = FakeDomain("reflector", 2)
 
 
 def _base_data(domain=FUEL, **overrides):
-    """Minimal MGXS set for one domain, keyed the way FakeLibrary expects."""
+    """Minimal MGXS set for one domain, keyed the way FakeLibrary expects.
+
+    Both scattering matrices are present and identical, so there is no (n,xn)
+    multiplicity to account for. A library that tallies only one of them draws
+    a warning; see ``test_scattering_multiplicity_warns_when_it_cannot_correct``.
+    """
     data = {
         (domain, "absorption"): FakeMGXS([0.01, 0.08], [1.0e-4, 8.0e-4]),
         (domain, "nu-fission"): FakeMGXS([0.0, 0.135], [0.0, 1.0e-3]),
         (domain, "kappa-fission"): FakeMGXS([0.0, 0.135]),
         (domain, "chi"): FakeMGXS([1.0, 0.0]),
-        # Both scattering matrices, identical here so there is no (n,xn)
-        # multiplicity to account for. A real library that tallies only one of
-        # them draws a warning, which test_scattering_multiplicity_warns_...
-        # covers.
         (domain, "scatter matrix"): FakeMGXS([0.17, 0.02, 0.0, 0.82]),
         (domain, "nu-scatter matrix"): FakeMGXS([0.17, 0.02, 0.0, 0.82]),
         (domain, "transport"): FakeMGXS([0.2222222222, 0.8333333333]),
@@ -353,9 +356,10 @@ def test_mgxs_ingestion_produces_a_usable_library():
 
 
 def test_mgxs_scatter_matrix_keeps_the_from_to_orientation():
+    """The fast row scatters down into the thermal column, never the reverse."""
     lib = from_mgxs_library(FakeLibrary(_base_data()))
     scatter = np.asarray(lib.composition(0).scatter).reshape(2, 2)
-    assert scatter[0, 1] == pytest.approx(0.02)  # fast down to thermal
+    assert scatter[0, 1] == pytest.approx(0.02)
     assert scatter[1, 0] == pytest.approx(0.0)
     assert lib.composition(0).removal[0] == pytest.approx(0.01 + 0.02)
 
@@ -368,8 +372,8 @@ def test_mgxs_ingestion_carries_uncertainties():
 
 
 def test_mgxs_prefers_the_diffusion_coefficient_score():
+    """The scored value wins, and sits inside the 5% agreement tolerance."""
     data = _base_data()
-    # Within the 5% agreement tolerance, so no warning is expected here.
     data[(FUEL, "diffusion-coefficient")] = FakeMGXS([1.53, 0.41])
     lib = from_mgxs_library(FakeLibrary(data))
     assert lib.composition(0).D == pytest.approx([1.53, 0.41])
@@ -459,27 +463,31 @@ def test_require_openmc_returns_the_module():
     assert require_openmc().__name__ == "openmc"
 
 
-# ------------------------------------------------- OpenMC contract regressions
 def test_mgxs_selects_subdomains_by_integer_id():
     """``MGXS.get_xs`` takes domain ids, not domain objects.
 
     ``Library.get_mgxs`` takes the object, which makes it easy to pass the
     object through to ``get_xs`` as well; real OpenMC then raises a TypeError
     from deep inside its argument checking.
+
+    Each score is queried once for the mean and once for the standard
+    deviation, so every selector recorded must be the id.
     """
     domain = FakeDomain("fuel", 7)
     data = _base_data(domain)
     from_mgxs_library(FakeLibrary(data, domains=(domain,)))
     seen = data[(domain, "absorption")].subdomains_seen
-    # Queried once for the mean and once for the standard deviation.
     assert seen and all(selector == [7] for selector in seen), seen
 
 
 def _scatter_pair_data(domain=FUEL, excess=1.0e-4):
-    """Base data plus both scattering matrices, differing by a multiplicity."""
+    """Base data plus both scattering matrices, differing by a multiplicity.
+
+    The excess sits in the fast-to-fast element, where (n,2n) neutrons stay.
+    """
     plain = np.array([[0.17, 0.02], [0.0, 0.82]])
     nu = plain.copy()
-    nu[0, 0] += excess  # (n,2n) neutrons, which stay in the fast group
+    nu[0, 0] += excess
     data = _base_data(domain)
     data[(domain, "consistent nu-scatter matrix")] = FakeMGXS(nu.ravel())
     data[(domain, "consistent scatter matrix")] = FakeMGXS(plain.ravel())
@@ -531,7 +539,8 @@ def test_multiplicity_correction_raises_k_infinity():
     """The correction must move k the right way, and by the right amount.
 
     In an infinite medium the extra neutrons show up as a reduced effective
-    absorption, so k rises by very nearly the (n,xn) production per absorption.
+    absorption, so k rises by very nearly the (n,xn) production per absorption,
+    weighted on the fast flux.
     """
     excess = 5.0e-4
     data, _, _ = _scatter_pair_data(excess=excess)
@@ -554,7 +563,6 @@ def test_multiplicity_correction_raises_k_infinity():
     ignored = solve("ignore")
     assert corrected.k_eff > ignored.k_eff
 
-    # Predicted rise: excess production per unit absorption, on the fast flux.
     flux = np.asarray(ignored.flux).ravel()
     absorption = np.asarray(
         from_mgxs_library(
@@ -567,7 +575,6 @@ def test_multiplicity_correction_raises_k_infinity():
     )
 
 
-# ---------------------------------------------- discontinuity factor tallies
 class FakeTally:
     def __init__(self, mean, std=None):
         self.mean = np.asarray(mean, dtype=float)
@@ -589,16 +596,20 @@ class FakeStatePoint:
             raise LookupError(name) from None
 
 
-#: Volume and slab flux integrals in EnergyFilter order, which ascends in
-#: energy: index 0 is thermal, index 1 is fast. The slab is a tenth of the
-#: assembly, so the thermal flux density is 1.5x the average and the fast
-#: 0.9x, which is the sense a real pin lattice gives.
 _SLAB_FRACTION = 0.1
+"""Slab volume as a fraction of the assembly's."""
+
 _ADF_TALLIES = {
     "openndm_adf_volume": FakeTally([10.0, 20.0]),
     "openndm_adf_x_min": FakeTally([1.5, 1.8]),
     "openndm_adf_x_max": FakeTally([1.5, 1.8]),
 }
+"""Volume and slab flux integrals, in EnergyFilter order.
+
+An EnergyFilter ascends in energy, so index 0 is thermal and index 1 is fast.
+The slab is a tenth of the assembly, so the thermal flux density is 1.5x the
+average and the fast 0.9x, which is the sense a real pin lattice gives.
+"""
 
 
 @requires_openmc
@@ -609,6 +620,8 @@ def test_compute_adf_returns_groups_in_decreasing_energy_order():
     group. It is silent: the values stay plausible and only their sense
     inverts, which is why C-2 uses a pin lattice, where the surface sits in
     water and the thermal factor must exceed one while the fast falls below.
+
+    Face 0 is x_min, and group 0 of the returned values must be the fast one.
     """
     from openndm.gc import compute_adf
 
@@ -617,7 +630,6 @@ def test_compute_adf_returns_groups_in_decreasing_energy_order():
         slab_fraction=_SLAB_FRACTION,
         warn_sigma=1.0,
     )
-    # Face 0 is x_min. Group 0 must be the fast group.
     assert result.values[0, 0] == pytest.approx(0.9)
     assert result.values[0, 1] == pytest.approx(1.5)
 
@@ -645,7 +657,6 @@ def test_compute_adf_defaults_uninstrumented_faces_to_one():
         slab_fraction=_SLAB_FRACTION,
         warn_sigma=1.0,
     )
-    # Only x_min and x_max were tallied; the other four faces stay at 1.0.
     assert np.allclose(result.values[2:], 1.0)
 
 

@@ -23,13 +23,14 @@ sys.path.insert(0, str(BENCHMARKS))
 
 from common import (  # noqa: E402
     CORE_HEIGHT,
+    IAEA_ORDER,
     IAEA_RADIAL_MAP,
     ROD_TIP_HEIGHT,
     check_radial_map,
 )
 
-#: Specification acceptance criterion for a static benchmark, in pcm.
 ACCEPTANCE_PCM = 100.0
+"""Specification acceptance criterion for a static benchmark, in pcm."""
 
 
 def _deck(name):
@@ -55,7 +56,6 @@ def pcm(k, reference):
     return 1.0e5 * (k - reference)
 
 
-# ------------------------------------------------------------- the core map
 def test_radial_map_invariants_hold():
     """Symmetry and an edge-connected fuel-1 band.
 
@@ -108,7 +108,6 @@ def test_map_is_not_accidentally_symmetric_only_in_shape():
     assert counts[4:7] == [2, 2, 2], counts
 
 
-# ------------------------------------------------------------------ IAEA-2D
 def test_iaea_2d_sanm_reproduces_the_reference_at_one_node_per_assembly():
     """The headline nodal result: one node per assembly, 20 cm mesh."""
     geometry, library = _deck("iaea2d").build(subdivide=1)
@@ -149,7 +148,6 @@ def test_iaea_2d_power_distribution_is_physical():
     assert radial[rodded].max() < 1.0
 
 
-# ------------------------------------------------------------------ IAEA-3D
 def test_iaea_3d_sanm_reproduces_the_reference():
     geometry, library = _deck("iaea3d").build(dz_target=20.0)
     result = _solve(geometry, library)
@@ -185,23 +183,26 @@ def test_iaea_3d_rods_occupy_the_upper_core_not_the_lower():
     Reading it as an insertion depth measured down from the top of the core,
     rather than as the height of the rod tips above the core bottom, leaves
     k_eff about 1700 pcm high and nothing else looks wrong.
+
+    Plane 0 is the bottom reflector and planes 1 to 4 are the lower 80 cm.
     """
     deck = _deck("iaea3d")
     geometry, _ = deck.build(dz_target=20.0)
     nz, ny, nx = geometry.shape
     mapping = geometry.lattice_to_node.reshape(nz, ny, nx)
     compositions = geometry.compositions
-    rodded_fuel = 2  # index of "fuel_2_rodded"
+    rodded_fuel = IAEA_ORDER.index("fuel_2_rodded")
 
     def plane_has_rodded_fuel(k):
         nodes = mapping[k][mapping[k] >= 0]
         return bool((compositions[nodes] == rodded_fuel).any())
 
-    # Plane 0 is the bottom reflector; planes 1..4 are the lower 80 cm.
-    assert not plane_has_rodded_fuel(0)
-    for k in range(1, 5):
+    bottom_reflector = 0
+    first_rodded_plane = 5
+    assert not plane_has_rodded_fuel(bottom_reflector)
+    for k in range(1, first_rodded_plane):
         assert not plane_has_rodded_fuel(k), f"plane {k} should be below the tip"
-    for k in range(5, nz - 1):
+    for k in range(first_rodded_plane, nz - 1):
         assert plane_has_rodded_fuel(k), f"plane {k} should be rodded"
 
 
@@ -215,12 +216,10 @@ def test_iaea_3d_axial_profile_is_bottom_peaked():
     assert 1 < peak < midplane, (peak, midplane, axial)
 
 
-# ----------------------------------------------------------------- analytic
 def test_analytic_deck_reports_the_exact_reference():
     assert _deck("analytic").analytic() == pytest.approx(1.205387388, abs=1.0e-8)
 
 
-# ------------------------------------------------------------------- biblis
 def test_biblis_2d_sanm_reproduces_the_reference():
     """The deck is parsed from its source, not transcribed.
 
@@ -267,12 +266,12 @@ def test_biblis_symmetry_faces_carry_the_half_width_assemblies():
     """
     deck = _deck("biblis2d")
     core = deck.NODE_MAP
-    # The north-west corner is the core centre: fuel, never reflector.
-    assert core[-1, 0] == 1
-    # The south-east corner is outside the core entirely.
-    assert core[0, -1] == 0
+    north_west, south_east = core[-1, 0], core[0, -1]
+    first_fuel, outside_the_core = 1, 0
+    assert north_west == first_fuel
+    assert south_east == outside_the_core
 
-# ---------------------------------------------------------------------- LMW
+
 def _lmw():
     return _deck("lmw")
 

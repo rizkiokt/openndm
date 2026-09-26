@@ -78,36 +78,38 @@ def has_external_backend():
     return True
 
 
-#: IAPWS R7-97(2012) Table 5: (T [K], p [Pa], v [m^3/kg], h [kJ/kg], cp [kJ/kg K]).
 IF97_TABLE5 = [
     (300.0, 3.0e6, 0.100215168e-2, 0.115331273e3, 0.417301218e1),
     (300.0, 80.0e6, 0.971180894e-3, 0.184142828e3, 0.401008987e1),
     (500.0, 3.0e6, 0.120241800e-2, 0.975542239e3, 0.465580682e1),
 ]
+"""IAPWS R7-97(2012) Table 5: (T [K], p [Pa], v [m^3/kg], h [kJ/kg], cp [kJ/kg K])."""
 
-#: IAPWS R7-97(2012) Table 35: (T [K], saturation pressure [MPa]).
 IF97_TABLE35 = [
     (300.0, 0.353658941e-2),
     (500.0, 0.263889776e1),
     (600.0, 0.123443146e2),
 ]
+"""IAPWS R7-97(2012) Table 35: (T [K], saturation pressure [MPa])."""
 
-#: IAPWS R7-97(2012) Table 36: (p [MPa], saturation temperature [K]).
 IF97_TABLE36 = [
     (0.1, 0.372755919e3),
     (1.0, 0.453035632e3),
     (10.0, 0.584149488e3),
 ]
+"""IAPWS R7-97(2012) Table 36: (p [MPa], saturation temperature [K])."""
 
-#: IAPWS R7-97(2012) Table 7: (p [MPa], h [kJ/kg], T [K]) from the backward
-#: equation, which the release permits to differ from the basic equation by up
-#: to 25 mK. This package inverts the basic equation instead, so it is held to
-#: that same tolerance rather than to the digits printed.
 IF97_TABLE7 = [
     (3.0, 500.0, 0.391798509e3),
     (80.0, 500.0, 0.378108626e3),
     (80.0, 1500.0, 0.611041229e3),
 ]
+"""IAPWS R7-97(2012) Table 7: (p [MPa], h [kJ/kg], T [K]).
+
+From the backward equation, which the release permits to differ from the basic
+equation by up to 25 mK. This package inverts the basic equation instead, so it
+is held to that same tolerance rather than to the digits printed.
+"""
 
 BACKWARD_TOLERANCE_K = 25.0e-3
 
@@ -291,16 +293,18 @@ def test_the_external_backend_agrees_with_the_built_in_formulation():
     )
 
 
-#: IAPWS R7-97(2012) Table 15, region 2:
-#: (T [K], p [Pa], v [m^3/kg], h [kJ/kg], cp [kJ/kg K]).
 IF97_TABLE15 = [
     (300.0, 0.0035e6, 0.394913866e2, 0.254991145e4, 0.191300162e1),
     (700.0, 0.0035e6, 0.923015898e2, 0.333568375e4, 0.208141274e1),
     (700.0, 30.0e6, 0.542946619e-2, 0.263149474e4, 0.103505092e2),
 ]
+"""IAPWS R7-97(2012) Table 15, region 2.
 
-#: IAPWS R7-97(2012) Section 4: the B23 boundary must pass through this point.
+Columns are (T [K], p [Pa], v [m^3/kg], h [kJ/kg], cp [kJ/kg K]).
+"""
+
 B23_VERIFICATION = (0.623150000e3, 0.165291643e2)
+"""IAPWS R7-97(2012) Section 4: the B23 boundary must pass through this point."""
 
 
 @pytest.mark.parametrize(("temperature", "pressure", "v", "h", "cp"), IF97_TABLE15)
