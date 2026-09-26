@@ -360,8 +360,8 @@ def test_a_solved_channel_drives_the_picard_loop():
     assert seen["moderator_density"].max() < 800.0
 
 
-#: NEACRP-L-335 Table 2.7 gives the guide tube its own diameter, 12.259 mm.
 NEACRP_GUIDE_TUBE_RADIUS = 12.259e-3 / 2
+"""Guide tube outer radius, m. NEACRP-L-335 Table 2.7 gives 12.259 mm."""
 NEACRP_SPEC_PINS = PinGeometry(
     fuel_radius=4.11950e-3,
     gap_thickness=6.8e-5,

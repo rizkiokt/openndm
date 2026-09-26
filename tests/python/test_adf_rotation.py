@@ -20,10 +20,13 @@ import openndm
 
 from conftest import ONE_GROUP
 
-#: Deliberately different on all four radial faces, so every rotation is
-#: distinguishable from every other. A set symmetric in x or y would make
-#: half of these tests pass without the permutation being applied at all.
 ASYMMETRIC = np.array([[0.7], [1.3], [0.9], [1.1], [1.0], [1.0]])
+"""Discontinuity factors that differ on all four radial faces.
+
+Every rotation of this set is distinguishable from every other. A set
+symmetric in x or y would make half of these tests pass without the
+permutation being applied at all.
+"""
 
 FACES = ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max")
 
@@ -75,7 +78,6 @@ def solve(geometry, lib, kernel="sanm"):
     return openndm.Model(geometry, lib, settings).solve(kernel=kernel)
 
 
-# ------------------------------------------------------------- the permutation
 @pytest.mark.parametrize("turns", [0, 1, 2, 3])
 def test_a_symmetric_set_is_invariant_under_every_rotation(turns):
     symmetric = np.array([[1.2], [1.2], [1.2], [1.2], [0.8], [0.8]])
@@ -130,7 +132,6 @@ def test_rotated_face_matches_the_array_permutation():
             assert expected[face] == ASYMMETRIC[openndm.rotated_face(face, turns)]
 
 
-# ------------------------------------------------------------------- in a core
 @pytest.mark.parametrize("turns", [1, 2, 3])
 def test_turning_a_node_matches_a_pre_rotated_composition(turns):
     """The oracle: the two routes to a rotated assembly must agree exactly.
@@ -206,7 +207,6 @@ def test_every_kernel_sees_the_rotation(kernel):
     assert turned.k_eff == by_hand.k_eff
 
 
-# ----------------------------------------------------------------- the mapping
 def test_a_rotation_map_matches_setting_each_node_by_hand():
     rotation = np.zeros((1, 3, 4), dtype=int)
     rotation[0, 1, 2] = 3

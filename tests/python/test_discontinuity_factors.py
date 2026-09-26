@@ -32,15 +32,17 @@ TIGHT = {
     "max_outer": 20000,
 }
 
-#: One period of the heterogeneous slab: six fuel nodes then four moderator.
-#:
-#: The fuel differs from period to period on purpose. A periodic stack with
-#: reflective outer faces has identical coarse nodes and a flat coarse flux,
-#: so its eigenvalue is fixed by the homogenised absorption and production
-#: ratio alone and no coupling coefficient, right or wrong, can move it. That
-#: makes it useless as a test of discontinuity factors. Tilting the fuel
-#: across the stack puts a real current between coarse nodes.
 FUEL_ABSORPTION = (0.016, 0.019, 0.022, 0.025, 0.028, 0.031)
+"""Fuel absorption per period of the heterogeneous slab, cm^-1.
+
+The fuel differs from period to period on purpose. A periodic stack with
+reflective outer faces has identical coarse nodes and a flat coarse flux, so
+its eigenvalue is fixed by the homogenised absorption and production ratio
+alone and no coupling coefficient, right or wrong, can move it. That makes it
+useless as a test of discontinuity factors. Tilting the fuel across the stack
+puts a real current between coarse nodes.
+"""
+
 FUEL_NU_FISSION = (0.030, 0.029, 0.028, 0.027, 0.026, 0.025)
 MODERATOR = {"D": 0.6, "absorption": 0.005, "nu_fission": 0.0}
 FINE_WIDTH = 2.0
@@ -48,12 +50,14 @@ FUEL_NODES = 6
 MODERATOR_NODES = 4
 PERIODS = len(FUEL_ABSORPTION)
 
-#: Composition index of the moderator, which follows the per-period fuels.
 MODERATOR_INDEX = PERIODS
+"""Composition index of the moderator, which follows the per-period fuels."""
 
 PERIOD_NODES = FUEL_NODES + MODERATOR_NODES
-#: Face index of the low and high z faces, in the order -x +x -y +y -z +z.
+"""Fine nodes in one period of the stack: the fuel, then the moderator."""
+
 Z_MIN_FACE, Z_MAX_FACE = 4, 5
+"""Face indices of the low and high z faces, in the order -x +x -y +y -z +z."""
 
 
 def one_group_library(materials):
@@ -96,6 +100,11 @@ def fine_materials():
 
 
 def fine_problem():
+    """Six periods of fuel and moderator, of unit transverse area.
+
+    A node's volume is therefore its width, which is what the homogenisation
+    below relies on.
+    """
     compositions = []
     for period in range(PERIODS):
         compositions += [period] * FUEL_NODES
@@ -129,7 +138,10 @@ def build_equivalent_coarse(d_choice="volume"):
     r"""Homogenise the fine problem and derive the exact discontinuity factors.
 
     Returns the coarse geometry, its library, the reference eigenvalue and the
-    reference coarse node-average fluxes.
+    reference coarse node-average fluxes. ``d_choice`` selects volume or flux
+    weighting of the diffusion coefficient; volume weighting is deliberately
+    not the best available choice, because the factors have to absorb whatever
+    it is.
 
     The factors follow from their definition. On each side of an interface the
     homogeneous node's surface flux is what the finite difference relation
@@ -159,7 +171,7 @@ def build_equivalent_coarse(d_choice="volume"):
         s = slice(c * PERIOD_NODES, (c + 1) * PERIOD_NODES)
         weight = fine_flux[s] * fine_volume[s]
         volume = fine_volume[s].sum()
-        coarse_width[c] = volume  # unit transverse area
+        coarse_width[c] = volume
         coarse_flux[c] = weight.sum() / volume
         absorption = np.array(
             [library.composition(int(i)).absorption[0] for i in compositions[s]]
@@ -170,13 +182,10 @@ def build_equivalent_coarse(d_choice="volume"):
         coarse_absorption[c] = (absorption * weight).sum() / weight.sum()
         coarse_nu_fission[c] = (production * weight).sum() / weight.sum()
         if d_choice == "volume":
-            # Deliberately not the "best" homogenised D. The discontinuity
-            # factors have to absorb whatever this is.
             coarse_D[c] = (fine_D[s] * fine_volume[s]).sum() / volume
         else:
             coarse_D[c] = (fine_D[s] * weight).sum() / weight.sum()
 
-    # Reference current and heterogeneous surface flux at each coarse interface.
     adf = np.ones((n_coarse, 6))
     for c in range(n_coarse - 1):
         lo_fine = (c + 1) * PERIOD_NODES - 1
@@ -265,7 +274,6 @@ def test_without_the_factors_the_coarse_solve_is_wrong():
     )
 
 
-# ------------------------------------------------------ structural identities
 def test_a_uniform_factor_on_every_face_changes_nothing():
     r"""Scaling every factor by a constant is not a physical change.
 

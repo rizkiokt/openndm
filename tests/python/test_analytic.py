@@ -97,11 +97,11 @@ TIGHT = {
 }
 
 
-# --------------------------------------------------- reflected slab, 1 group
-#: Core and reflector data for the reflected slab. The core half-width is
-#: measured from the symmetry plane.
 CORE = {"D": 1.2, "absorption": 0.02, "nu_fission": 0.025, "half_width": 50.0}
+"""Core data for the reflected slab, the half-width from the symmetry plane."""
+
 REFLECTOR = {"D": 0.4, "absorption": 0.01, "thickness": 20.0}
+"""Reflector data for the reflected slab."""
 
 
 def reflected_slab_reference():
@@ -126,13 +126,13 @@ def reflected_slab_reference():
     def residual(B):
         return CORE["D"] * B * math.tan(B * a) - right
 
-    # tan(Ba) sweeps 0 to infinity across the interval, so the root is unique.
     B = bisect(residual, 1.0e-9, 0.5 * math.pi / a - 1.0e-9)
     k = CORE["nu_fission"] / (CORE["absorption"] + CORE["D"] * B * B)
     return k, B
 
 
 def build_reflected_slab(n_core, n_reflector):
+    """Reflected slab of unit transverse area, so a node volume is its width."""
     dz = [CORE["half_width"] / n_core] * n_core
     dz += [REFLECTOR["thickness"] / n_reflector] * n_reflector
     geometry = openndm.Geometry.from_lattice(
@@ -186,9 +186,12 @@ def test_reflected_slab_converges_to_the_analytic_eigenvalue(kernel):
     assert abs(error) < 20.0, f"{kernel}: {error:+.2f} pcm from analytic"
 
 
-#: Below this the eigenvalue sits at the iteration's own round-off and has no
-#: discretisation error left for a finer mesh to remove.
 SLAB_ROUND_OFF = 1.0e-11
+"""Eigenvalue error at which the slab refinement study stops being meaningful.
+
+Below this the eigenvalue sits at the iteration's own round-off and has no
+discretisation error left for a finer mesh to remove.
+"""
 
 
 def reflected_slab_errors(kernel):
@@ -254,32 +257,30 @@ def test_reflected_slab_flux_shape_matches_the_analytic_solution():
     geometry, library = build_reflected_slab(n_core, n_reflector)
     result = openndm.Model(geometry, library, openndm.Settings(**TIGHT)).solve()
 
-    widths = geometry.volumes  # unit transverse area, so volume is the width
+    widths = geometry.volumes
     edges = np.concatenate(([0.0], np.cumsum(widths)))
     a, b = CORE["half_width"], REFLECTOR["thickness"]
     kappa = math.sqrt(REFLECTOR["absorption"] / REFLECTOR["D"])
 
-    # Node-average of the analytic solution, integrated exactly.
-    exact = np.empty(geometry.n_nodes)
+    exact_node_average = np.empty(geometry.n_nodes)
     for i in range(n_core):
         lo, hi = edges[i], edges[i + 1]
-        exact[i] = (math.sin(B * hi) - math.sin(B * lo)) / (B * (hi - lo))
+        exact_node_average[i] = (math.sin(B * hi) - math.sin(B * lo)) / (B * (hi - lo))
     scale = math.cos(B * a) / math.sinh(kappa * b)
     for i in range(n_core, geometry.n_nodes):
         lo, hi = edges[i], edges[i + 1]
-        exact[i] = (
+        exact_node_average[i] = (
             scale
             * (math.cosh(kappa * (a + b - lo)) - math.cosh(kappa * (a + b - hi)))
             / (kappa * (hi - lo))
         )
 
     computed = np.asarray(result.flux).ravel()
-    computed = computed / computed[0] * exact[0]
-    relative = np.abs(computed - exact) / exact.max()
+    computed = computed / computed[0] * exact_node_average[0]
+    relative = np.abs(computed - exact_node_average) / exact_node_average.max()
     assert relative.max() < 2.0e-3, relative.max()
 
 
-# ------------------------------------------------------- albedo boundary
 ALBEDO_SLAB = {
     "D": 1.0,
     "absorption": 0.02,
@@ -381,9 +382,6 @@ def test_eigenvalue_decreases_monotonically_with_the_albedo():
     assert all(a > b for a, b in itertools.pairwise(values)), values
 
 
-# --------------------------------------- method of manufactured solutions
-#: Subcritical two-group medium for the manufactured solution, chosen so that
-#: both group sources come out positive.
 MMS = {
     "D": (1.5, 0.4),
     "absorption": (0.01, 0.05),
@@ -393,6 +391,10 @@ MMS = {
     "amplitude": (1.0, 0.6),
     "side": 100.0,
 }
+"""Subcritical two-group medium for the manufactured solution.
+
+Chosen so that both group sources come out positive.
+"""
 
 
 def mms_library():
@@ -443,7 +445,10 @@ def mms_source_amplitudes():
 
 
 def mms_case(n_nodes):
-    """Geometry, node-average source and the exact node-average flux."""
+    """Geometry, node-average source and the exact node-average flux.
+
+    Node values are in (k, j, i) flattened order, matching ``Geometry.expand``.
+    """
     side = MMS["side"]
     h = side / n_nodes
     geometry = openndm.Geometry.from_lattice(
@@ -457,7 +462,6 @@ def mms_case(n_nodes):
     axis_mean = np.array(
         [_mean_sine(edges[i], edges[i + 1], side) for i in range(n_nodes)]
     )
-    # Node index order is (k, j, i) flattened, matching Geometry.expand.
     shape = (
         axis_mean[:, None, None] * axis_mean[None, :, None]
         * axis_mean[None, None, :]

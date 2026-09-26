@@ -13,13 +13,18 @@ import openndm
 
 from conftest import ONE_GROUP
 
-#: Plain fuel, and the same fuel with a rod in it.
 FUEL, RODDED = 0, 1
-#: Number of axial planes in the small test core.
+"""Composition indices of plain fuel and of the same fuel with a rod in it."""
+
 NPLANES = 10
-#: Axial mesh of the small test core: ten 10 cm planes, so a plane boundary
-#: falls on every multiple of 10 cm.
+"""Number of axial planes in the small test core."""
+
 DZ = [10.0] * NPLANES
+"""Axial mesh of the small test core, cm.
+
+Ten 10 cm planes, so a plane boundary falls on every multiple of 10 cm.
+"""
+
 HEIGHT = sum(DZ)
 
 
@@ -157,8 +162,9 @@ def test_a_composition_with_no_rodded_counterpart_is_an_error():
     """Silence here would look exactly like a correctly withdrawn bank."""
     columns = np.zeros((3, 3), dtype=bool)
     columns[1, 1] = True
+    reflector_the_bank_cannot_substitute = 7
     core = np.full((len(DZ), 3, 3), FUEL, dtype=int)
-    core[-1] = 7  # a reflector the bank travels through but cannot substitute
+    core[-1] = reflector_the_bank_cannot_substitute
     geometry = openndm.Geometry.from_lattice(core, pitch=20.0, dz=DZ)
     bank = openndm.ControlRodBank("A", columns=columns, rodded={FUEL: RODDED})
     rods = openndm.ControlRods(geometry, [bank])
@@ -226,7 +232,6 @@ def test_column_mask_must_match_the_lattice():
         openndm.ControlRods(geometry, [bank])
 
 
-# --------------------------------------------- the shipped deck as an oracle
 def _iaea3d():
     """Import the IAEA-3D deck under a unique module name."""
     benchmarks = Path(__file__).resolve().parents[2] / "benchmarks"
@@ -300,7 +305,6 @@ def test_bank_reproduces_the_iaea3d_deck_node_for_node():
     assert from_bank == pytest.approx(from_deck, abs=1.0e-12)
 
 
-# ------------------------------------------------------------------ cusping
 CUSP = 2
 
 
@@ -379,11 +383,10 @@ def test_cusping_leaves_boundary_positions_alone(tight):
     cusp_geometry, cusp_library_, cusp_rods = cusp_core()
     cusp_model = openndm.Model(cusp_geometry, cusp_library_, tight)
 
-    # The uncusped bank on the same core, for the reference value.
     columns = np.zeros((3, 3), dtype=bool)
     columns[1, 1] = True
-    bare = openndm.ControlRodBank("A", columns=columns, rodded={FUEL: RODDED})
-    plain_rods = openndm.ControlRods(plain_geometry, [bare])
+    uncusped = openndm.ControlRodBank("A", columns=columns, rodded={FUEL: RODDED})
+    plain_rods = openndm.ControlRods(plain_geometry, [uncusped])
 
     for tip in (20.0, 30.0, 40.0):
         plain_rods.insert(A=tip)
@@ -475,10 +478,11 @@ def test_cusping_needs_the_library():
 
 
 def test_cusp_must_cover_every_composition_the_bank_reaches():
+    """The banked column holds a second composition, which needs its own slot."""
     columns = np.zeros((3, 3), dtype=bool)
     columns[1, 1] = True
     core = np.full((len(DZ), 3, 3), FUEL, dtype=int)
-    core[-1] = RODDED  # a second composition in the banked column
+    core[-1] = RODDED
     geometry = openndm.Geometry.from_lattice(core, pitch=20.0, dz=DZ)
     bank = openndm.ControlRodBank(
         "A",
@@ -501,7 +505,6 @@ def test_cusp_slots_must_be_distinct():
         )
 
 
-# -------------------------------------------------------------- worth curves
 def test_worth_curve_matches_two_direct_solves(tight):
     """The curve must agree with worth computed the long way round."""
     geometry, library, rods = cusp_core()
@@ -641,7 +644,6 @@ def test_worth_curve_validates_its_arguments(tight):
         rods.worth_curve(model, positions=[{"A": 0.0}], reference=0.0)
 
 
-# ------------------------------------------------------- reweighting by hand
 def test_reweight_reaches_what_converge_cusping_reaches(tight):
     """Driving the sweep by hand converges on the same mixture.
 
