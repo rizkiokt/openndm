@@ -19,14 +19,12 @@ to 3 (A1, C1, C2, as "Reference").
 
 from __future__ import annotations
 
-#: Delayed neutron fraction the reference states, pcm.
 BETA_PCM = 760.0
+"""Delayed neutron fraction the reference states, pcm."""
 
-#: Radial and axial nodes per assembly in the reference calculation.
 REFERENCE_MESH = (4, 16)
+"""Radial and axial nodes per assembly in the reference calculation."""
 
-#: Table 3.1, initial steady state. Power is relative: 1e-6 is HZP, 1.0 is FP.
-#: Temperatures in C, rod worth in pcm.
 INITIAL_STEADY_STATE = {
     "A1": {"boron_ppm": 567.7, "power": 1.0e-6, "f_xy": 1.909, "f_q": 2.874,
            "t_doppler": 286.0, "t_centre": 286.0, "rod_worth_pcm": 821.8},
@@ -41,8 +39,12 @@ INITIAL_STEADY_STATE = {
     "C2": {"boron_ppm": 1160.6, "power": 1.0, "f_xy": 1.198, "f_q": 2.221,
            "t_doppler": 546.1, "t_centre": 1671.9, "rod_worth_pcm": 78.1},
 }
+"""Table 3.1, initial steady state.
 
-#: Table 3.1, final steady state at 5 s. Power relative, temperature in C.
+Power is relative: 1e-6 is hot zero power, 1.0 is full power. Temperatures in
+C, rod worth in pcm.
+"""
+
 FINAL_STEADY_STATE = {
     "A1": {"power": 0.263, "t_doppler": 344.1},
     "A2": {"power": 1.036, "t_doppler": 556.1},
@@ -51,3 +53,4 @@ FINAL_STEADY_STATE = {
     "C1": {"power": 0.206, "t_doppler": 331.9},
     "C2": {"power": 1.032, "t_doppler": 554.7},
 }
+"""Table 3.1, final steady state at 5 s. Power relative, temperature in C."""
