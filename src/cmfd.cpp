@@ -19,7 +19,7 @@ namespace {
 //! The cap it produces is derived in docs/theory.md section 4.1.
 constexpr double kShiftMargin = 0.25;
 
-}  // namespace
+}
 
 CmfdSystem::CmfdSystem(const Geometry& geom, const XSLibrary& xs)
     : geom_(geom),
@@ -758,4 +758,4 @@ void CmfdSystem::apply_operator(
   }
 }
 
-}  // namespace openndm
+}

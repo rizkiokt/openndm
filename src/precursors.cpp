@@ -14,7 +14,7 @@ namespace {
 //! the truncated series is good to well under one ulp of the result.
 constexpr double kSmall = 1.0e-4;
 
-}  // namespace
+}
 
 double decay_integral_0(double lambda, double dt)
 {
@@ -149,4 +149,4 @@ std::vector<double> PrecursorState::decay_rate() const
   return out;
 }
 
-}  // namespace openndm
+}

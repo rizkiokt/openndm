@@ -33,7 +33,7 @@ double chunked_sum(const double* a, const double* b, std::size_t n)
   return total;
 }
 
-}  // namespace
+}
 
 double deterministic_dot(
     const std::vector<double>& x, const std::vector<double>& y)
@@ -284,4 +284,4 @@ LinearResult bicgstab(const GroupMatrix& A, const std::vector<double>& b,
   return result;
 }
 
-}  // namespace openndm
+}

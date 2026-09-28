@@ -33,4 +33,4 @@ std::unique_ptr<Kernel> make_fdm_kernel()
   return std::make_unique<FdmKernel>();
 }
 
-}  // namespace openndm
+}

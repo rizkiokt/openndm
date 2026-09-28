@@ -18,8 +18,7 @@
 //! \f$\lambda \Delta t = 0\f$, where the closed forms lose all their
 //! significant digits to cancellation.
 
-#ifndef OPENNDM_PRECURSORS_H
-#define OPENNDM_PRECURSORS_H
+#pragma once
 
 #include <vector>
 
@@ -93,6 +92,4 @@ double decay_integral_0(double lambda, double dt);
 //! \f$I_1 = (\Delta t - I_0)/\lambda\f$, accurate as \f$\lambda t \to 0\f$.
 double decay_integral_1(double lambda, double dt);
 
-}  // namespace openndm
-
-#endif  // OPENNDM_PRECURSORS_H
+}

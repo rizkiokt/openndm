@@ -293,4 +293,4 @@ XSLibrary XSLibrary::interpolate(const std::vector<double>& state) const
   return out;
 }
 
-}  // namespace openndm
+}

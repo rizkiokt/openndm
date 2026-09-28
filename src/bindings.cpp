@@ -42,7 +42,7 @@ std::vector<double> to_vector(
   return std::vector<double>(a.data(), a.data() + a.size());
 }
 
-}  // namespace
+}
 
 PYBIND11_MODULE(_core, m)
 {

@@ -290,11 +290,11 @@ private:
   }
 };
 
-}  // namespace
+}
 
 std::unique_ptr<Kernel> make_sanm_kernel()
 {
   return std::make_unique<SanmKernel>();
 }
 
-}  // namespace openndm
+}

@@ -1,8 +1,7 @@
 //! \file settings.h
 //! Run-time solver configuration (FR-SOL-6, FR-SOL-8).
 
-#ifndef OPENNDM_SETTINGS_H
-#define OPENNDM_SETTINGS_H
+#pragma once
 
 #include "openndm/constants.h"
 
@@ -111,6 +110,4 @@ struct IterationRecord {
   int inner_iterations = 0;
 };
 
-}  // namespace openndm
-
-#endif  // OPENNDM_SETTINGS_H
+}

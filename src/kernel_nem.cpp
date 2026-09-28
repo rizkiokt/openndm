@@ -329,11 +329,11 @@ public:
   }
 };
 
-}  // namespace
+}
 
 std::unique_ptr<Kernel> make_nem_kernel()
 {
   return std::make_unique<NemKernel>();
 }
 
-}  // namespace openndm
+}

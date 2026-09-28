@@ -7,8 +7,7 @@
 //! coupling coefficient \f$\hat{D}\f$ that makes the coarse-mesh system
 //! reproduce that current (FR-SOL-4).
 
-#ifndef OPENNDM_KERNEL_H
-#define OPENNDM_KERNEL_H
+#pragma once
 
 #include <memory>
 #include <vector>
@@ -137,6 +136,4 @@ public:
   static std::unique_ptr<Kernel> create(KernelType type);
 };
 
-}  // namespace openndm
-
-#endif  // OPENNDM_KERNEL_H
+}

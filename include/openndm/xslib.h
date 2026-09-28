@@ -1,8 +1,7 @@
 //! \file xslib.h
 //! Macroscopic cross section storage, validation and branch interpolation.
 
-#ifndef OPENNDM_XSLIB_H
-#define OPENNDM_XSLIB_H
+#pragma once
 
 #include <string>
 #include <vector>
@@ -139,6 +138,4 @@ private:
   bool finalized_ = false;
 };
 
-}  // namespace openndm
-
-#endif  // OPENNDM_XSLIB_H
+}

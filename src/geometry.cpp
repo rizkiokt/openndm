@@ -33,7 +33,7 @@ constexpr int hi_face(int axis)
   return 2 * axis + 1;
 }
 
-}  // namespace
+}
 
 Geometry Geometry::from_cartesian(const CartesianSpec& spec)
 {
@@ -234,4 +234,4 @@ int Geometry::n_compositions() const
   return m + 1;
 }
 
-}  // namespace openndm
+}

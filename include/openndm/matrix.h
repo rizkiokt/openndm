@@ -8,8 +8,7 @@
 //! summation so that results are bit-identical regardless of how many threads
 //! run (FR-OPT-4).
 
-#ifndef OPENNDM_MATRIX_H
-#define OPENNDM_MATRIX_H
+#pragma once
 
 #include <cstddef>
 #include <vector>
@@ -129,6 +128,4 @@ struct LinearResult {
 LinearResult bicgstab(const GroupMatrix& A, const std::vector<double>& b,
     std::vector<double>& x, const Ilu0& precond, double tol, int max_iter);
 
-}  // namespace openndm
-
-#endif  // OPENNDM_MATRIX_H
+}

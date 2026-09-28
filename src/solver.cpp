@@ -60,7 +60,7 @@ double node_wise_source_change(const std::vector<double>& source_new,
   return largest;
 }
 
-}  // namespace
+}
 
 Solver::Solver(const Geometry& geom, const XSLibrary& xs)
     : geom_(geom),
@@ -584,4 +584,4 @@ TransientRecord Solver::step(double dt, const Settings& settings)
   return record;
 }
 
-}  // namespace openndm
+}

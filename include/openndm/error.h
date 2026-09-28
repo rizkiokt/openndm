@@ -1,8 +1,7 @@
 //! \file error.h
 //! Typed error handling for the OpenNDM core (FR-OPT-6).
 
-#ifndef OPENNDM_ERROR_H
-#define OPENNDM_ERROR_H
+#pragma once
 
 #include <stdexcept>
 #include <string>
@@ -67,6 +66,4 @@ public:
   }
 };
 
-}  // namespace openndm
-
-#endif  // OPENNDM_ERROR_H
+}

@@ -6,8 +6,7 @@
 //! hexagonal geometry is therefore a new builder in this file plus a kernel
 //! that understands six lateral axes, and nothing else.
 
-#ifndef OPENNDM_GEOMETRY_H
-#define OPENNDM_GEOMETRY_H
+#pragma once
 
 #include <array>
 #include <string>
@@ -167,6 +166,4 @@ private:
   int n_axes_ = 3;
 };
 
-}  // namespace openndm
-
-#endif  // OPENNDM_GEOMETRY_H
+}

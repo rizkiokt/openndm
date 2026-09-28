@@ -11,14 +11,12 @@
 //! \f[ P_0 = 1, \quad P_1 = 2\xi, \quad P_2 = 6\xi^2 - \tfrac{1}{2}, \f]
 //! all of which except \f$P_0\f$ integrate to zero over the node.
 
-#ifndef OPENNDM_KERNEL_COMMON_H
-#define OPENNDM_KERNEL_COMMON_H
+#pragma once
 
 #include <array>
 #include <cmath>
 
-namespace openndm {
-namespace detail {
+namespace openndm::detail {
 
 //! Quadratic transverse leakage fit (FR-SOL-2).
 //!
@@ -166,7 +164,4 @@ inline bool solve_dense(double* a, double* b, int n)
   return true;
 }
 
-}  // namespace detail
-}  // namespace openndm
-
-#endif  // OPENNDM_KERNEL_COMMON_H
+}

@@ -1,8 +1,7 @@
 //! \file cmfd.h
 //! Coarse mesh finite difference system and the nonlinear two-node iteration.
 
-#ifndef OPENNDM_CMFD_H
-#define OPENNDM_CMFD_H
+#pragma once
 
 #include <memory>
 #include <vector>
@@ -205,6 +204,4 @@ private:
   mutable std::vector<double> prev_flux_;
 };
 
-}  // namespace openndm
-
-#endif  // OPENNDM_CMFD_H
+}

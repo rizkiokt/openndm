@@ -1,8 +1,7 @@
 //! \file constants.h
 //! Compile-time constants and small enumerations shared across the core.
 
-#ifndef OPENNDM_CONSTANTS_H
-#define OPENNDM_CONSTANTS_H
+#pragma once
 
 #include <cstddef>
 
@@ -41,6 +40,4 @@ enum class SolveMode {
   fixed_source  //!< fixed external source (FR-MODE-3)
 };
 
-}  // namespace openndm
-
-#endif  // OPENNDM_CONSTANTS_H
+}

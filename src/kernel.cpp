@@ -21,4 +21,4 @@ std::unique_ptr<Kernel> Kernel::create(KernelType type)
   throw InputError("unknown kernel type");
 }
 
-}  // namespace openndm
+}

@@ -16,6 +16,10 @@ BraceWrapping:
   AfterStruct: false
   BeforeElse: false
 ColumnLimit: 80
+# Google style re-adds a `// namespace x` comment on every closing brace.
+# CLAUDE.md allows no plain `//` in C++, so clang-format must leave the
+# closers alone.
+FixNamespaceComments: false
 PackConstructorInitializers: Never
 DerivePointerAlignment: false
 IndentWidth: 2
