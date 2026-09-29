@@ -24,9 +24,10 @@ struct Surface {
   double h_lo = 0.0;  //!< width of \c lo normal to this surface [cm]
   double h_hi = 0.0;  //!< width of \c hi normal to this surface [cm]
   int axis = 0;       //!< transverse-integration axis this surface belongs to
-  BoundaryType bc = BoundaryType::interior;
+  BoundaryType bc = BoundaryType::interior;  //!< condition carried here
   int albedo_id = -1;  //!< row of Geometry::albedos() when \c bc is \c albedo
 
+  //! True when only one side carries a node.
   bool is_boundary() const { return bc != BoundaryType::interior; }
 
   //! Index of the single adjacent node on a boundary surface.
@@ -100,10 +101,15 @@ struct CartesianSpec {
   //! symmetry conditions, while a face looking at an out-of-core position is a
   //! real outer boundary and must not inherit a reflective symmetry condition.
   BoundaryType inactive_bc = BoundaryType::vacuum;
+  //! Albedo per group applied with \c inactive_bc, read only when that is
+  //! \c albedo.
   std::vector<double> inactive_albedo;
 
+  //! Lattice positions along x.
   int nx() const { return static_cast<int>(dx.size()); }
+  //! Lattice positions along y.
   int ny() const { return static_cast<int>(dy.size()); }
+  //! Lattice positions along z.
   int nz() const { return static_cast<int>(dz.size()); }
 };
 
@@ -122,17 +128,23 @@ public:
   //!         node width, or a fully inactive core map.
   static Geometry from_cartesian(const CartesianSpec& spec);
 
+  //! Active nodes; inactive lattice positions are not among them.
   int n_nodes() const { return static_cast<int>(nodes_.size()); }
+  //! Interior and boundary surfaces together.
   int n_surfaces() const { return static_cast<int>(surfaces_.size()); }
+  //! Transverse-integration axes, 3 for a Cartesian geometry.
   int n_axes() const { return n_axes_; }
 
+  //! Every node, indexed by the node index the surfaces refer to.
   const std::vector<Node>& nodes() const { return nodes_; }
+  //! Every surface, interior and boundary alike.
   const std::vector<Surface>& surfaces() const { return surfaces_; }
 
   //! Albedo table, one row per distinct boundary spec, each of length \c
   //! n_groups.
   const std::vector<std::vector<double>>& albedos() const { return albedos_; }
 
+  //! Volume of every active node summed [cm^3].
   double total_volume() const;
 
   //! Shape of the originating structured grid, for reshaping results back to

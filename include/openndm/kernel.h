@@ -22,12 +22,12 @@ struct Settings;
 
 //! Everything a two-node problem needs, gathered by CmfdSystem.
 struct TwoNodeProblem {
-  int surface = 0;
-  int node_lo = 0;
-  int node_hi = 0;
-  int axis = 0;
-  double h_lo = 0.0;
-  double h_hi = 0.0;
+  int surface = 0;    //!< surface the two nodes share
+  int node_lo = 0;    //!< node on the negative side of the normal
+  int node_hi = 0;    //!< node on the positive side of the normal
+  int axis = 0;       //!< axis the normal runs along
+  double h_lo = 0.0;  //!< width of \c node_lo along the axis [cm]
+  double h_hi = 0.0;  //!< width of \c node_hi along the axis [cm]
   //! Node-average scalar flux from the coarse-mesh solution, [node][group].
   const double* flux_lo = nullptr;
   const double* flux_hi = nullptr;
@@ -55,9 +55,11 @@ struct TwoNodeProblem {
   //! group; used by kernels that need outer-face partial currents.
   const double* cmfd_current_lo = nullptr;  //!< at the outer face of node_lo
   const double* cmfd_current_hi = nullptr;  //!< at the outer face of node_hi
+  //! Coarse-mesh scalar flux at the nodes' outer faces, per group, for the
+  //! same kernels.
   const double* cmfd_surface_flux_lo = nullptr;
   const double* cmfd_surface_flux_hi = nullptr;
-  double k_eff = 1.0;
+  double k_eff = 1.0;  //!< eigenvalue the fission source is divided by
 };
 
 //! Everything a one-node boundary problem needs, gathered by CmfdSystem.
@@ -69,10 +71,10 @@ struct TwoNodeProblem {
 //! node shape, and the current that shape produces at the face is what the
 //! nonlinear iteration matches (FR-SOL-4). See \c docs/theory.md 3.6.
 struct OneNodeProblem {
-  int surface = 0;
-  int node = 0;
-  int axis = 0;
-  double h = 0.0;
+  int surface = 0;  //!< the boundary surface
+  int node = 0;     //!< the single node behind it
+  int axis = 0;     //!< axis the normal runs along
+  double h = 0.0;   //!< width of \c node along the axis [cm]
   //! +1 when the boundary is the node's high face along the axis, -1 when it
   //! is the low one. Currents stay positive along the axis, as everywhere
   //! else, so this is what turns one into an outward current.
@@ -90,18 +92,21 @@ struct OneNodeProblem {
   //! node repeated on whichever side the boundary is.
   const double* tl = nullptr;   //!< 3*G
   const double* src = nullptr;  //!< 3*G, null for an eigenvalue solve
+  //! Width of the interior neighbour along the axis, for the leakage fit
+  //! [cm]. The one on the side the boundary is on stays zero.
   double h_prev = 0.0;
   double h_next = 0.0;
   //! Net current from the coarse-mesh solution at the node's *other* face,
   //! which the caller guarantees is an interior surface. Positive along the
   //! axis. NEM needs it to close its second coefficient; SANM does not.
   const double* cmfd_current_interior = nullptr;
-  double k_eff = 1.0;
+  double k_eff = 1.0;  //!< eigenvalue the fission source is divided by
 };
 
 //! Interface implemented by FDM, NEM and SANM.
 class Kernel {
 public:
+  //! Virtual, so a kernel can be owned through this interface.
   virtual ~Kernel() = default;
 
   //! Human readable name, written into the statepoint metadata.
@@ -133,6 +138,7 @@ public:
   {
   }
 
+  //! Construct the kernel \c type names (FR-SOL-8).
   static std::unique_ptr<Kernel> create(KernelType type);
 };
 

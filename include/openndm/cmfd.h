@@ -21,9 +21,15 @@ namespace openndm {
 //! solves so that a perturbed re-solve can warm start (FR-OPT-3).
 class CmfdSystem {
 public:
+  //! Both references must outlive the system, which re-reads them on every
+  //! assembly rather than copying them.
+  //!
+  //! \throws InputError if the library is not finalized.
   CmfdSystem(const Geometry& geom, const XSLibrary& xs);
 
+  //! Nodes of the geometry, i.e. rows of one within-group system.
   int n_nodes() const { return geom_.n_nodes(); }
+  //! Energy groups, i.e. within-group systems assembled.
   int n_groups() const { return n_groups_; }
 
   //! Recompute the finite difference coupling coefficients and reset Dhat to
@@ -126,6 +132,7 @@ public:
 
   //! Transpose the operator in place for the adjoint solve (FR-MODE-2).
   void set_adjoint(bool adjoint);
+  //! True while the operator is transposed.
   bool adjoint() const { return adjoint_; }
 
   //! Net current per surface per group from the current flux, evaluated with
@@ -137,11 +144,17 @@ public:
   void compute_currents(
       const std::vector<double>& flux, std::vector<double>& current) const;
 
+  //! Finite difference coupling coefficients, surface*G + g.
   const std::vector<double>& dtilde() const { return dtilde_; }
+  //! Nonlinear coupling corrections, surface*G + g.
   const std::vector<double>& dhat() const { return dhat_; }
+  //! Mutable, so a caller can restore the corrections a previous solve
+  //! converged.
   std::vector<double>& dhat() { return dhat_; }
 
+  //! The geometry the system was built on.
   const Geometry& geometry() const { return geom_; }
+  //! The library the cached cross sections are read from.
   const XSLibrary& library() const { return xs_; }
 
 private:

@@ -30,6 +30,7 @@ double deterministic_norm(const std::vector<double>& x);
 //! CSR sparsity pattern of the node adjacency graph, shared across groups.
 class SparsePattern {
 public:
+  //! Empty pattern, holding no rows.
   SparsePattern() = default;
 
   //! Columns are stored in ascending order within a row, which keeps the
@@ -40,9 +41,13 @@ public:
   //! \param neighbours neighbour node index list per node (diagonal excluded)
   SparsePattern(int n_rows, const std::vector<std::vector<int>>& neighbours);
 
+  //! Number of rows, i.e. of nodes.
   int n_rows() const { return n_rows_; }
+  //! Number of stored entries, diagonal included.
   int nnz() const { return static_cast<int>(colind_.size()); }
+  //! Start of each row in \c colind(), with a trailing end index.
   const std::vector<int>& rowptr() const { return rowptr_; }
+  //! Column of every stored entry, ascending within a row.
   const std::vector<int>& colind() const { return colind_; }
   //! Position in \c colind_ of the diagonal entry of each row.
   const std::vector<int>& diag_pos() const { return diag_pos_; }
@@ -57,13 +62,21 @@ private:
 //! Values of one within-group operator laid out on a shared SparsePattern.
 class GroupMatrix {
 public:
+  //! Empty matrix, unusable until one is assigned to it.
   GroupMatrix() = default;
+
+  //! Zeroed values on \c pattern, which must outlive the matrix.
   explicit GroupMatrix(const SparsePattern* pattern);
 
+  //! Reset every value to zero, keeping the pattern.
   void zero();
+
+  //! The shared pattern the values are laid out on.
   const SparsePattern& pattern() const { return *pattern_; }
 
+  //! Stored values, in pattern order.
   std::vector<double>& values() { return values_; }
+  //! Stored values, in pattern order.
   const std::vector<double>& values() const { return values_; }
 
   //! y = A * x
@@ -71,7 +84,9 @@ public:
 
   //! Accumulate \c v into entry (row, col). The entry must exist.
   void add(int row, int col, double v);
+  //! Accumulate \c v into the diagonal entry of \c row.
   void add_diagonal(int row, double v);
+  //! Diagonal entry of \c row.
   double diagonal(int row) const;
 
 private:
@@ -90,6 +105,7 @@ private:
 //! reports through non-convergence rather than through a crash.
 class Ilu0 {
 public:
+  //! Unfactorised, and so invalid until factor() runs.
   Ilu0() = default;
 
   //! Factorise \c A in the IKJ order with no fill-in.
@@ -102,6 +118,7 @@ public:
   //! the unit lower triangle followed by backward substitution.
   void apply(const std::vector<double>& b, std::vector<double>& x) const;
 
+  //! True once factor() has run without meeting a zero pivot.
   bool valid() const { return valid_; }
 
 private:
@@ -113,9 +130,9 @@ private:
 
 //! Convergence report from an inner linear solve.
 struct LinearResult {
-  int iterations = 0;
-  double residual = 0.0;
-  bool converged = false;
+  int iterations = 0;      //!< BiCGSTAB iterations taken
+  double residual = 0.0;   //!< final relative residual
+  bool converged = false;  //!< false on a breakdown or an exhausted budget
 };
 
 //! Preconditioned BiCGSTAB (FR-SOL-5).

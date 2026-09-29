@@ -12,18 +12,22 @@ namespace openndm {
 //! Every field is run-time settable; no kernel choice is a compile-time
 //! decision (FR-SOL-8).
 struct Settings {
-  KernelType kernel = KernelType::sanm;
-  SolveMode mode = SolveMode::forward;
+  KernelType kernel = KernelType::sanm;  //!< nodal kernel to run (FR-SOL-8)
+  SolveMode mode = SolveMode::forward;   //!< what to compute (FR-MODE)
 
-  //! Outer (eigenvalue) iteration control (FR-SOL-6).
+  //! Change in k_eff between outer iterations below which the solve has
+  //! converged, tested together with \c fission_source_tolerance (FR-SOL-6).
   double k_tolerance = 1.0e-9;
+  //! Largest node-wise relative change in the normalised fission source
+  //! below which the solve has converged.
   double fission_source_tolerance = 1.0e-8;
-  int max_outer = 500;
-  int min_outer = 2;
+  int max_outer = 500;  //!< outer iteration cap
+  int min_outer = 2;    //!< outers run before either tolerance is tested
 
-  //! Inner (within-group) linear solve control.
+  //! Residual relative to the right hand side at which one within-group
+  //! BiCGSTAB solve stops.
   double inner_tolerance = 1.0e-5;
-  int max_inner = 50;
+  int max_inner = 50;  //!< BiCGSTAB iteration cap per group solve
   //! Maximum Gauss-Seidel sweeps over energy groups per outer iteration.
   //!
   //! One sweep is exact for a purely down-scattering problem with no Wielandt
@@ -49,7 +53,7 @@ struct Settings {
   //! Nonlinear two-node update cadence: run the nodal kernel every
   //! \c nodal_update_interval outer iterations once past \c nodal_start.
   int nodal_update_interval = 1;
-  int nodal_start = 2;
+  int nodal_start = 2;  //!< first outer iteration the kernel runs at
   //! Gauss-Seidel sweeps over groups inside one two-node problem.
   int two_node_sweeps = 2;
   //! Clip on the magnitude of Dhat relative to Dtilde. Large corrected
@@ -103,11 +107,11 @@ struct Settings {
 
 //! Iteration history entry, retained for the statepoint and for plotting.
 struct IterationRecord {
-  int outer = 0;
-  double k_eff = 0.0;
-  double k_change = 0.0;
-  double source_change = 0.0;
-  int inner_iterations = 0;
+  int outer = 0;               //!< 1 for the first outer iteration
+  double k_eff = 0.0;          //!< eigenvalue after this iteration
+  double k_change = 0.0;       //!< signed change in k_eff since the last one
+  double source_change = 0.0;  //!< largest node-wise relative source change
+  int inner_iterations = 0;    //!< BiCGSTAB iterations summed over the groups
 };
 
 }

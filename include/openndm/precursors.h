@@ -37,10 +37,14 @@ public:
   //!         decay constant is non-positive.
   PrecursorState(int n_nodes, const DelayedData& delayed);
 
+  //! Number of nodes the state covers.
   int n_nodes() const { return n_nodes_; }
+  //! Number of delayed neutron precursor groups.
   int n_precursors() const { return n_precursors_; }
 
+  //! Every concentration, flattened as \c node*n_precursors + d.
   const std::vector<double>& concentrations() const { return c_; }
+  //! Every concentration, flattened as \c node*n_precursors + d.
   std::vector<double>& concentrations() { return c_; }
 
   //! Concentration of precursor group \c d in \c node.

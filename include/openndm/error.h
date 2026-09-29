@@ -49,7 +49,9 @@ public:
   {
   }
 
+  //! Iterations the solve had taken when it gave up.
   int iterations() const { return iterations_; }
+  //! Residual it had reached, in the measure the solve converges on.
   double residual() const { return residual_; }
 
 private:

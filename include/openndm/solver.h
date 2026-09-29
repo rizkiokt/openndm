@@ -17,31 +17,34 @@ namespace openndm {
 
 //! Everything a completed solve produces (FR-OUT-3).
 struct Result {
-  double k_eff = 0.0;
+  double k_eff = 0.0;  //!< zero from a fixed-source solve, which has none
   //! Scalar flux, node*G + g.
   std::vector<double> flux;
-  //! Node power [W], normalised so that the total equals Settings power when
-  //! set, otherwise to a core average of 1.
+  //! Relative node power, normalised to a mean of one over the nodes that
+  //! produce power, which is the convention peaking factors are quoted
+  //! against. Dimensionless.
   std::vector<double> power;
+  //! One entry per outer iteration taken, in order.
   std::vector<IterationRecord> history;
-  bool converged = false;
-  int outer_iterations = 0;
-  double runtime_seconds = 0.0;
-  std::string kernel;
+  bool converged = false;        //!< false when the outer budget ran out
+  int outer_iterations = 0;      //!< outers taken
+  double runtime_seconds = 0.0;  //!< wall clock time of the solve [s]
+  std::string kernel;            //!< Kernel::name() of the kernel that ran
 };
 
 //! One completed time step (FR-KIN-6).
 struct TransientRecord {
-  double time = 0.0;
-  double dt = 0.0;
+  double time = 0.0;  //!< time at the end of the step [s]
+  double dt = 0.0;    //!< length of the step [s]
   //! Total fission power, in the units of the library's kappa-fission. Not
   //! renormalised, because the whole point of a transient is that it moves.
   double total_power = 0.0;
+  //! Largest single node power, in the same units as \c total_power.
   double peak_power = 0.0;
   //! Iterations over the implicit fission source within this step.
   int iterations = 0;
-  int inner_iterations = 0;
-  bool converged = false;
+  int inner_iterations = 0;  //!< BiCGSTAB iterations summed over the step
+  bool converged = false;    //!< false when the step budget ran out
 };
 
 //! Drives the nonlinear nodal iteration to a converged eigenvalue.
@@ -50,6 +53,10 @@ struct TransientRecord {
 //! solve() again to warm start from the previous solution (FR-OPT-3).
 class Solver {
 public:
+  //! Both references must outlive the solver, which reads them on every
+  //! solve rather than copying them.
+  //!
+  //! \throws InputError if the library is not finalized.
   Solver(const Geometry& geom, const XSLibrary& xs);
   ~Solver();
 
@@ -103,7 +110,9 @@ public:
 
   //! Precursor concentrations, node*n_precursors + d.
   const std::vector<double>& precursors() const;
+  //! Precursor groups of the transient in progress, zero before one starts.
   int n_precursors() const;
+  //! Time reached by the transient in progress [s].
   double transient_time() const { return time_; }
 
   //! Discard the retained flux and coupling coefficients so the next solve
@@ -137,6 +146,7 @@ public:
 
   //! Access the retained solution, for warm starting or for inspection.
   const std::vector<double>& flux() const { return flux_; }
+  //! Eigenvalue of the retained solution.
   double k_eff() const { return k_eff_; }
 
   //! Net current on every surface for the retained flux, surface*G + g.
@@ -150,6 +160,8 @@ public:
   //! Number of surfaces, so a binding can shape the current array.
   int geometry_surfaces() const { return geom_.n_surfaces(); }
 
+  //! The coarse-mesh system, for a caller that needs the coupling
+  //! coefficients or the currents directly.
   CmfdSystem& system() { return cmfd_; }
 
 private:
