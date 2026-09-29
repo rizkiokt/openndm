@@ -6,6 +6,8 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
 ### Documentation
 
 - The theory manual's equations are written in LaTeX, so Read the Docs renders
@@ -946,6 +948,7 @@ Recorded with rationale in `docs/architecture.md`. The substantive ones:
 pybind11 instead of a ctypes-called C API; a purpose-built 7-point sparse
 structure instead of Eigen; numpy views through pybind11 instead of xtensor.
 
-[Unreleased]: https://github.com/rizkiokt/openndm/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/rizkiokt/openndm/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/rizkiokt/openndm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rizkiokt/openndm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rizkiokt/openndm/releases/tag/v0.1.0

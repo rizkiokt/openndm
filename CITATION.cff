@@ -10,8 +10,8 @@ type: software
 license: MIT
 repository-code: "https://github.com/rizkiokt/openndm"
 url: "https://openndm.readthedocs.io"
-version: 0.1.0
-date-released: "2026-09-16"
+version: 0.3.0
+date-released: "2026-09-29"
 keywords:
   - nuclear engineering
   - reactor physics
