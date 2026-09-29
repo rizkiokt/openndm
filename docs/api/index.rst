@@ -1,9 +1,11 @@
 API reference
 =============
 
-The Python API is the primary interface. Everything below is importable from
-the top-level ``openndm`` namespace except :mod:`openndm.gc`, which is the
-OpenMC-dependent group constant generation path and is imported explicitly.
+The Python API is the primary interface. The classes and functions a
+calculation needs are importable from the top-level ``openndm`` namespace.
+Module constants, :mod:`openndm.plots` and :func:`openndm.water.external_backend`
+are imported from their modules, and so is :mod:`openndm.gc`, the
+OpenMC-dependent group constant generation path.
 
 .. toctree::
    :maxdepth: 2

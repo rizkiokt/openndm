@@ -7,7 +7,10 @@ Legend: **done** — implemented and covered by a test. **partial** —
 implemented with a stated limitation. **not started** — the API may name it,
 but nothing behind it works.
 
-Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
+Version 0.2.0 plus unreleased work on `main`. Roughly: M0 to M3 of the
+specification's phase plan, with parts of M5 (steady thermal-hydraulic
+feedback and a coupled boron search), M6 (transients, LMW and the NEACRP
+static cases) and M8 (VTK export).
 
 ---
 
@@ -29,7 +32,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 |---|---|---|
 | FR-XS-1 | done | Any `G ≥ 1`, full `G×G` scattering including upscattering. |
 | FR-XS-2 | done | D or transport, absorption, νΣf, κΣf, χ, scattering matrix, 1/v. |
-| FR-XS-3 | done | Up to 8 precursor groups with β, λ and delayed χ. Stored and round-tripped; nothing consumes them yet, because FR-KIN is not implemented. |
+| FR-XS-3 | done | Up to 8 precursor groups with β, λ and delayed χ. Stored, round-tripped and consumed by `Transient`. |
 | FR-XS-4 | done | Per node face per group, defaulting to 1.0. Verified against the equivalence theorem: with flux-volume homogenised cross sections and the factors implied by a reference solution, the coarse solve reproduces the reference eigenvalue and node-average fluxes exactly, for any homogenised diffusion coefficient. On the test problem the factors are worth 3000 pcm. |
 | FR-XS-5 | partial | Arbitrary branch axes with arbitrary names, so fuel temperature, moderator density and temperature, boron and rod state all work. Burnup as a *history* axis, distinct from an instantaneous axis, is not modelled. |
 | FR-XS-6 | done | Multilinear interpolation; `clamp`, `linear` and `error` extrapolation. |
@@ -61,9 +64,9 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | ID | State | Notes |
 |---|---|---|
 | FR-SOL-1 | done | Finite difference, also the CMFD base. |
-| FR-SOL-2 | done | NEM, quartic expansion, quadratic transverse leakage. |
+| FR-SOL-2 | done | NEM, quartic expansion, quadratic transverse leakage, dropping to a linear fit at a boundary node on a non-reflective face. |
 | FR-SOL-3 | done | SANM, the default. |
-| FR-SOL-4 | done | Nonlinear two-node iteration on interior surfaces and a one-node problem on boundary faces, so every surface carries a corrected coupling. The boundary update is under-relaxed by `Settings.boundary_relaxation`, without which a group whose boundary flux is small next to its within-node source drives the update into a two-cycle. A node spanning the core along an axis keeps the finite difference coupling on both of its faces there, having no interior surface to take information from. |
+| FR-SOL-4 | done | Nonlinear two-node iteration on interior surfaces and a one-node problem on boundary faces, so every surface carries a corrected coupling. The boundary update is under-relaxed by `Settings.boundary_relaxation`, without which a group whose boundary flux is small next to its within-node source drives the update into a two-cycle, and an update outside `dhat_limit` is discarded rather than clamped. A node spanning the core along an axis keeps the finite difference coupling on both of its faces there, having no interior surface to take information from. |
 | FR-SOL-5 | done | Power iteration with a capped Wielandt shift; BiCGSTAB with ILU0. |
 | FR-SOL-6 | done | Criteria on k, node-wise fission source and iteration count; `ConvergenceError` carries the count and the residual. |
 | FR-SOL-7 | partial | OpenMP over nodes and surfaces in the two-node update, the matrix-vector product and the source assembly. The triangular solves in ILU0 are serial, and that is now measured: 31% of the runtime is effectively serial by Amdahl on eight threads, so parallel efficiency is 32% where NFR-PERF-7 asks for 60%. The eigenvalue is bit-identical on every thread count. See `benchmarks/performance/`. |
@@ -78,8 +81,8 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | FR-MODE-3 | done | Verified against exact algebra in a leakage-free box, and against a method of manufactured solutions for the full multi-group operator. |
 | FR-MODE-4 | done | Secant with a bisection fallback; the boron model is supplied by the caller. `evaluate_state=` replaces the single static solve with any callable returning a `Result`, which is what composes the search with FR-MODE-6: a coupled boron search evaluates each candidate against a converged thermal-hydraulic state rather than an isolated one. |
 | FR-MODE-5 | done | `ControlRodBank` and `ControlRods` give banks a radial map, a composition substitution and a position in steps on KOMODO's `%CROD` convention. Verified against `benchmarks/iaea3d`, which places the same rods by hand, node for node. `worth_curve` returns integral and differential worth over a sequence of static solves, for one bank or a prepared multi-bank sequence, warm starting between points; it agrees with worth computed from two direct solves to 0.01 pcm. A partially rodded node takes a homogenised mixture written into a spare composition: volume-weighted from `insert`, flux-weighted through `converge_cusping`, which iterates solve and re-weight. Against a fine-mesh reference the largest error falls 784 -> 259 -> 55 pcm across no cusping, volume and flux weighting, the last being the size of the coarse mesh's own discretisation error. |
-| FR-MODE-6 | done | `Model.solve_coupled`: solve, hand the power to a `ThermalSolver`, push what comes back into the cross sections, repeat until the node power stops moving. The feedback model stays in the caller's `apply_state`, the way `search_boron` keeps the boron model in the caller's hands. A library with no temperature dependence returns the uncoupled eigenvalue to 1e-12 in one iteration; on a test slab with a 5% Doppler swing the loop converges in 10 iterations and moves `k_eff` by -3590 pcm, monotonically in power. Every iteration calls `refresh()`, which clears the flux, so each solve starts cold -- the cost issue #82 records. Exercised against a published reference by `benchmarks/neacrp`: a boron search evaluated against a converged coupled state reaches the NEACRP critical boron within 1.7 ppm and the core-average Doppler temperature within 0.7 K on all three full power cases. |
-| FR-MODE-7 | not started | Needs FR-KIN. |
+| FR-MODE-6 | done | `Model.solve_coupled`: solve, hand the power to a `ThermalSolver`, push what comes back into the cross sections, repeat until the node power stops moving. The feedback model stays in the caller's `apply_state`, the way `search_boron` keeps the boron model in the caller's hands. A library with no temperature dependence returns the uncoupled eigenvalue to 1e-12 in one iteration; on a test slab with a 5% Doppler swing the loop converges in 10 iterations and moves `k_eff` by -3590 pcm, monotonically in power. Every iteration calls `refresh()`, which keeps the flux and `D̂`, so with `warm_start=True` each solve starts from the last. Exercised against a published reference by `benchmarks/neacrp`: a boron search evaluated against a converged coupled state reaches the NEACRP critical boron within 1.7 ppm and the core-average Doppler temperature within 0.7 K on all three full power cases. |
+| FR-MODE-7 | not started | Both halves exist, but the thermal-hydraulics is steady only: `PinConduction` has no heat capacity term and there is no transient coupling driver. |
 | FR-MODE-8 | done | `Model.sweep`, reusing geometry and library, warm starting by default. |
 
 ## 4.6 Kinetics (FR-KIN)
@@ -98,13 +101,14 @@ flat to 1 part in 1e10, prompt jump to 0.5%, asymptotic period against the
 inhour equation to 0.2%, and the observed order in time. See
 [`theory.md`](theory.md) §10 and §11.
 
-**FR-MODE-7** (transient with feedback) still needs FR-TH.
+**FR-MODE-7** (transient with feedback) still needs a time-dependent
+thermal-hydraulic model and a driver that couples it to `Transient`.
 
 ## 4.7 Thermal hydraulics (FR-TH)
 
 | ID | State | Notes |
 |---|---|---|
-| FR-TH-1 | done | `ChannelModel`, one closed channel per radial column of the core map, at constant mass flow and constant pressure. Enthalpy is integrated up the channel and inverted through the property backend for temperature and density. Against `ConstantWater` the answer is closed form and the tests match it to 1e-12 relative for uniform and for cosine power; against `IF97Water` the enthalpy rise carries the power put in to 1e-9, and the outlet is identical at 5, 10 and 40 axial nodes. `PinGeometry` holds the pin dimensions and derives the flow area, the heated and wetted perimeters and the hydraulic diameter. Cross-flow, a momentum equation and boiling are all absent, the last being FR-TH-5. |
+| FR-TH-1 | done | `ChannelModel`, one closed channel per radial column of the core map, at constant mass flow and constant pressure. Enthalpy is integrated up the channel and inverted through the property backend for temperature and density. Against `ConstantWater` the answer is closed form and the tests match it to 1e-12 relative for uniform and for cosine power; against `IF97Water` the enthalpy rise carries the power put in to 1e-9, and the outlet is identical at 5, 10 and 40 axial nodes. `PinGeometry` holds the pin dimensions and derives the flow area, the heated and wetted perimeters and the hydraulic diameter. `PinGeometry(guide_tube_radius=...)` gives guide tubes their own radius; with the NEACRP value the assembly flow area falls from 257.247 to 245.523 cm^2. Cross-flow and a momentum equation are absent; boiling is FR-TH-5. |
 | FR-TH-2 | done | `PinConduction`: a radial mesh across the pellet, then gap conductance, cladding conduction and the film in series. The conduction equation is integrated exactly across each ring, so a constant conductivity reproduces the analytic parabola at every ring boundary to 4e-16 relative for ring counts from 1 to 200, not merely at the ends. Volume-average pellet temperature is integrated on r^2, on which a constant-conductivity profile is linear, so that integral is exact too. Conductivities are injected as a constant or a callable. No correlation is *invented* here, but the four NEACRP-L-335 Section 2.7 relations are shipped as `neacrp_fuel_conductivity`, `neacrp_clad_conductivity` and their two heat capacities, cited and opt-in; a callable is evaluated at each ring's outer boundary, which is first order in the ring count -- measured 3.02 K, 1.49 K, 0.74 K at 25, 50 and 100 rings on a test correlation. |
 | FR-TH-3 | done | `IF97Water` implements IAPWS-IF97 region 1 (compressed liquid), region 2 (vapour, via the `vapour_` methods) and region 4 (the saturation line), from the coefficient tables of R7-97(2012). Verified against the release's own program-verification values, Tables 5, 15, 35 and 36 and the B23 point of Section 4, to the nine significant figures they are printed to, and cross-checked against the independent `iapws` package to 1e-9 over 60 pressures along the saturation line. `saturated_liquid_enthalpy` and its three companions give both sides of the line, which is what FR-TH-5 needs. **Region 3 is not implemented**, so the saturation line is reachable only up to 16.529 MPa, where it meets the B23 boundary; a PWR at 15.5 MPa is below that and a BWR at 7 MPa far below, but the near-critical fluid is out of reach. `ConstantWater` gives fixed properties, which is what makes a channel model analytically verifiable. |
 | FR-TH-4 | done | `PinConduction(doppler_weight=...)`, the weight on the pellet surface with the rest on the centreline. The default is the 0.7 surface, 0.3 centre convention the requirement names as an example, and it is a parameter rather than a constant in the source. At 0.5 it reproduces the volume average exactly, the parabola's average sitting midway between centre and surface. |
@@ -158,25 +162,25 @@ like it.
 |---|---|---|
 | NFR-PERF-1 | done | 181 ms against < 1 s, single-threaded. |
 | NFR-PERF-2 | done | 1.9 s against < 10 s, single-threaded, on a synthetic eight-group library. |
-| NFR-PERF-3 | not started | Needs the coupled steady state, which needs FR-TH and FR-MODE-7. |
+| NFR-PERF-3 | not started | `Model.solve_coupled` now exists, so the case is runnable, but it has not been measured. |
 | NFR-PERF-4 | not started | Names adaptive time stepping, which is not implemented. A fixed-step rod ejection can be timed but is not the stated case. |
 | NFR-PERF-5 | done | 70 MB peak resident against < 500 MB, interpreter included. |
 | NFR-PERF-6 | done | 104 ms against < 0.3 s. Passes on the clock; warm started since #82, see FR-OPT-3. |
 | NFR-PERF-7 | **failed** | 32% parallel efficiency on eight threads against a 60% target, on 16200 nodes at eight groups. 25% at 28800 nodes, so not a small-problem artefact. The serial ILU0 triangular solves are the cause; see FR-SOL-7. |
 | NFR-QA-1 | partial | Catch2 for C++ and pytest for Python. Coverage is collected in CI but the 80% line coverage gate is not enforced. |
-| NFR-QA-2 | done | Every deck runs in CI. The four static decks meet the 100 pcm acceptance criterion: IAEA-2D, IAEA-3D, BIBLIS-2D and the analytic cuboid, the last against exact algebra rather than a published reference. `benchmarks/lmw` is a transient whose specification states the scenario and not the answer, so it is tested for the conventions it depends on and the shape it produces, and its power history is reported rather than scored. |
+| NFR-QA-2 | partial | The static decks and LMW are solved by `pytest` in CI, and `benchmarks/analytic/run.py` runs there too. `benchmarks/neacrp` is checked in CI for its data only; its coupled cases are run by hand, and `benchmarks/performance` is not in CI. The four static decks meet the 100 pcm acceptance criterion: IAEA-2D, IAEA-3D, BIBLIS-2D and the analytic cuboid, the last against exact algebra rather than a published reference. `benchmarks/lmw` is a transient whose specification states the scenario and not the answer, so it is tested for the conventions it depends on and the shape it produces, and its power history is reported rather than scored. |
 | NFR-QA-3 | done | Linux gcc and clang, macOS clang, Python 3.10 to 3.13, all green. Windows is not built and is not documented as WSL-only. The OpenMC coupling job runs on manual dispatch only, because no stable public nuclear data URL exists to hard-code; see `tests/validation/README.md`. |
 | NFR-QA-4 | done | clang-format and ruff, both enforced. |
 | NFR-QA-5 | done | Semantic versioning and a changelog. |
 | NFR-QA-6 | done | A user guide, a theory manual, architecture notes, this status map, and four worked notebooks in `examples/`, all executed with their outputs committed. Built as a Sphinx site with an autodoc API reference; CI builds it with warnings as errors against the installed extension, so an API page that renders empty fails the build. |
-| NFR-QA-7 | partial | [`theory.md`](theory.md) writes out every equation the code currently solves, with the discretisation. It covers only what is implemented. |
+| NFR-QA-7 | partial | [`theory.md`](theory.md) writes out the neutronics, kinetics and water property equations with their discretisation. The channel energy balance, two-phase closure, pin conduction, Picard coupling, rod cusping and ADF rotation are documented in the user guide and the docstrings but not yet in the theory manual. |
 | V-1 | done | Analytic bare cuboid, and a reflected slab against its transcendental criticality condition. |
 | V-2 | done | Method of manufactured solutions for the multi-group operator, with the observed order of accuracy of each kernel. |
 | V-3 | done | Coarse nodal against refined finite difference; SANM and NEM agree to the last digit printed from four nodes per assembly onward. |
 | V-4 | done | Adjoint eigenvalue equality, and first-order perturbation theory against a direct re-solve, which tests the adjoint flux shape rather than only the operator transpose. |
 | NFR-EXT-1 | done | See FR-GEO-6. |
 | NFR-EXT-2 | done | Group count, precursor count and branch axes are all run-time. |
-| NFR-EXT-3 | partial | cp310-cp313 wheels build in CI on manylinux_2_28 and macOS arm64, with x86_64 macOS cross-compiled from the arm64 runner because GitHub is retiring the Intel one. The release pipeline is tag-triggered and uses trusted publishing, refusing to build unless the tag, `pyproject.toml` and `CMakeLists.txt` agree on the version, and there is a conda-forge recipe. No tag has been cut, so nothing is published yet. |
+| NFR-EXT-3 | partial | cp310-cp313 wheels build in CI on manylinux_2_28 and macOS arm64, with x86_64 macOS cross-compiled from the arm64 runner because GitHub is retiring the Intel one. The release pipeline is tag-triggered and uses trusted publishing, refusing to build unless the tag, `pyproject.toml` and `CMakeLists.txt` agree on the version, and there is a conda-forge recipe. v0.2.0 is tagged and published to PyPI as wheels and an sdist. The conda-forge recipe is not yet merged, so `conda install` does not work. |
 | NFR-EXT-4 | done | No dependency beyond a C++17 compiler; the build fetches nothing at configure time. |
 | NFR-EXT-5 | not started | The public `extern "C"` API. |
 
@@ -211,12 +215,14 @@ C-3 through C-6 are not written.
 ## What the benchmarks establish
 
 The nodal kernels are verified two ways that do not share machinery. Against
-the analytic bare cuboid, every kernel converges to the closed-form
-eigenvalue at second order. Against the IAEA-2D core map, SANM at one node
-per assembly lands 2.6 pcm from the mesh-converged eigenvalue, and SANM and
-NEM — which close their two-node problems by entirely different routes —
-agree with each other to 0.08 pcm. Both IAEA decks reproduce their published
-eigenvalues inside the 100 pcm acceptance criterion.
+the analytic bare cuboid, the nodal kernels converge to the closed-form
+eigenvalue at fourth order and FDM at second. Against the IAEA-2D core map,
+SANM and NEM — which close their two-node problems by entirely different
+routes — agree to the last digit printed from four nodes per assembly onward.
+SANM at one node per assembly lands 27.8 pcm from the mesh-converged
+eigenvalue, having lost a cancellation it used to benefit from (see below).
+IAEA-2D, IAEA-3D and BIBLIS-2D reproduce their published eigenvalues inside
+the 100 pcm acceptance criterion.
 
 The LMW deck establishes something different, because it has no reference to
 reproduce: it is the first problem to run rod banks, cusping, precursors and
@@ -224,6 +230,13 @@ theta integration together, and the first measurement of what the missing
 exponential transformation costs. Its mesh is converged — eight times the
 nodes moves the peak power by 0.06% — while its time step is not, and the
 gap between those two is the finding. See `benchmarks/README.md`.
+
+The NEACRP deck is the first comparison of a coupled calculation against a
+published reference. A boron search evaluated against a converged
+thermal-hydraulic state reaches the published critical boron within 3.5 ppm at
+hot zero power and 1.7 ppm at full power, and the core-average Doppler
+temperature within 0.7 K. The peaking factors are not yet compared; see
+`benchmarks/README.md`.
 
 ## What the boundary treatment costs and buys
 

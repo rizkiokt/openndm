@@ -15,7 +15,14 @@ from .settings import Settings
 from .thermal import PicardCoupling
 from .xslib import XSLibrary
 
-__all__ = ["BoronSearchResult", "CoupledResult", "Model", "Result"]
+__all__ = [
+    "BoronSearchResult",
+    "CoupledResult",
+    "Model",
+    "Result",
+    "Transient",
+    "TransientStep",
+]
 
 _SECANT_SEED_STEP_PPM = 100.0
 """Offset from the initial guess to the second point of the secant, in ppm."""

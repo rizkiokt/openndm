@@ -1,7 +1,7 @@
 # Contributing to OpenNDM
 
 OpenNDM was initiated and is developed by **Rizki Oktavian, PhD**
-(<rizkiokt@gmail.com>). Contributions are welcome — bug reports, benchmark
+(<rizkiokt@purdue.edu>). Contributions are welcome — bug reports, benchmark
 cases, kernels, documentation. If you are considering something substantial,
 open an issue or email first, so the design discussion happens before you have
 written the code rather than in review.

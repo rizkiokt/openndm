@@ -35,11 +35,12 @@ Installation
 
 .. code-block:: bash
 
-   conda install -c conda-forge openndm   # recommended
    pip install openndm
 
-The OpenMC coupling in :mod:`openndm.gc` needs OpenMC, which is only
-distributed through conda-forge. The solver itself imports and runs without it.
+Wheels are published for Linux and macOS, Python 3.10 to 3.13. The OpenMC
+coupling in :mod:`openndm.gc` needs OpenMC, which is distributed through
+conda-forge; install OpenNDM with pip into that conda environment. The solver
+itself imports and runs without OpenMC.
 
 .. toctree::
    :maxdepth: 2

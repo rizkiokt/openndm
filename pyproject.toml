@@ -9,8 +9,8 @@ description = "Open Nodal Diffusion Method: a nodal diffusion solver built on th
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
-authors = [{ name = "Rizki Oktavian", email = "rizkiokt@gmail.com" }]
-maintainers = [{ name = "Rizki Oktavian", email = "rizkiokt@gmail.com" }]
+authors = [{ name = "Rizki Oktavian", email = "rizkiokt@purdue.edu" }]
+maintainers = [{ name = "Rizki Oktavian", email = "rizkiokt@purdue.edu" }]
 keywords = ["nuclear", "reactor", "neutronics", "diffusion", "nodal", "openmc"]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",

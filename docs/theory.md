@@ -4,9 +4,9 @@ Every equation the code currently solves, with its discretisation written out
 (NFR-QA-7). This covers what is implemented; see
 [`status.md`](status.md) for what is not.
 
-Notation: `G` energy groups indexed `g`, nodes indexed `i`, surfaces indexed
-`s`. A surface has a normal direction and two sides, `lo` and `hi`, with the
-normal pointing from `lo` to `hi`.
+Notation: $G$ energy groups indexed $g$, nodes indexed $i$, surfaces indexed
+$s$. A surface has a normal direction and two sides, lo and hi, with the
+normal pointing from lo to hi.
 
 ---
 
@@ -14,18 +14,16 @@ normal pointing from `lo` to `hi`.
 
 Multi-group neutron diffusion at steady state:
 
-```
--∇·D_g ∇φ_g + Σ_r,g φ_g = Σ_{g'≠g} Σ_s,g'→g φ_g' + (χ_g / k) Σ_g' νΣ_f,g' φ_g'
-```
+$$ -\nabla\cdot D_g \nabla\phi_g + \Sigma_{r,g}\,\phi_g
+   = \sum_{g'\neq g} \Sigma_{s,g'\to g}\,\phi_{g'}
+   + \frac{\chi_g}{k} \sum_{g'} \nu\Sigma_{f,g'}\,\phi_{g'} $$
 
 with the removal cross section
 
-```
-Σ_r,g = Σ_a,g + Σ_{g'≠g} Σ_s,g→g'
-```
+$$ \Sigma_{r,g} = \Sigma_{a,g} + \sum_{g'\neq g} \Sigma_{s,g\to g'} $$
 
 Within-group scattering never leaves the node and so appears on neither side.
-`Σ_r` is cached at library finalisation.
+$\Sigma_r$ is cached at library finalisation.
 
 ---
 
@@ -33,79 +31,76 @@ Within-group scattering never leaves the node and so appears on neither side.
 
 ### 2.1 Node balance
 
-Integrating over node `i` gives, for each group,
+Integrating over node $i$ gives, for each group,
 
-```
-Σ_s∈faces(i)  ±J_s A_s  +  Σ_r,g V_i φ_{i,g}
-    = Σ_{g'≠g} Σ_s,g'→g V_i φ_{i,g'} + (χ_g / k) Σ_g' νΣ_f,g' V_i φ_{i,g'}
-```
+$$ \sum_{s\in\text{faces}(i)} \pm J_s A_s + \Sigma_{r,g} V_i\,\phi_{i,g}
+   = \sum_{g'\neq g} \Sigma_{s,g'\to g} V_i\,\phi_{i,g'}
+   + \frac{\chi_g}{k} \sum_{g'} \nu\Sigma_{f,g'} V_i\,\phi_{i,g'} $$
 
-with `+` on the node's high faces and `−` on its low faces, so the sum is the
+with $+$ on the node's high faces and $-$ on its low faces, so the sum is the
 net leakage out of the node.
 
 ### 2.2 Interface current
 
 The coarse-mesh current across an interior surface is written
 
-```
-J_s = −D̃_s (φ_hi − φ_lo) − D̂_s (φ_hi + φ_lo)
-```
+$$ J_s = -\tilde{D}_s\left(\phi_\text{hi} - \phi_\text{lo}\right)
+   - \hat{D}_s\left(\phi_\text{hi} + \phi_\text{lo}\right) $$
 
-`D̃` is the finite difference coupling and `D̂` is the correction the nodal
-kernel supplies. With `D̂ = 0` this is exactly finite differences.
+$\tilde{D}$ is the finite difference coupling and $\hat{D}$ is the correction
+the nodal kernel supplies. With $\hat{D} = 0$ this is exactly finite
+differences.
 
 ### 2.3 Discontinuity factors
 
-Let `f_lo` and `f_hi` be the discontinuity factors of the two nodes on their
-shared face. Continuity of current and of *factor-weighted* surface flux,
+Let $f_\text{lo}$ and $f_\text{hi}$ be the discontinuity factors of the two
+nodes on their shared face. Continuity of current and of *factor-weighted*
+surface flux,
 
-```
-f_lo φ_s,lo = f_hi φ_s,hi
-J = 2 D_lo (φ_lo − φ_s,lo) / h_lo = 2 D_hi (φ_s,hi − φ_hi) / h_hi
-```
+$$ f_\text{lo}\,\phi_{s,\text{lo}} = f_\text{hi}\,\phi_{s,\text{hi}}, \qquad
+   J = \frac{2 D_\text{lo}\left(\phi_\text{lo} - \phi_{s,\text{lo}}\right)}{h_\text{lo}}
+     = \frac{2 D_\text{hi}\left(\phi_{s,\text{hi}} - \phi_\text{hi}\right)}{h_\text{hi}} $$
 
 eliminates the surface fluxes to give
 
-```
-J = Λ (f_lo φ_lo − f_hi φ_hi),    Λ = 2 D_lo D_hi / (f_lo h_lo D_hi + f_hi h_hi D_lo)
-```
+$$ J = \Lambda\left(f_\text{lo}\,\phi_\text{lo} - f_\text{hi}\,\phi_\text{hi}\right),
+   \qquad
+   \Lambda = \frac{2 D_\text{lo} D_\text{hi}}
+                  {f_\text{lo} h_\text{lo} D_\text{hi} + f_\text{hi} h_\text{hi} D_\text{lo}} $$
 
-Matching this to the canonical form above:
+Matching this to the canonical form above gives the coupling and the initial
+correction, before any nodal update:
 
-```
-D̃_s = Λ (f_lo + f_hi) / 2
-D̂_s = Λ (f_hi − f_lo) / 2      (the initial value, before any nodal update)
-```
+$$ \tilde{D}_s = \frac{\Lambda\left(f_\text{lo} + f_\text{hi}\right)}{2}, \qquad
+   \hat{D}_s = \frac{\Lambda\left(f_\text{hi} - f_\text{lo}\right)}{2} $$
 
 So the discontinuity factors are folded into the coupling before the nonlinear
 iteration starts, and the finite difference kernel already honours them.
 
 ### 2.4 Boundary faces
 
-Write the boundary condition as `J_out = γ f φ_s` with the node's outward
-normal, where `γ` follows from the condition:
+Write the boundary condition as $J_\text{out} = \gamma f \phi_s$ with the
+node's outward normal, where $\gamma$ follows from the condition:
 
-| Condition | γ |
+| Condition | $\gamma$ |
 |---|---|
-| reflective | `0` |
-| vacuum (Marshak, `J_in = 0`) | `1/2` |
-| albedo `β = J⁻/J⁺` | `(1 − β) / (2(1 + β))` |
-| zero flux | `→ ∞` |
+| reflective | $0$ |
+| vacuum (Marshak, $J_\text{in} = 0$) | $1/2$ |
+| albedo $\beta = J^-/J^+$ | $\dfrac{1 - \beta}{2(1 + \beta)}$ |
+| zero flux | $\to \infty$ |
 
-Combining with `J = 2D(φ − φ_s)/h`:
+Combining with $J = 2D(\phi - \phi_s)/h$:
 
-```
-D̃_bc = 2 D γ f / (2 D + γ f h)
-```
+$$ \tilde{D}_\text{bc} = \frac{2 D \gamma f}{2 D + \gamma f h} $$
 
-and in the zero-flux limit `D̃_bc = 2D/h`, where the discontinuity factor drops
-out because the surface flux is zero either way. The boundary contributes
-`+ A D̃_bc` to the node's diagonal.
+and in the zero-flux limit $\tilde{D}_\text{bc} = 2D/h$, where the
+discontinuity factor drops out because the surface flux is zero either way.
+The boundary contributes $+A\tilde{D}_\text{bc}$ to the node's diagonal.
 
-`D̂` **is** updated on boundary faces, from the one-node problem of §3.6. The
-same `γ` serves both: the finite difference coupling above and the boundary
-condition the nodal kernel imposes are the one relation, so they cannot drift
-apart.
+$\hat{D}$ **is** updated on boundary faces, from the one-node problem of §3.6.
+The same $\gamma$ serves both: the finite difference coupling above and the
+boundary condition the nodal kernel imposes are the one relation, so they
+cannot drift apart.
 
 ---
 
@@ -113,62 +108,56 @@ apart.
 
 ### 3.1 The one-dimensional equation
 
-Integrating the diffusion equation over the cross-section normal to axis `u`
+Integrating the diffusion equation over the cross-section normal to axis $u$
 and dividing by the transverse area gives, per node and group,
 
-```
-−D d²φ/du² + Σ_r φ = Q(u) − L(u)
-```
+$$ -D\,\frac{d^2\phi}{du^2} + \Sigma_r\,\phi = Q(u) - L(u) $$
 
-where `Q` collects scattering and fission from the other groups and `L` is the
+where $Q$ collects scattering and fission from the other groups and $L$ is the
 transverse leakage,
 
-```
-L(u) = Σ_{b≠u} [ J_b(high) − J_b(low) ] / h_b
-```
+$$ L(u) = \sum_{b\neq u} \frac{J_b(\text{high}) - J_b(\text{low})}{h_b} $$
 
 evaluated from the coarse-mesh currents.
 
-Map the node onto `ξ ∈ [−1/2, 1/2]` with `u = h(ξ + 1/2)` and use the basis
+Map the node onto $\xi \in [-1/2, 1/2]$ with $u = h(\xi + 1/2)$ and use the
+basis
 
-```
-P_0 = 1,    P_1 = 2ξ,    P_2 = 6ξ² − 1/2
-```
+$$ P_0 = 1, \qquad P_1 = 2\xi, \qquad P_2 = 6\xi^2 - \tfrac{1}{2} $$
 
-all of which except `P_0` integrate to zero over the node.
+all of which except $P_0$ integrate to zero over the node.
 
 ### 3.2 Transverse leakage fit
 
-The leakage shape in node `i` is the quadratic through the node-average
-leakages of `i−1`, `i`, `i+1`:
+The leakage shape in node $i$ is the quadratic through the node-average
+leakages of $i-1$, $i$, $i+1$:
 
-```
-L(ξ) = L_i + l_1 P_1(ξ) + l_2 P_2(ξ)
-```
+$$ L(\xi) = L_i + l_1 P_1(\xi) + l_2 P_2(\xi) $$
 
-with `l_1`, `l_2` chosen so that the polynomial, extended over the neighbours,
-reproduces their averages. With `a = h_{i−1}/h_i`, `b = h_{i+1}/h_i`,
-`t = 1/2 + a` and `s = 1/2 + b`:
+with $l_1$, $l_2$ chosen so that the polynomial, extended over the neighbours,
+reproduces their averages. With $a = h_{i-1}/h_i$, $b = h_{i+1}/h_i$,
+$t = 1/2 + a$ and $s = 1/2 + b$:
 
-```
-[ −(1+a)        (2t³ − t/2)/a ] [ l_1 ]   [ L_{i−1} − L_i ]
-[  (1+b)        (2s³ − s/2)/b ] [ l_2 ] = [ L_{i+1} − L_i ]
-```
+$$ \begin{bmatrix}
+     -(1+a) & (2t^3 - t/2)/a \\
+     1+b    & (2s^3 - s/2)/b
+   \end{bmatrix}
+   \begin{bmatrix} l_1 \\ l_2 \end{bmatrix}
+   =
+   \begin{bmatrix} L_{i-1} - L_i \\ L_{i+1} - L_i \end{bmatrix} $$
 
 At a core boundary one of the three averages does not exist, and what is put
 in its place matters more than it looks.
 
 **Reflective face.** The solution is mirror-symmetric about the face, so the
-ghost node genuinely has `h_{i−1} = h_i` and `L_{i−1} = L_i`. The quadratic
+ghost node genuinely has $h_{i-1} = h_i$ and $L_{i-1} = L_i$. The quadratic
 fit is kept and it is exact.
 
 **Any other face.** There is no third average and nothing to invent one from,
 so the quadratic drops to the linear fit through the two averages that do
 exist:
 
-```
-l_1 = (L_{i+1} − L_i) / (1 + h_{i+1}/h_i),    l_2 = 0
-```
+$$ l_1 = \frac{L_{i+1} - L_i}{1 + h_{i+1}/h_i}, \qquad l_2 = 0 $$
 
 with the mirrored form at a low-side face. This is what KOMODO does, and the
 alternative — repeating the boundary node's own average, as though the face
@@ -184,116 +173,114 @@ difference answer instead of converging away from it.
 The fission source contains the group's own flux. Moving that term to the left
 gives the effective removal
 
-```
-Σ_r,eff = Σ_r,g − χ_g νΣ_f,g / k
-```
+$$ \Sigma_{r,\text{eff}} = \Sigma_{r,g} - \frac{\chi_g\,\nu\Sigma_{f,g}}{k} $$
 
 which can be negative in a strongly multiplying group. Both kernels handle
 that; SANM switches to a trigonometric basis.
 
 ### 3.4 SANM
 
-With `κ² = Σ_r,eff h² / D` and the source projected onto the quadratic basis as
-`S = (h²/D)(Q − L) = s_0 + s_1 P_1 + s_2 P_2`, the equation becomes
+With $\kappa^2 = \Sigma_{r,\text{eff}} h^2 / D$ and the source projected onto
+the quadratic basis as $S = (h^2/D)(Q - L) = s_0 + s_1 P_1 + s_2 P_2$, the
+equation becomes
 
-```
-−φ'' + κ² φ = S(ξ)
-```
+$$ -\phi'' + \kappa^2 \phi = S(\xi) $$
 
 The particular solution is polynomial, because the basis closes under a second
-derivative (`P_2'' = 12`, `P_1'' = 0`):
+derivative ($P_2'' = 12$, $P_1'' = 0$):
 
-```
-b_2 = s_2 / κ²
-b_1 = s_1 / κ²
-b_0 = (s_0 + 12 b_2) / κ²
-```
+$$ b_2 = \frac{s_2}{\kappa^2}, \qquad
+   b_1 = \frac{s_1}{\kappa^2}, \qquad
+   b_0 = \frac{s_0 + 12 b_2}{\kappa^2} $$
 
-The homogeneous solution uses the analytic pair. For `κ² > 0` that is
-`sinh(κξ)` and `cosh(κξ)`; for `κ² < 0`, `sin(ωξ)` and `cos(ωξ)` with
-`ω = √(−κ²)`. So
+The homogeneous solution uses the analytic pair. For $\kappa^2 > 0$ that is
+$\sinh(\kappa\xi)$ and $\cosh(\kappa\xi)$; for $\kappa^2 < 0$,
+$\sin(\omega\xi)$ and $\cos(\omega\xi)$ with $\omega = \sqrt{-\kappa^2}$. So
 
-```
-φ(ξ) = A·odd(ξ) + C·even(ξ) + b_0 + b_1 P_1 + b_2 P_2
-```
+$$ \phi(\xi) = A\,\text{odd}(\xi) + C\,\text{even}(\xi)
+   + b_0 + b_1 P_1 + b_2 P_2 $$
 
-`odd` integrates to zero over the node, so the node-average constraint
-`∫φ dξ = φ̄` fixes the even coefficient outright:
+$\text{odd}$ integrates to zero over the node, so the node-average constraint
+$\int\phi\,d\xi = \bar\phi$ fixes the even coefficient outright:
 
-```
-C = (φ̄ − b_0) / ∫even dξ
-```
+$$ C = \frac{\bar\phi - b_0}{\int \text{even}\,d\xi} $$
 
 leaving exactly **one free coefficient per node**. A two-node problem
-therefore has two unknowns, `A_lo` and `A_hi`, closed by the two interface
-conditions:
+therefore has two unknowns, $A_\text{lo}$ and $A_\text{hi}$, closed by
+factor-weighted flux continuity and current continuity at the interface:
 
-```
-f_lo φ_lo(+1/2) = f_hi φ_hi(−1/2)          (factor-weighted flux continuity)
-−(D_lo/h_lo) φ_lo'(+1/2) = −(D_hi/h_hi) φ_hi'(−1/2)     (current continuity)
-```
+$$ f_\text{lo}\,\phi_\text{lo}(+\tfrac{1}{2}) = f_\text{hi}\,\phi_\text{hi}(-\tfrac{1}{2}),
+   \qquad
+   -\frac{D_\text{lo}}{h_\text{lo}}\,\phi_\text{lo}'(+\tfrac{1}{2})
+   = -\frac{D_\text{hi}}{h_\text{hi}}\,\phi_\text{hi}'(-\tfrac{1}{2}) $$
 
 That is a 2×2 solve per surface per group. No outer boundary condition is
 needed: the outer faces enter through the node averages, which the coarse-mesh
 solution already knows.
 
-The source `Q` needs the *shapes* of the other groups, so the two-node problem
+The source $Q$ needs the *shapes* of the other groups, so the two-node problem
 sweeps Gauss-Seidel over groups, projecting each group's current expansion
-onto `{P_0, P_1, P_2}` in closed form. The moments of the analytic functions
-are, with `x = |κ|`, `sh = sinh(x/2)`, `ch = cosh(x/2)`:
+onto $\{P_0, P_1, P_2\}$ in closed form. The moments of the analytic functions
+are, with $x = |\kappa|$, $\text{sh} = \sinh(x/2)$, $\text{ch} = \cosh(x/2)$:
 
-```
-∫ cosh(xξ) dξ        = (2/x) sh
-∫ sinh(xξ) P_1 dξ    = (2/x) ch − (4/x²) sh
-∫ cosh(xξ) P_2 dξ    = (2/x) sh − (12/x²) ch + (24/x³) sh
-```
+$$ \begin{aligned}
+   \int \cosh(x\xi)\,d\xi     &= \frac{2}{x}\,\text{sh} \\
+   \int \sinh(x\xi)\,P_1\,d\xi &= \frac{2}{x}\,\text{ch} - \frac{4}{x^2}\,\text{sh} \\
+   \int \cosh(x\xi)\,P_2\,d\xi &= \frac{2}{x}\,\text{sh} - \frac{12}{x^2}\,\text{ch}
+                                  + \frac{24}{x^3}\,\text{sh}
+   \end{aligned} $$
 
-and on the trigonometric branch, with `sn = sin(x/2)`, `cs = cos(x/2)`:
+and on the trigonometric branch, with $\text{sn} = \sin(x/2)$,
+$\text{cs} = \cos(x/2)$:
 
-```
-∫ cos(xξ) dξ         = (2/x) sn
-∫ sin(xξ) P_1 dξ     = (4/x²) sn − (2/x) cs
-∫ cos(xξ) P_2 dξ     = (2/x) sn + (12/x²) cs − (24/x³) sn
-```
+$$ \begin{aligned}
+   \int \cos(x\xi)\,d\xi     &= \frac{2}{x}\,\text{sn} \\
+   \int \sin(x\xi)\,P_1\,d\xi &= \frac{4}{x^2}\,\text{sn} - \frac{2}{x}\,\text{cs} \\
+   \int \cos(x\xi)\,P_2\,d\xi &= \frac{2}{x}\,\text{sn} + \frac{12}{x^2}\,\text{cs}
+                                 - \frac{24}{x^3}\,\text{sn}
+   \end{aligned} $$
 
-`|κ²|` is floored at `1e-8` so the basis stays conditioned in the physically
-irrelevant limit of vanishing removal.
+$|\kappa^2|$ is floored at $10^{-8}$ so the basis stays conditioned in the
+physically irrelevant limit of vanishing removal.
 
 ### 3.5 NEM
 
 The flux is a quartic:
 
-```
-φ(ξ) = φ̄ + a_1 f_1 + a_2 f_2 + a_3 f_3 + a_4 f_4
-f_1 = 2ξ                 f_2 = 6ξ² − 1/2
-f_3 = ξ³ − ξ/4           f_4 = ξ⁴ − 0.3ξ² + 0.0125
-```
+$$ \phi(\xi) = \bar\phi + a_1 f_1 + a_2 f_2 + a_3 f_3 + a_4 f_4 $$
 
-All four integrate to zero, and `f_3`, `f_4` additionally vanish at both faces,
-so the surface fluxes are `φ(±1/2) = φ̄ ± a_1 + a_2`.
+$$ f_1 = 2\xi, \qquad f_2 = 6\xi^2 - \tfrac{1}{2}, \qquad
+   f_3 = \xi^3 - \tfrac{\xi}{4}, \qquad f_4 = \xi^4 - 0.3\,\xi^2 + 0.0125 $$
 
-The weighted residual (moment) equations, taking `f_1` and `f_2` as weights,
+All four integrate to zero, and $f_3$, $f_4$ additionally vanish at both
+faces, so the surface fluxes are $\phi(\pm 1/2) = \bar\phi \pm a_1 + a_2$.
+
+The weighted residual (moment) equations, taking $f_1$ and $f_2$ as weights,
 give after evaluating the integrals
 
-```
-−(D/h²) a_3            + Σ_r,eff (a_1/3 − a_3/60)   = q_1/3
-−(D/h²)(0.4 a_4)       + Σ_r,eff (a_2/5 − a_4/350)  = q_2/5
-```
+$$ \begin{aligned}
+   -\frac{D}{h^2}\,a_3 + \Sigma_{r,\text{eff}}\left(\frac{a_1}{3} - \frac{a_3}{60}\right)
+     &= \frac{q_1}{3} \\
+   -\frac{D}{h^2}\,0.4\,a_4 + \Sigma_{r,\text{eff}}\left(\frac{a_2}{5} - \frac{a_4}{350}\right)
+     &= \frac{q_2}{5}
+   \end{aligned} $$
 
-which express `a_1` and `a_2` linearly in `a_3` and `a_4`:
+which express $a_1$ and $a_2$ linearly in $a_3$ and $a_4$:
 
-```
-a_1 = q_1/Σ_r,eff + a_3 (3D/(Σ_r,eff h²) + 1/20)
-a_2 = q_2/Σ_r,eff + a_4 (2D/(Σ_r,eff h²) + 1/70)
-```
+$$ \begin{aligned}
+   a_1 &= \frac{q_1}{\Sigma_{r,\text{eff}}}
+          + a_3\left(\frac{3D}{\Sigma_{r,\text{eff}} h^2} + \frac{1}{20}\right) \\
+   a_2 &= \frac{q_2}{\Sigma_{r,\text{eff}}}
+          + a_4\left(\frac{2D}{\Sigma_{r,\text{eff}} h^2} + \frac{1}{70}\right)
+   \end{aligned} $$
 
 Two free coefficients per node remain, four for a two-node problem. Unlike
 SANM the node-average constraint is already built into the basis, so the two
 interface conditions are not enough; the two outer faces are closed with the
 coarse-mesh net currents. That is a 4×4 solve per surface per group.
 
-The moment equations divide by `Σ_r,eff`, so it is floored at `1e-10` in
-magnitude rather than allowed to blow the coefficients up.
+The moment equations divide by $\Sigma_{r,\text{eff}}$, so it is floored at
+$10^{-10}$ in magnitude rather than allowed to blow the coefficients up.
 
 ### 3.6 The one-node boundary problem
 
@@ -303,19 +290,19 @@ it. The node-average constraint and the boundary condition of §2.4 between
 them determine the within-node shape, and the current that shape produces at
 the face is what the nonlinear update matches.
 
-For SANM the node average fixes `C` and the boundary condition fixes `A`, the
-only coefficient left. Writing the face at `ξ = s/2`, with `s = +1` for a high
-face and `−1` for a low one, `J_out = γ f φ(s/2)` gives
+For SANM the node average fixes $C$ and the boundary condition fixes $A$, the
+only coefficient left. Writing the face at $\xi = s/2$, with $s = +1$ for a
+high face and $-1$ for a low one, $J_\text{out} = \gamma f \phi(s/2)$ gives
 
-```
-A = −s [ γ f K_φ + s (D/h) K_φ' ] / [ (D/h) odd'(1/2) + γ f odd(1/2) ]
-```
+$$ A = -s\,\frac{\gamma f K_\phi + s\,(D/h)\,K_{\phi'}}
+               {(D/h)\,\text{odd}'(\tfrac{1}{2}) + \gamma f\,\text{odd}(\tfrac{1}{2})} $$
 
-where `K_φ` and `K_φ'` are the parts of the face flux and its derivative that
-do not involve `A`. In the zero-flux limit the condition degenerates to
-`φ(s/2) = 0` and `A = −s K_φ / odd(1/2)`, with `D` dropping out.
+where $K_\phi$ and $K_{\phi'}$ are the parts of the face flux and its
+derivative that do not involve $A$. In the zero-flux limit the condition
+degenerates to $\phi(s/2) = 0$ and $A = -s K_\phi / \text{odd}(\tfrac{1}{2})$,
+with $D$ dropping out.
 
-For NEM the two free coefficients `a_3, a_4` need two equations: the boundary
+For NEM the two free coefficients $a_3, a_4$ need two equations: the boundary
 condition, and the coarse-mesh net current at the node's other face. That is
 the same row NEM already uses at the outer faces of a two-node problem.
 
@@ -331,21 +318,33 @@ SANM basis spans; with the boundary faces closed this way and the transverse
 leakage identically zero, SANM returns the analytic eigenvalue to round-off on
 any mesh, five nodes included.
 
----
-
 ### 3.7 The nonlinear update
 
 Whichever kernel is used, the two-node problem returns the interface current
-`J_nodal`. The corrected coupling coefficient is whatever makes the
+$J_\text{nodal}$. The corrected coupling coefficient is whatever makes the
 coarse-mesh system reproduce it:
 
-```
-D̂_s = −( J_nodal + D̃_s (φ_hi − φ_lo) ) / (φ_hi + φ_lo)
-```
+$$ \hat{D}_s = -\frac{J_\text{nodal} + \tilde{D}_s\left(\phi_\text{hi} - \phi_\text{lo}\right)}
+                     {\phi_\text{hi} + \phi_\text{lo}} $$
 
-clamped to `|D̂| ≤ dhat_limit · D̃`. Without a clamp a large correction costs
-the coarse-mesh matrix its diagonal dominance; PARCS and KOMODO clamp for the
-same reason.
+clamped to $|\hat{D}| \le \texttt{dhat\_limit}\cdot\tilde{D}$. Without a clamp
+a large correction costs the coarse-mesh matrix its diagonal dominance; PARCS
+and KOMODO clamp for the same reason.
+
+Boundary faces are treated differently. Their $\hat{D}$ is the one-node face
+current divided by a single node flux, and in an intermediate group of a
+down-scatter chain at a zero-flux face that flux is small next to the source
+driving it, so the ratio is badly conditioned. Two things follow:
+
+- the step is under-relaxed by `Settings.boundary_relaxation` (default 0.5);
+- an update that lands outside the band is **discarded** rather than clamped,
+  keeping the value the face already had. Saturating it at the limit replaces
+  an untrustworthy number with a large wrong one; discarding it on the first
+  update falls back to the finite difference coupling.
+
+Interior faces are neither damped nor discarded: their $\hat{D}$ divides by
+the sum of two node fluxes and is tied to a neighbour by continuity, so it does
+not have the same conditioning.
 
 At convergence the coarse-mesh currents equal the nodal currents at every
 interior surface, so the coarse-mesh solution carries the nodal accuracy while
@@ -357,56 +356,55 @@ the linear algebra stays a 7-point stencil.
 
 ### 4.1 Power iteration with a Wielandt shift
 
-Write the system as `A φ = (1/k) F φ`. The shifted form is
+Write the system as $A\phi = \frac{1}{k} F\phi$. The shifted form is
 
-```
-(A − F/k_s) φ^{m+1} = (1/k^m − 1/k_s) F φ^m
-```
+$$ \left(A - \frac{F}{k_s}\right)\phi^{m+1}
+   = \left(\frac{1}{k^m} - \frac{1}{k_s}\right) F\phi^m $$
 
-with `k_s = k + shift`. The eigenvalue update follows from requiring
+with $k_s = k + \text{shift}$. The eigenvalue update follows from requiring
 consistency at the fixed point:
 
-```
-1/k^{m+1} = 1/k_s + (1/k^m − 1/k_s) · ⟨F φ^m⟩ / ⟨F φ^{m+1}⟩
-```
+$$ \frac{1}{k^{m+1}} = \frac{1}{k_s}
+   + \left(\frac{1}{k^m} - \frac{1}{k_s}\right)
+     \frac{\langle F\phi^m \rangle}{\langle F\phi^{m+1} \rangle} $$
 
-At convergence `φ^{m+1} = φ^m` and this collapses to `k^{m+1} = k^m`, so the
-shift changes the iteration path and nothing else.
+At convergence $\phi^{m+1} = \phi^m$ and this collapses to
+$k^{m+1} = k^m$, so the shift changes the iteration path and nothing else.
 
-**The shift must not be lagged.** The term `−F/k_s` couples every group to
-every other through `χ_g νΣ_f,g'`. Where `χ` and `νΣ_f` occupy different
-groups, as in any two-group LWR library, that coupling is *entirely* off the
-group diagonal: a single Gauss-Seidel sweep over groups then adds the shift to
-one group's source and removes it again through the eigenvalue term, leaving
-the flux update algebraically identical to the unshifted one. The group sweep
-therefore repeats until the flux settles. On the IAEA-2D core this is the
-difference between 526 and 103 outer iterations.
+**The shift must not be lagged.** The term $-F/k_s$ couples every group to
+every other through $\chi_g\,\nu\Sigma_{f,g'}$. Where $\chi$ and
+$\nu\Sigma_f$ occupy different groups, as in any two-group LWR library, that
+coupling is *entirely* off the group diagonal: a single Gauss-Seidel sweep over
+groups then adds the shift to one group's source and removes it again through
+the eigenvalue term, leaving the flux update algebraically identical to the
+unshifted one. The group sweep therefore repeats until the flux settles. On
+the IAEA-2D core this is the difference between 526 and 103 outer iterations.
 
-**The shift must be capped.** Where `χ` and `νΣ_f` *do* share a group, as in a
-one-group model, the shift subtracts directly from the diagonal and a tight
-shift cancels removal outright. The system computes
+**The shift must be capped.** Where $\chi$ and $\nu\Sigma_f$ *do* share a
+group, as in a one-group model, the shift subtracts directly from the diagonal
+and a tight shift cancels removal outright. The system computes
 
-```
-1/k_s ≤ min over nodes and groups of  0.75 · Σ_r V / (χ νΣ_f V)
-```
+$$ \frac{1}{k_s} \le \min_{i,g}\; 0.75\,
+   \frac{\Sigma_{r,g} V_i}{\chi_g\,\nu\Sigma_{f,g} V_i} $$
 
 and never exceeds it, which keeps the acceleration where it helps and backs
 off where it would produce a singular operator.
 
 ### 4.2 Inner solves
 
-Within group `g`, the system is a 7-point stencil on the node adjacency graph.
+Within group $g$, the system is a 7-point stencil on the node adjacency graph.
 The right-hand side is
 
-```
-b_g = Σ_{g'≠g} Σ_s,g'→g φ_g'  +  χ_g ( (1/k_s) Σ_{g'≠g} νΣ_f,g' φ_g' + λ S )
-λ = 1/k − 1/k_s
-```
+$$ b_g = \sum_{g'\neq g} \Sigma_{s,g'\to g}\,\phi_{g'}
+   + \chi_g\left(\frac{1}{k_s}\sum_{g'\neq g} \nu\Sigma_{f,g'}\,\phi_{g'}
+   + \lambda S\right), \qquad
+   \lambda = \frac{1}{k} - \frac{1}{k_s} $$
 
-with `S` the fission source held fixed across the outer iteration. Each group's
-system is solved by BiCGSTAB preconditioned by a zero-fill incomplete LU using
-the same sparsity pattern. A zero pivot degrades that row to Jacobi rather than
-failing, so a decoupled node surfaces as non-convergence and not as a crash.
+with $S$ the fission source held fixed across the outer iteration. Each
+group's system is solved by BiCGSTAB preconditioned by a zero-fill incomplete
+LU using the same sparsity pattern. A zero pivot degrades that row to Jacobi
+rather than failing, so a decoupled node surfaces as non-convergence and not as
+a crash.
 
 ### 4.3 Determinism
 
@@ -420,13 +418,13 @@ A cold solve discards the nonlinear correction along with the flux, so the
 same model solved twice retraces the same iteration path rather than
 depending on what the object happened to hold. Warm starting (FR-OPT-3) opts
 out of that deliberately, and an adjoint run is the one case that must keep
-the `D̂` a forward solve converged.
+the $\hat{D}$ a forward solve converged.
 
-`Model.refresh()` rebuilds `D̃` from the new diffusion coefficients and keeps
-`D̂` and the flux, so a warm start survives a change to the model. The
-retained `D̂` is the correction for the old model; the first nodal update
-replaces it. Keeping it rather than resetting it to the discontinuity-factor
-value saves outers: 18 against 22 on the shuffled case in
+`Model.refresh()` rebuilds $\tilde{D}$ from the new diffusion coefficients and
+keeps $\hat{D}$ and the flux, so a warm start survives a change to the model.
+The retained $\hat{D}$ is the correction for the old model; the first nodal
+update replaces it. Keeping it rather than resetting it to the
+discontinuity-factor value saves outers: 18 against 22 on the shuffled case in
 `benchmarks/performance`, 2 against 15 on a swap that changes nothing.
 
 ---
@@ -435,11 +433,12 @@ value saves outers: 18 against 22 on the shuffled case in
 
 The adjoint operator is the transpose. Concretely:
 
-- the scattering matrix is transposed, `Σ_s,g→g'` in place of `Σ_s,g'→g`;
+- the scattering matrix is transposed, $\Sigma_{s,g\to g'}$ in place of
+  $\Sigma_{s,g'\to g}$;
 - the emission spectrum and the production cross section exchange roles, so
-  the fission term becomes `νΣ_f,g Σ_g' χ_g' φ†_g'`;
+  the fission term becomes $\nu\Sigma_{f,g} \sum_{g'} \chi_{g'}\,\phi^\dagger_{g'}$;
 - the two off-diagonal leakage entries of each interior surface are swapped,
-  which is what transposes the `D̂` asymmetry.
+  which is what transposes the $\hat{D}$ asymmetry.
 
 Everything downstream, including the power iteration, is unchanged, so the
 adjoint returns the same eigenvalue with a different flux shape. The nodal
@@ -453,26 +452,24 @@ operator is exactly the corrected adjoint operator.
 ## 6. Fixed source
 
 For subcritical multiplication the eigenvalue is fixed at one and the external
-source `S_ext` is added:
+source $S_\text{ext}$ is added:
 
-```
-A φ − F φ = S_ext V
-```
+$$ A\phi - F\phi = S_\text{ext} V $$
 
-assembled by taking the shifted operator at `1/k_s = 1`, which puts the
+assembled by taking the shifted operator at $1/k_s = 1$, which puts the
 in-group fission term on the diagonal, and leaving the off-group fission on the
 right-hand side. In a leakage-free box with a uniform source this reproduces
-`φ = S / (Σ_a − νΣ_f)` exactly.
+$\phi = S / (\Sigma_a - \nu\Sigma_f)$ exactly.
 
 Because the in-group fission term sits on the diagonal here rather than in
 the source, one Gauss-Seidel sweep over groups is exact unless the library
-upscatters -- the opposite of the shifted eigenvalue case in §4.1, where the
+upscatters — the opposite of the shifted eigenvalue case in §4.1, where the
 shift is entirely off the group diagonal and the sweep has to repeat.
 
-The kernels see `S_ext` through the same quadratic expansion as the transverse
-leakage. For NEM only its first and second moments reach the unknowns: a flat
-source cannot change a shape whose node average the coarse-mesh solution has
-already fixed.
+The kernels see $S_\text{ext}$ through the same quadratic expansion as the
+transverse leakage. For NEM only its first and second moments reach the
+unknowns: a flat source cannot change a shape whose node average the
+coarse-mesh solution has already fixed.
 
 A single-node delta source is a different matter. The two-node closure
 overshoots against a discontinuity that steep, and SANM can undershoot
@@ -489,29 +486,27 @@ neutrons appear only in the row sums of the `nu-scatter matrix`, as an excess
 over the plain `scatter matrix`.
 
 The operator in §2 cannot see that production. Summing the group balance over
-`g`, the in-scatter and out-scatter terms are the same double sum with the
+$g$, the in-scatter and out-scatter terms are the same double sum with the
 indices relabelled, so they cancel identically:
 
-```
-sum_g sum_{g'!=g} Sigma_s,g->g' phi_g  ==  sum_g sum_{g'!=g} Sigma_s,g'->g phi_g'
-```
+$$ \sum_g \sum_{g'\neq g} \Sigma_{s,g\to g'}\,\phi_g
+   = \sum_g \sum_{g'\neq g} \Sigma_{s,g'\to g}\,\phi_{g'} $$
 
-leaving `k = sum(nuSf phi) / sum(Sigma_a phi)` with the (n,xn) neutrons
-nowhere in it, whichever scattering matrix was supplied.
+leaving $k = \sum \nu\Sigma_f\phi \,/ \sum \Sigma_a\phi$ with the (n,xn)
+neutrons nowhere in it, whichever scattering matrix was supplied.
 
 The fix is exact rather than a correction factor. The true balance with
 multiplicity is
 
-```
-Sigma_a,g phi_g + Sigma_s^tot,g phi_g
-    = sum_{g'} nuSigma_s,g'->g phi_g' + chi_g/k F
-```
+$$ \Sigma_{a,g}\,\phi_g + \Sigma^\text{tot}_{s,g}\,\phi_g
+   = \sum_{g'} \nu\Sigma_{s,g'\to g}\,\phi_{g'} + \frac{\chi_g}{k} F $$
 
 and moving the self-scatter term across gives a removal cross section
-`Sigma_a + Sigma_s^tot - nuSigma_{s,g->g}`. Supplying the nu-weighted matrix
-to §2 instead forms `Sigma_a + nuSigma_s^tot - nuSigma_{s,g->g}`. The two
-differ by exactly the multiplicity excess `nuSigma_s^tot - Sigma_s^tot`, so
-subtracting that excess from the absorption cross section reproduces the
+$\Sigma_a + \Sigma_s^\text{tot} - \nu\Sigma_{s,g\to g}$. Supplying the
+nu-weighted matrix to §2 instead forms
+$\Sigma_a + \nu\Sigma_s^\text{tot} - \nu\Sigma_{s,g\to g}$. The two differ by
+exactly the multiplicity excess $\nu\Sigma_s^\text{tot} - \Sigma_s^\text{tot}$,
+so subtracting that excess from the absorption cross section reproduces the
 correct operator **group by group**, not merely in the global balance.
 
 `openndm.gc.from_mgxs_library` does this by default when the library carries
@@ -524,34 +519,35 @@ consistency all look perfect without it. See `tests/validation/README.md`.
 
 ## 7. Critical spectrum and buckling search
 
-For a homogeneous medium with buckling `B²`:
+For a homogeneous medium with buckling $B^2$:
 
-```
-( Σ_t,g + D_g(B²) B² ) φ_g − Σ_g' Σ_s0,g'→g φ_g' = (χ_g/k) Σ_g' νΣ_f,g' φ_g'
-```
+$$ \left(\Sigma_{t,g} + D_g(B^2)\,B^2\right)\phi_g
+   - \sum_{g'} \Sigma_{s0,g'\to g}\,\phi_{g'}
+   = \frac{\chi_g}{k} \sum_{g'} \nu\Sigma_{f,g'}\,\phi_{g'} $$
 
-The fission source is rank one, so `k(B²)` is available in closed form:
+The fission source is rank one, so $k(B^2)$ is available in closed form:
 
-```
-k(B²) = νΣ_f^T M(B²)^{-1} χ,      M = diag(Σ_t + D B²) − Σ_s0^T
-```
+$$ k(B^2) = \nu\Sigma_f^{T} M(B^2)^{-1} \chi, \qquad
+   M = \operatorname{diag}\!\left(\Sigma_t + D B^2\right) - \Sigma_{s0}^{T} $$
 
 and the search reduces to a scalar root find. The two conventions differ only
-in `D`:
+in $D$:
 
-- **P1**: `D_g = 1 / (3 Σ_tr,g)`, independent of buckling.
-- **B1**: `D_g = γ_g / (3 Σ_tr,g)` with, for `x_g = B²/Σ_t,g²`,
+- **P1**: $D_g = 1 / (3\Sigma_{tr,g})$, independent of buckling.
+- **B1**: $D_g = \gamma_g / (3\Sigma_{tr,g})$ with, for
+  $x_g = B^2/\Sigma_{t,g}^2$,
 
-```
-α_g = arctan(√x_g) / √x_g        (x > 0)
-α_g = artanh(√−x_g) / √−x_g      (x < 0)
-γ_g = x_g / (3 (1/α_g − 1))
-```
+$$ \alpha_g = \begin{cases}
+     \dfrac{\arctan\sqrt{x_g}}{\sqrt{x_g}} & x_g > 0 \\[1.5ex]
+     \dfrac{\operatorname{artanh}\sqrt{-x_g}}{\sqrt{-x_g}} & x_g < 0
+   \end{cases}
+   \qquad
+   \gamma_g = \frac{x_g}{3\left(1/\alpha_g - 1\right)} $$
 
-`α ≈ 1 − x/3` for small `x`, so `γ → 1` and B1 reduces to P1 as `B → 0`. This
-is verified directly in the test suite.
+$\alpha \approx 1 - x/3$ for small $x$, so $\gamma \to 1$ and B1 reduces to P1
+as $B \to 0$. This is verified directly in the test suite.
 
-The root is bracketed outward from zero on whichever side reduces `k` toward
+The root is bracketed outward from zero on whichever side reduces $k$ toward
 the target: positive for a medium supercritical at infinite dilution, negative
 otherwise. On the negative side the physical region is bounded — far enough
 below zero the leakage term cancels removal and the flux solution changes sign
@@ -562,10 +558,16 @@ outward.
 
 ## 8. Derived quantities
 
-Node power is `P_i = V_i Σ_g κΣ_f,g φ_{i,g}`, normalised to a mean of one over
-the nodes that carry power. Radial and axial profiles are volume-weighted
-collapses of that onto the lattice. `F_q` is the peak node power and `F_ΔH` the
-peak radial power, both relative to the core average.
+Node power is $P_i = V_i \sum_g \kappa\Sigma_{f,g}\,\phi_{i,g}$, normalised to
+a mean of one over the nodes that carry power. Radial and axial profiles are
+volume-weighted collapses of that onto the lattice. $F_q$ is the peak node
+power and $F_{\Delta H}$ the peak radial power.
+
+Because $P_i$ is integrated over the node, its mean over nodes equals the
+volume-weighted core average only when every node has the same volume. On a
+non-uniform mesh $F_q$ is therefore not a peak-to-average power density: on
+the NEACRP A1 core, whose axial layers run from 7.7 to 30 cm, it is 4.03
+where the volume-weighted figure is 3.18.
 
 Flux is normalised so the volume-averaged total flux over all groups is one,
 which makes results comparable between meshes and between runs.
@@ -762,24 +764,34 @@ this table.
 
 ## 12. Water properties
 
-IAPWS-IF97 region 1 (compressed liquid) and region 4 (the saturation line),
-from IAPWS R7-97(2012). Region 1 is a fundamental equation for the specific
-Gibbs free energy in dimensionless form,
+IAPWS-IF97 from IAPWS R7-97(2012): region 1 (compressed liquid), region 2
+(vapour) and region 4 (the saturation line). Region 1 is a fundamental
+equation for the specific Gibbs free energy in dimensionless form,
 
-```
-gamma(pi, tau) = sum_i n_i (7.1 - pi)^I_i (tau - 1.222)^J_i
-```
+$$ \gamma(\pi, \tau) = \sum_i n_i\,(7.1 - \pi)^{I_i}\,(\tau - 1.222)^{J_i},
+   \qquad \pi = \frac{p}{16.53\ \text{MPa}}, \quad \tau = \frac{1386\ \text{K}}{T} $$
 
-with `pi = p/16.53 MPa` and `tau = 1386 K/T`, from which
+from which
 
-```
-v = (R T / p) pi gamma_pi        h = R T tau gamma_tau
-cp = -R tau^2 gamma_tautau       R = 461.526 J/(kg K)
-```
+$$ v = \frac{RT}{p}\,\pi\gamma_\pi, \qquad h = RT\,\tau\gamma_\tau, \qquad
+   c_p = -R\,\tau^2\gamma_{\tau\tau}, \qquad R = 461.526\ \text{J/(kg K)} $$
 
-Both `7.1 - pi` and `tau - 1.222` are strictly positive everywhere in region
-1 — `pi` reaches 6.05 at 100 MPa and `tau` falls to 2.224 at 623.15 K — so the
-negative exponents in the table need no special handling.
+Both $7.1 - \pi$ and $\tau - 1.222$ are strictly positive everywhere in region
+1 — $\pi$ reaches 6.05 at 100 MPa and $\tau$ falls to 2.224 at 623.15 K — so
+the negative exponents in the table need no special handling.
+
+Region 2 splits the Gibbs energy into an ideal-gas part and a residual,
+
+$$ \gamma = \ln\pi + \sum_i n^o_i\,\tau^{J^o_i}
+   + \sum_i n_i\,\pi^{I_i}\,(\tau - 0.5)^{J_i},
+   \qquad \pi = \frac{p}{1\ \text{MPa}}, \quad \tau = \frac{540\ \text{K}}{T} $$
+
+with $v$, $h$ and $c_p$ following from the same derivatives as region 1.
+Region 4 gives the saturation pressure and temperature explicitly, and the
+saturated liquid and vapour states are region 1 and region 2 evaluated on that
+line. Region 3 is not implemented, which bounds the saturation line at
+16.529 MPa, where it meets the B23 boundary; above that the saturation
+accessors refuse rather than extrapolate.
 
 ### Why the inverse is iterated rather than tabulated
 
@@ -823,5 +835,5 @@ The water properties follow:
 - IAPWS R7-97(2012), *Revised Release on the IAPWS Industrial Formulation 1997
   for the Thermodynamic Properties of Water and Steam*, International
   Association for the Properties of Water and Steam, Lucerne, August 2007.
-  Coefficients from Tables 2 and 34; verification values from Tables 5, 7, 35
-  and 36.
+  Coefficients from Tables 2, 10, 11 and 34; verification values from
+  Tables 5, 7, 15, 35 and 36.

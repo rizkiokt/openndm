@@ -19,12 +19,13 @@ include/openndm/        public C++ headers
   geometry.h            node/surface graph and the Cartesian builder
   xslib.h               group constants, ADFs, branch tables
   matrix.h              sparse pattern, ILU0, BiCGSTAB, deterministic reductions
-  kernel.h              the abstract two-node kernel interface
+  kernel.h              the kernel interface: two-node and one-node problems
   cmfd.h                the coarse-mesh system and the nonlinear update
+  precursors.h          delayed precursor state and its closed-form step
   settings.h            run-time configuration
-  solver.h              the outer iteration and the top-level entry points
+  solver.h              the outer iteration, transients, top-level entry points
 
-src/                    implementation
+src/                    implementation, one .cpp per public header, plus
   kernel_common.h       internal: leakage fit, analytic basis, dense solve
   kernel_fdm.cpp        finite difference
   kernel_nem.cpp        polynomial nodal
@@ -32,6 +33,20 @@ src/                    implementation
   bindings.cpp          pybind11 bridge
 
 python/openndm/         the Python package
+  model.py              Model, Result, Transient, boron search, coupled solve
+  geometry.py           Geometry, lattice builder, assembly rotation
+  xslib.py              XSLibrary, branch interpolation
+  settings.py           Settings
+  rods.py               control rod banks, cusping, worth curves
+  feedback.py           analytic square-root Doppler feedback
+  thermal.py            ThermalSolver protocol, PicardCoupling, mappings
+  channel.py            closed-channel coolant model, PinGeometry
+  pin.py                radial pin conduction, NEACRP correlations
+  water.py              water property backends, IAPWS-IF97
+  statepoint.py         HDF5 statepoint writer and reader
+  vtk.py                VTK export
+  plots.py              matplotlib helpers
+  exceptions.py         the Python side of the exception hierarchy
   gc/                   OpenMC group constant generation
 ```
 
@@ -101,8 +116,9 @@ it in `src/matrix.cpp`.
 provided, and no access to Eigen's direct solvers or its other preconditioners.
 
 **When to revisit**: if a future kernel needs a matrix structure that is not a
-stencil — SP3 with its coupled second moment, or an implicit transient
-operator with a different sparsity — the argument weakens considerably.
+stencil — SP3 with its coupled second moment, for instance — the argument
+weakens considerably. The transient did not: each time step is a fixed-source
+solve on the static stencil with a term added to the diagonal.
 
 ## Deviation 3: numpy views through pybind11 instead of xtensor
 
@@ -161,6 +177,37 @@ adjoint keeps the `D̂` converged by a forward solve, and a cold adjoint request
 runs the forward problem first. The transpose of the corrected forward
 operator is the corrected adjoint operator, so this is the correct thing to do
 and not merely the convenient one.
+
+### Assembly rotation belongs to the position
+
+FR-OPT-7 asks to rotate assemblies. One assembly type is loaded at many
+positions in different orientations, so the rotation is stored per node on
+the geometry, not per composition, and every ADF lookup follows it. Only the
+discontinuity factors turn, because nothing else about an assembly is
+orientation-dependent in this model.
+
+### Thermal-hydraulics departures
+
+- **One channel per radial column, not per assembly** (FR-TH-1). The channel
+  model follows the geometry it is given. On a subdivided mesh a caller either
+  scales flow and pin counts per column or runs the channels on an
+  assembly-level geometry; `benchmarks/neacrp` does the second.
+- **No correlation is a default** (FR-TH-2, FR-TH-5). Conductivities, film
+  coefficient and slip ratio are injected. FR-TH-5 asks for a void fraction
+  correlation; the homogeneous relation ships and a slip ratio can be
+  supplied, but no published correlation is chosen on the user's behalf. The
+  NEACRP-L-335 conductivities ship as cited, opt-in functions.
+- **`SaturationProperties` is a separate protocol** from `WaterProperties`.
+  A single-phase channel never needs the saturation line, and folding it into
+  one protocol would have made `ConstantWater` and the external adapters
+  incomplete for nothing.
+- **`T(p, h)` is a Newton iteration on the IF97 basic equation** (FR-TH-3),
+  not the release's backward equation, which may differ from it by 25 mK.
+  See [`theory.md`](theory.md) §12.
+- **Coupled cross sections are per composition.** A temperature field is
+  collapsed onto compositions by `CompositionMapping`, so a resolved
+  distribution needs one composition per region that can differ. The NEACRP
+  deck uses one composition per node.
 
 ### The statepoint is written from Python
 

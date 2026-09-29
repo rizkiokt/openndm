@@ -18,7 +18,7 @@ That opens a private advisory visible only to the maintainer. Do not open a
 public issue for a security problem.
 
 If private reporting is unavailable to you, email Rizki Oktavian at
-<rizkiokt@gmail.com> with `OPENNDM SECURITY` in the subject.
+<rizkiokt@purdue.edu> with `OPENNDM SECURITY` in the subject.
 
 Expect an acknowledgement within a week. If a report is confirmed, the advisory
 is where the fix and the disclosure timeline get coordinated, and you will be
