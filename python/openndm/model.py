@@ -562,9 +562,9 @@ class Model:
 
         Notes
         -----
-        Every iteration calls :meth:`refresh`, which discards the flux, so
-        each solve starts cold. That is the same cost :meth:`search_boron`
-        pays and the reason issue #82 matters here.
+        Every iteration calls :meth:`refresh`, which keeps the flux, so
+        passing ``warm_start=True`` starts each solve from the previous
+        iteration's.
         """
         latest: dict[str, Result] = {}
         library = self.library
@@ -734,6 +734,12 @@ class Model:
         sections, so the cached per-node data and coupling coefficients follow.
         The solver object survives, so buffers stay allocated.
 
+        The converged flux and Dhat are kept, so a solve with
+        ``warm_start=True`` starts from them (FR-OPT-3). A cold solve discards
+        both and retraces the path a fresh model would take. A retained
+        adjoint solution is dropped, since the forward Dhat it rests on
+        belongs to the old model.
+
         Writing a composition marks the library unfinalized, because its
         removal cross sections are derived at finalize time. Re-finalize
         before calling this, or it raises rather than letting a solve run on
@@ -742,14 +748,12 @@ class Model:
         Raises
         ------
         InputError
-            If a transient is in progress. The retained flux is that
-            transient's state rather than a cache, so discarding it would
-            leave the next step with nothing to advance. A step re-reads the
-            cross sections, the compositions and the coupling on its own, so
-            there is nothing to refresh between steps.
+            If a transient is in progress. A step re-reads the cross
+            sections, the compositions and the coupling on its own, so there
+            is nothing to refresh between steps.
         """
         self._require_finalized()
-        self._solver.reset()
+        self._solver.refresh()
 
     def swap_assemblies(self, a: int, b: int) -> None:
         """Exchange the compositions of two radial positions (FR-OPT-7).

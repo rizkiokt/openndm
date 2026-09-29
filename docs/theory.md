@@ -422,6 +422,13 @@ depending on what the object happened to hold. Warm starting (FR-OPT-3) opts
 out of that deliberately, and an adjoint run is the one case that must keep
 the `D̂` a forward solve converged.
 
+`Model.refresh()` rebuilds `D̃` from the new diffusion coefficients and keeps
+`D̂` and the flux, so a warm start survives a change to the model. The
+retained `D̂` is the correction for the old model; the first nodal update
+replaces it. Keeping it rather than resetting it to the discontinuity-factor
+value saves outers: 18 against 22 on the shuffled case in
+`benchmarks/performance`, 2 against 15 on a swap that changes nothing.
+
 ---
 
 ## 5. Adjoint

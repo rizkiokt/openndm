@@ -8,6 +8,21 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Fixed
 
+- **`Model.refresh()` keeps the flux, so warm start survives a change to the
+  model** (#82). It used to clear the flux, so every perturbed re-solve started
+  cold whatever `warm_start` said. It now rebuilds `D̃` and keeps the flux and
+  `D̂`; a cold solve discards both and is bit-identical to before. On the
+  shuffled case in `benchmarks/performance` the warm solve drops from 20 outers
+  to 18, **1.15×** against the 2× FR-OPT-3 asks for. Re-solving after a swap
+  that changes nothing takes 2 outers instead of 104 on IAEA-2D. The eigenvalue
+  is unchanged: warm and cold agree to 0.0002 pcm when both are converged
+  tightly. `ControlRods.worth_curve` and `Model.sweep` now warm start as their
+  defaults said they did; a worth curve moves by at most 1e-5 pcm.
+
+  A retained adjoint solution is dropped on refresh, because it rests on the
+  forward `D̂` of the old model. Keeping it put a warm adjoint solve 569 pcm
+  off after swapping IAEA-2D's rodded centre with outer fuel.
+
 - **Guide tubes no longer borrow the fuel pin's radius.** `PinGeometry` took
   a guide tube to be a fuel pin with the heat turned off, because KOMODO's
   `%THER` card gives one set of radii and a guide tube count and nothing else.

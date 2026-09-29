@@ -121,6 +121,21 @@ public:
   //! the node compositions and the coupling on its own.
   void reset();
 
+  //! Re-read the library and the geometry, keeping the retained flux and
+  //! Dhat as the starting point of the next warm-started solve (FR-OPT-3).
+  //!
+  //! Dtilde is rebuilt from the new diffusion coefficients. Dhat is the
+  //! correction converged for the previous model, and the first nodal update
+  //! replaces it. A cold solve rebuilds both, so with \c warm_start off the
+  //! result is identical to reset().
+  //!
+  //! An adjoint solution is dropped, because the forward Dhat it was built
+  //! on belongs to the old model; the next adjoint solve reruns the forward
+  //! problem first.
+  //!
+  //! Throws while a transient is in progress, as reset() does.
+  void refresh();
+
   //! Access the retained solution, for warm starting or for inspection.
   const std::vector<double>& flux() const { return flux_; }
   double k_eff() const { return k_eff_; }
@@ -139,6 +154,10 @@ public:
   CmfdSystem& system() { return cmfd_; }
 
 private:
+  //! Throw InputError while a transient is in progress, because the retained
+  //! flux is that transient's state rather than a cache.
+  void require_no_transient() const;
+
   //! Scale the retained flux so its volume-averaged total is one.
   //!
   //! An eigenvector has no natural scale, so fixing one makes a flux
