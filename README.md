@@ -26,11 +26,12 @@ which of those requirements are implemented today.
 
 ## Status
 
-**Pre-alpha (v0.1.0).** The static solver is implemented and verified against
-both the analytic bare-cuboid solution and the published IAEA-2D/3D PWR
-benchmarks; the transient, thermal-hydraulics and pin-power chapters of the
-specification are not yet written. `docs/status.md` maps every requirement ID
-to its state — read it before assuming a feature exists.
+**Pre-1.0 (v0.2.0 on PyPI, with unreleased work on `main`).** The static
+solver is verified against an analytic solution and the published IAEA-2D/3D
+and BIBLIS-2D benchmarks. Transients and steady thermal-hydraulic feedback are
+implemented; transients with feedback and pin power reconstruction are not.
+`docs/status.md` maps every requirement ID to its state — read it before
+assuming a feature exists.
 
 Implemented and tested:
 
@@ -38,13 +39,23 @@ Implemented and tested:
   inactive core-map positions, per-face zero-flux / vacuum / reflective /
   albedo boundaries
 - Arbitrary group count with full `G×G` scattering including upscattering,
-  assembly discontinuity factors, branch-parameterised libraries with
-  multilinear interpolation
+  assembly discontinuity factors with assembly rotation, branch-parameterised
+  libraries with multilinear interpolation, and √T Doppler feedback
 - Three run-time-selectable kernels: FDM, polynomial nodal (NEM) and
   semi-analytic nodal (SANM), coupled through a nonlinear two-node CMFD
-  iteration
+  iteration, with a one-node problem closing the boundary faces
 - Power iteration with Wielandt shift, ILU0-preconditioned BiCGSTAB inners,
   forward / adjoint / fixed-source modes, critical boron search
+- Control rod banks addressed by position, a cusping correction for a
+  partially rodded node, and integral and differential worth curves
+- Transients: θ-weighted time integration with delayed precursors integrated
+  in closed form
+- Thermal-hydraulic feedback at steady state: closed-channel energy balance
+  with homogeneous equilibrium boiling, radial pin conduction and the
+  effective Doppler temperature, IAPWS-IF97 water properties, and a Picard
+  coupling that also drives a boron search against the coupled state. Any
+  external solver can take the channel model's place through the
+  `ThermalSolver` protocol
 - `openndm.gc` ingestion of `openmc.mgxs.Library`, `mgxs.h5` files and
   statepoints, with OpenMC as an optional dependency, validated end to end
   against a real OpenMC run (C-1)
@@ -54,9 +65,11 @@ Implemented and tested:
 ## Installation
 
 ```bash
-pip install .            # needs a C++17 compiler; CMake and ninja come from pip
-pip install '.[dev]'     # plus pytest, ruff and the docs toolchain
+pip install openndm      # wheels for Linux and macOS, Python 3.10 to 3.13
 ```
+
+From a checkout, `pip install .` builds the extension with a C++17 compiler;
+CMake and ninja come from pip. `CONTRIBUTING.md` has the development setup.
 
 OpenMC is optional and only needed for `openndm.gc`.
 
@@ -106,7 +119,7 @@ geom = openndm.Geometry.from_lattice(
 model = openndm.Model(geom, lib, openndm.Settings(kernel="sanm", verbosity=0))
 result = model.solve()
 
-print(result.k_eff)              # 1.036880
+print(result.k_eff)              # 1.036855
 print(result.radial_power())     # assembly-wise relative power, (9, 9)
 print(result.f_q, result.f_dh)   # peaking factors
 ```
@@ -117,8 +130,9 @@ print(result.f_q, result.f_dh)   # peaking factors
 `ctest --test-dir build` the C++ one. The checks that pin down correctness:
 
 - **V-1, analytic buckling.** A bare homogeneous cuboid against
-  `k = νΣf / (Σa + D B²)`. Every kernel converges second order; at 64 nodes per
-  side the error is 0.1 pcm.
+  `k = νΣf / (Σa + D B²)`. The nodal kernels converge at fourth order and FDM
+  at second; at 64 nodes per side the error is under 0.01 pcm nodal and
+  0.86 pcm FDM.
 - **V-1, reflected slab.** A core plus reflector against the transcendental
   criticality condition `D₁B tan(B a) = D₂κ coth(κb)`, which exercises a
   material interface, a reflector and two boundary conditions at once.
@@ -129,19 +143,19 @@ print(result.f_q, result.f_dh)   # peaking factors
   and fission included, against a solution chosen in advance, with the
   observed order of accuracy of each kernel.
 - **V-3, kernel consistency.** Coarse-mesh SANM and NEM against a refined FDM
-  solution of the same problem. On the IAEA-2D core map, SANM at one node per
-  assembly lands 3.7 pcm from the mesh-converged FDM eigenvalue, and all three
-  kernels agree to within 25 pcm under refinement. This is the check that
-  catches a wrong transverse leakage, a wrong discontinuity factor convention
-  or a broken two-node closure; mesh refinement alone would not, because a
-  kernel with any of those defects still converges smoothly, just to the wrong
-  answer.
+  solution of the same problem. On the IAEA-2D core map SANM and NEM agree to
+  the last digit printed from four nodes per assembly onward, and all three
+  kernels converge to the same eigenvalue under refinement. This is the check
+  that catches a wrong transverse leakage, a wrong discontinuity factor
+  convention or a broken two-node closure; mesh refinement alone would not,
+  because a kernel with any of those defects still converges smoothly, just to
+  the wrong answer.
 - **V-4, adjoint reciprocity.** Forward and adjoint eigenvalues agree to under
   1 pcm while the flux shapes differ.
 - **V-4, perturbation theory.** First-order adjoint-weighted reactivity
   against a direct re-solve. This tests the adjoint flux *shape*; eigenvalue
   equality alone only confirms the operator was transposed.
-- **Neutron balance.** Every node conserves neutrons to 3e-11, and the
+- **Neutron balance.** Every node conserves neutrons to 3e-12, and the
   core-wide leakage-plus-absorption-equals-production identity closes to 1e-9.
 - **Symmetry.** A symmetric core map gives a symmetric power; rotating or
   mirroring a lopsided core is a pure relabelling.
@@ -169,13 +183,16 @@ have caught, two of which fail silently — see
 
 | Deck | Reference | Result |
 |---|---|---|
-| Bare cuboid, analytic | `k = νΣf / (Σa + D B²)` | 0.05 pcm at 64 nodes/side |
-| IAEA-2D PWR | published `k_eff = 1.02959` | SANM **−3.7 pcm** at one node per assembly |
-| IAEA-3D PWR | published `k_eff = 1.02903` | SANM **+44.7 pcm** at a 20 cm axial mesh |
+| Bare cuboid, analytic | `k = νΣf / (Σa + D B²)` | nodal kernels 0.01 pcm at 32 nodes/side |
+| IAEA-2D PWR | published `k_eff = 1.02959` | SANM **+21.5 pcm** at one node per assembly |
+| IAEA-3D PWR | published `k_eff = 1.02903` | SANM **+69.2 pcm** at a 20 cm axial mesh |
+| BIBLIS-2D PWR | published `k_eff = 1.02511` | SANM **−1.4 pcm** at one node per assembly |
+| NEACRP rod ejection, initial states | published critical boron | within **3.5 ppm** cold, **1.7 ppm** coupled at full power |
+| LMW transient | none in the specification | reported, not compared |
 
-All three meet the specification's 100 pcm acceptance criterion. See
-[`benchmarks/README.md`](benchmarks/README.md) for the full convergence
-tables and for the two transcription errors the structural invariants now
+All four static decks meet the specification's 100 pcm acceptance
+criterion. See [`benchmarks/README.md`](benchmarks/README.md) for the full
+convergence tables and for the two transcription errors the structural invariants now
 catch.
 
 ## Documentation
@@ -200,7 +217,7 @@ OpenNDM was initiated and is developed by **Rizki Oktavian, PhD**
 ([@rizkiokt](https://github.com/rizkiokt)).
 
 If you would like to contribute, or want to discuss using OpenNDM in your own
-work, get in touch at <rizkiokt@gmail.com>. Bug reports and feature requests
+work, get in touch at <rizkiokt@purdue.edu>. Bug reports and feature requests
 are better filed as [issues](https://github.com/rizkiokt/openndm/issues), and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) describes the pull request workflow.
 

@@ -5,10 +5,10 @@ own directory.
 
 | Deck | Type | Reference | Result | Status |
 |---|---|---|---|---|
-| `analytic/` | 1-group bare cuboid, 3D | Exact: `k = νΣf / (Σa + D B²)` | 0.05 pcm at 64 nodes/side | **Verified** |
-| `iaea2d/` | 2-group PWR, quarter core, 2D | Published `k_eff = 1.02959` | SANM −3.7 pcm at one node per assembly | **Verified** |
-| `iaea3d/` | 2-group PWR, quarter core, 3D | Published `k_eff = 1.02903` | SANM +44.7 pcm at 20 cm axial mesh | **Verified** |
-| `biblis2d/` | 2-group PWR, quarter core, 2D, 8 compositions | Published `k_eff = 1.02511` | SANM −2.1 pcm at one node per assembly | **Verified** |
+| `analytic/` | 1-group bare cuboid, 3D | Exact: `k = νΣf / (Σa + D B²)` | Nodal 0.01 pcm at 32 nodes/side, FDM 0.86 pcm at 64 | **Verified** |
+| `iaea2d/` | 2-group PWR, quarter core, 2D | Published `k_eff = 1.02959` | SANM +21.5 pcm at one node per assembly | **Verified** |
+| `iaea3d/` | 2-group PWR, quarter core, 3D | Published `k_eff = 1.02903` | SANM +69.2 pcm at 20 cm axial mesh | **Verified** |
+| `biblis2d/` | 2-group PWR, quarter core, 2D, 8 compositions | Published `k_eff = 1.02511` | SANM −1.4 pcm at one node per assembly | **Verified** |
 | `lmw/` | 2-group PWR rod transient, 3D | None in the specification | Power history, converged in mesh, not in time step | **Reported, not compared** |
 | `neacrp/` | 2-group PWR rod ejection, 3D, 11 compositions, coupled | Published critical boron, NEA/NSC/DOC(93)25 Table 3.1 | Boron within **3.5 ppm** cold and **1.7 ppm** coupled; Doppler within **0.7 K** | **Verified on boron and temperature; peaking open** |
 

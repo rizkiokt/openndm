@@ -3,9 +3,10 @@
 What is planned, in what order, and why that order. For what already exists,
 read [`status.md`](status.md) — this document does not duplicate it.
 
-Version 0.1.0 covers M0–M3 of the specification's phase plan: geometry, cross
+Version 0.2.0 covers M0–M3 of the specification's phase plan: geometry, cross
 sections, the three kernels, static calculation modes, the OpenMC coupling,
-and output. What follows is M4 onward.
+and output. Phases 1 to 3 below have since landed on `main`; what remains
+follows them.
 
 ## The ordering principle
 
@@ -59,7 +60,7 @@ IAEA-3D deck uses. It is also a problem the OpenMC coupling is unusually
 well placed to solve: rather than smearing rodded and unrodded constants,
 the partially rodded node's constants can be generated directly.
 
-## Phase 2 — kinetics (FR-KIN)
+## Phase 2 — kinetics (FR-KIN) — complete except the exponential transformation
 
 The largest capability gap. Delayed neutron data already round-trips through
 the library (FR-XS-3), so the storage format does not change.
@@ -98,27 +99,38 @@ single change that would most improve transient accuracy — it is the standard
 remedy for exactly this, and nothing else on this list competes with a 3%
 error at the step size the problem is meant to be run at.
 
-## Phase 3 — thermal hydraulics (FR-TH)
+## Phase 3 — thermal hydraulics (FR-TH) — steady state complete
 
 A closed-channel mass and energy solve with one-dimensional radial
-conduction through fuel, gap and cladding. The input set this needs is
-well established: percent power, thermal power, inlet temperature, mass flow,
-pin geometry, pins and guide tubes per assembly, and the fraction of heat
-deposited directly in the coolant.
+conduction through fuel, gap and cladding, coupled to the neutronics by a
+Picard iteration.
 
-Unblocks FR-MODE-6 and the NEACRP benchmarks. Nothing in the current solver
-obstructs it: no kernel refers to temperature or density, and cross sections
-reach the solver only through `XSLibrary`, which already interpolates over a
-temperature axis.
+| Delivers | State |
+|---|---|
+| `ThermalSolver` protocol, `PicardCoupling`, `AxialMapping`, `CompositionMapping` | **done** |
+| `IF97Water`, regions 1, 2 and 4, and `external_backend` for `iapws` or CoolProp | **done** |
+| `ChannelModel`, single phase, and `two_phase=True` homogeneous equilibrium | **done** |
+| `PinConduction` and the effective Doppler temperature | **done** |
+| `Model.solve_coupled`, and `search_boron(evaluate_state=...)` against a coupled state | **done** |
+| NEACRP A1–C2 initial steady states against NEA/NSC/DOC(93)25 | **done** — boron within 3.5 ppm cold, 1.7 ppm hot |
 
-## Unscheduled, and independent of the above
+Still open in this phase: IF97 region 3, cross-flow and a momentum equation,
+a shipped film or slip correlation, and a time-dependent conduction model.
+
+## Next
 
 | Item | Why it is worth doing |
 |---|---|
-| `feat/adf-rotation` | FR-OPT-7. Directly coupled-scope: OpenMC gives discontinuity factors in one orientation, and a rotated assembly needs its faces permuted. 90/180/270 over assembly ranges |
-| `feat/perf-acceptance` | NFR-PERF-1..7 have **never been measured**. The specification states numeric targets and no acceptance run has ever been made against them |
-| `feat/vtk-export` | FR-OUT-6. Mesh output for external visualisation |
-| Cut the first release | NFR-EXT-3. The release pipeline landed in #7: tag-triggered, trusted publishing, version agreement enforced before it builds. No tag has been cut, so nothing is on PyPI or conda-forge yet |
+| FR-MODE-7, transient with feedback | Both halves exist; it needs heat capacity in `PinConduction` and a driver coupling it to `Transient`. Unblocks the NEACRP rod ejections |
+| Exponential flux transformation (FR-KIN-2) | The single change that would most improve transient accuracy; see Phase 2 |
+| Adaptive time stepping (FR-KIN-3) | Named by NFR-PERF-4 |
+| Parallel ILU0 triangular solves | NFR-PERF-7 fails at 32% parallel efficiency against 60% |
+| Faster outer convergence | FR-OPT-3's warm start reaches 1.15× against the 2× target |
+| NEACRP peaking factors | F_Q is 6 to 13% high and the reference's definition is not yet settled; `Result.f_q` normalises to an arithmetic node mean, which differs from the volume-weighted mean on a non-uniform axial mesh |
+
+The items once listed as unscheduled have all landed: ADF rotation (#66), the
+performance acceptance run (#83), VTK export (#76) and the first release,
+0.2.0, on PyPI.
 
 ### On the boundary nodal correction, now done
 
@@ -162,8 +174,9 @@ underlying data is the published OECD/NEA and ANL benchmark material; KOMODO
 is a machine-readable transcription of it.
 
 Parsed rather than transcribed, BIBLIS landed 2.1 pcm from its published
-eigenvalue on the first run. The deck written from memory had been wrong in
-both the map and the reference -- see `benchmarks/README.md`.
+eigenvalue on the first run, and 1.4 pcm since the boundary correction. The
+deck written from memory had been wrong in both the map and the reference --
+see `benchmarks/README.md`.
 
 LMW came with a caveat BIBLIS did not, and it is worth stating on its own: a
 specification can unblock the *deck* without supplying the *answer*. LMW
@@ -172,6 +185,10 @@ file. It ships anyway, labelled as reported rather than compared, because a
 scenario that runs is worth having while the comparison stays open. Closing
 that comparison needs the published curve from a citable source, not one
 written down from recollection.
+
+NEACRP followed the same route: the deck is parsed from KOMODO's sample and
+its data checked against NEACRP-L-335, and the six initial steady states
+reproduce the published critical boron. See `benchmarks/README.md`.
 
 Still open: LRA and TWIGL, static and transient, which KOMODO does not ship.
 The same lesson applies -- look for a specification before writing a deck

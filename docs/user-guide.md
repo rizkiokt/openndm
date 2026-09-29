@@ -103,7 +103,8 @@ numbering, so index 0 of every array is the fast group.
 `scatter[0][1]`. Transposing the matrix does not raise; it silently reverses
 the spectrum.
 
-**Removal is derived, not given.** `Σr = Σa + Σ_{g'≠g} Σs_{g→g'}`, computed by
+**Removal is derived, not given.**
+$\Sigma_{r,g} = \Sigma_{a,g} + \sum_{g'\neq g} \Sigma_{s,g\to g'}$, computed by
 `finalize()`. Within-group scattering never leaves the node and cancels, so
 you may leave the diagonal at zero or fill it in; the answer is the same.
 
@@ -118,7 +119,7 @@ lib.set_composition(
     nu_fission=[0.0, 0.135],
     kappa_fission=[0.0, 0.135],
     chi=[1.0, 0.0],
-    inv_velocity=[...],      # only needed by a transient, once implemented
+    inv_velocity=[...],      # only needed by a transient
     scatter=[[0.0, 0.020], [0.0, 0.0]],
     std={"absorption": [1e-4, 8e-4]},   # 1-sigma, carried through
 )
@@ -209,8 +210,9 @@ lib.rotated_adf(0, quarter_turns)           # the same, read from the library
 lib.set_delayed(beta=[...], decay_constant=[...], chi_delayed=None)
 ```
 
-Up to eight precursor groups. Stored and round-tripped today; nothing consumes
-them until the transient solver exists.
+Up to eight precursor groups, consumed by a transient (see
+[Transients](#transients)). Without `chi_delayed` every delayed neutron is born
+in the top group.
 
 ---
 
@@ -264,7 +266,7 @@ Per face, keyed `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max`:
 | `"reflective"` | zero net current, i.e. a symmetry plane |
 | `"vacuum"` | zero incoming partial current (Marshak) |
 | `"zero_flux"` | zero surface flux |
-| `"albedo"` | user supplied `β = J⁻/J⁺` per group |
+| `"albedo"` | user supplied $\beta = J^-/J^+$ per group |
 
 ```python
 geom = openndm.Geometry.from_lattice(
@@ -275,7 +277,7 @@ geom = openndm.Geometry.from_lattice(
 ```
 
 The limits behave as you would expect and are tested to machine precision:
-`β = 1` is reflective, `β = 0` is vacuum, `β = -1` is zero flux.
+$\beta = 1$ is reflective, $\beta = 0$ is vacuum, $\beta = -1$ is zero flux.
 
 ### `outside` is not `boundaries`
 
@@ -359,7 +361,8 @@ The defaults leave about 0.1 pcm of iteration error. Loosening
 | `wielandt_start` | `3` | outer at which the shift begins |
 | `nodal_update_interval` | `1` | outers between nonlinear updates |
 | `two_node_sweeps` | `2` | group sweeps inside one two-node problem |
-| `dhat_limit` | `10.0` | clamp on the corrected coupling coefficient |
+| `dhat_limit` | `10.0` | bound on the corrected coupling coefficient, relative to the finite difference one. Interior faces clamp to it; a boundary-face update outside it is discarded |
+| `boundary_relaxation` | `0.5` | under-relaxation of the boundary-face correction; 1 disables it |
 | `warm_start` | `False` | reuse the previous flux and coupling |
 | `threads` | `0` | OpenMP threads; 0 leaves the environment default |
 
@@ -416,6 +419,21 @@ print(search.boron, search.k_eff, search.history)
 You supply the callback, so the boron model stays yours. If the target cannot
 be reached the error says so and names the range that *was* reachable.
 
+By default each candidate concentration is evaluated with one static solve.
+`evaluate_state=` replaces that with any callable returning a `Result`, which
+is how a boron search runs against a converged thermal-hydraulic state:
+
+```python
+search = model.search_boron(
+    apply_boron, target_k=1.0, guess=1000.0, bracket=(0.0, 2500.0),
+    evaluate_state=lambda: model.solve_coupled(
+        channel, apply_state, total_power=693.75e6).result,
+)
+```
+
+It is called after `apply_boron`, and a coupled solve does its own refresh.
+See [Thermal-hydraulic coupling](#thermal-hydraulic-coupling).
+
 ### Sweeps
 
 ```python
@@ -465,6 +483,17 @@ result.history               # structured array of the outer iteration
 `flux` and `power` are views onto the C++ buffers and stay valid as long as
 the `Result` does. Copy them if you intend to outlive it.
 
+`power` is integrated over each node and normalised to its arithmetic mean
+over powered nodes, so on a non-uniform mesh `f_q` is not a peak-to-average
+power *density*. Divide by volume and normalise yourself when the mesh is not
+uniform:
+
+```python
+density = result.power / geom.volumes
+powered = density > 0
+f_q = density.max() / np.average(density[powered], weights=geom.volumes[powered])
+```
+
 ### Plots
 
 ```python
@@ -495,10 +524,10 @@ than against a fixed number. Measured on the model above:
 
 | `inner_tolerance` | `fission_source_tolerance` | worst residual |
 |---|---|---|
-| `1e-5` (default) | `1e-8` (default) | `4.6e-5` |
-| `1e-8` | `1e-8` | `3.6e-8` |
+| `1e-5` (default) | `1e-8` (default) | `6.8e-5` |
+| `1e-8` | `1e-8` | `7.9e-8` |
 | `1e-11` | `1e-8` | `1.0e-8` |
-| `1e-11` | `1e-10` | `8.7e-11` |
+| `1e-11` | `1e-10` | `8.9e-11` |
 
 Tighten both when you want a sharp check:
 
@@ -879,12 +908,13 @@ do not.
 
 ### What is not implemented
 
-No exponential transformation, no adaptive time stepping, no decay heat, and
-no feedback — FR-MODE-7 needs a thermal-hydraulics model, and there is no
-built-in one yet. There *is* somewhere to attach your own; see the next
-section. The nonlinear nodal coupling coefficients are held at their static
-values inside a step, so the nodal kernels drift from consistency as the flux
-shape moves; FDM has nothing to freeze.
+No exponential transformation, no adaptive time stepping, no decay heat, and no
+thermal-hydraulic feedback inside a transient (FR-MODE-7). The built-in
+thermal-hydraulics of the next section is steady state only: `PinConduction`
+has no heat capacity term, and there is no driver coupling it to `Transient`.
+The nonlinear nodal coupling coefficients are held at their static values
+inside a step, so the nodal kernels drift from consistency as the flux shape
+moves; FDM has nothing to freeze.
 
 ---
 
@@ -941,6 +971,21 @@ the channel and inverts through the water backend for temperature and density.
 
 `mass_flow` and the pin counts are **per channel, not per assembly**. If you
 used `subdivide`, one assembly is several columns and both must be scaled.
+The alternative is to run the channels on an assembly-level geometry and map
+node power onto it; `AssemblyChannels` in `benchmarks/neacrp/neacrp_build.py`
+is a `ThermalSolver` that does exactly that.
+
+**An assembly on a symmetry face** is modelled as a half or a quarter of
+itself and carries that fraction of the power, while its channel still has a
+whole assembly's flow and pins. Scale its power up to a whole assembly's
+worth before it reaches the channel (`whole_assembly_factor` in the same
+file); the enthalpy rise and linear heat rate then come out right. On NEACRP
+leaving it out put the critical boron 21.6 ppm high and the Doppler
+temperature 28.1 K low.
+
+`PinGeometry(guide_tube_radius=...)` gives guide tubes their own outer radius.
+Without it they are taken to be the size of a fuel pin, which overstates the
+flow area wherever guide tubes are wider.
 
 `direct_heating` does **not** change the outlet temperature. In steady state
 every watt reaches the coolant whichever route it takes; the fraction splits
@@ -963,10 +1008,25 @@ conduction = openndm.PinConduction(pins, fuel_conductivity=lambda t: 3.0 + 0.0,
                                    film_coefficient=3.0e4, n_rings=20)
 ```
 
-**No conductivity correlation ships with OpenNDM.** The published ones are
-temperature-dependent and citing one is your call, not ours. A constant is
-exact at any ring count; a callable is evaluated at each ring's outer boundary,
-which is first order in `n_rings`, so mesh accordingly.
+No conductivity is a default. The four NEACRP-L-335 reference relations ship
+as cited, opt-in callables:
+
+```python
+conduction = openndm.PinConduction(
+    pins,
+    fuel_conductivity=openndm.neacrp_fuel_conductivity,
+    clad_conductivity=openndm.neacrp_clad_conductivity,
+    gap_conductance=1.0e4, film_coefficient=3.0e4,
+)
+```
+
+`neacrp_fuel_heat_capacity` and `neacrp_clad_heat_capacity` come with them
+and have no consumer yet, since steady conduction reads no heat capacity. The
+fuel conductivity refuses temperatures at or below its pole at 73.15 K.
+
+A constant conductivity is exact at any ring count; a callable is evaluated at
+each ring's outer boundary, which is first order in `n_rings`, so mesh
+accordingly.
 
 ### Boiling
 
@@ -997,8 +1057,7 @@ modelled.
 `slip_ratio` defaults to 1, which is the homogeneous equilibrium model proper
 and makes the mixture density exactly the inverse of the mass-weighted
 specific volume. Anything else is a correlation you are choosing; **no
-published slip correlation ships with OpenNDM**, for the same reason no
-conductivity correlation does.
+published slip correlation ships with OpenNDM**.
 
 ### Cross sections live per composition
 
@@ -1056,6 +1115,7 @@ the mean power, and raises `ConvergenceError` if it is still moving after
 `max_iterations`. It does not return an unconverged state. Lower `relaxation`
 if it oscillates: a coupling whose power falls off temperature steeply enough
 to diverge at `relaxation=1.0` usually converges in a few iterations at 0.25.
+The NEACRP full power cases run at `relaxation=0.4`.
 
 `coupled.history` holds one `CouplingStep` per iteration with the power change
 and the eigenvalue.

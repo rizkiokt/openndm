@@ -31,6 +31,7 @@ __all__ = [
     "CRITICAL_PRESSURE",
     "CRITICAL_TEMPERATURE",
     "GAS_CONSTANT",
+    "SATURATION_REGION3_PRESSURE",
     "ConstantWater",
     "IF97Water",
     "SaturationProperties",

@@ -6,6 +6,15 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Documentation
+
+- The theory manual's equations are written in LaTeX, so Read the Docs renders
+  them; most were plain text in code blocks. Status, roadmap, README, user
+  guide and architecture notes brought up to date with the work since 0.2.0,
+  and the benchmark figures re-measured after the one-node boundary problem.
+  `Transient`, `TransientStep` and `SATURATION_REGION3_PRESSURE` now appear in
+  the API reference.
+
 ### Fixed
 
 - **`Model.refresh()` keeps the flux, so warm start survives a change to the
@@ -47,6 +56,20 @@ All notable changes to OpenNDM are recorded here. The format follows
   returns the universes to tally over, in composition order, so the MGXS
   library and the map share one ordering. The IAEA quarter core built this
   way gives the hand-built eigenvalue exactly.
+
+- **The NEACRP rod ejection benchmark, initial steady states**
+  (`benchmarks/neacrp/`, #95, #97, #99). The deck is parsed from KOMODO's
+  sample and checked against NEACRP-L-335. Against the published critical
+  boron of NEA/NSC/DOC(93)25 Table 3.1: within **3.5 ppm** on the three hot
+  zero power cases and **1.7 ppm** on the three coupled full power cases, with
+  the core-average Doppler temperature within **0.7 K**. The peaking factors
+  are reported but not verified; F_Q is 6 to 13% high and the reference's
+  definition is not yet settled.
+
+- **A boron search against a coupled state** (`Model.search_boron(
+  evaluate_state=...)`, #96). Any callable returning a `Result` replaces the
+  single static solve per candidate, so each concentration can be evaluated
+  against a converged thermal-hydraulic state.
 
 - **The NEACRP thermophysical correlations, cited and opt-in**
   (`openndm.neacrp_fuel_conductivity` and three companions). #70 shipped no
