@@ -18,6 +18,7 @@ Module                       Responsibility
 :mod:`openndm.gc.leakage`    B1 / P1 critical spectrum and buckling search
 :mod:`openndm.gc.kinetics`   adjoint-weighted beta_eff and Lambda
 :mod:`openndm.gc.formfunc`   pin form functions for power reconstruction
+:mod:`openndm.gc.lattice`    core maps from an ``openmc.RectLattice``
 :mod:`openndm.gc.driver`     branch library generation and assembly
 ============================ ===========================================
 
@@ -30,6 +31,7 @@ from .adf import add_adf_tallies, compute_adf
 from .driver import BranchDriver, BranchGrid
 from .formfunc import compute_form_functions
 from .kinetics import KineticsParameters, compute_kinetics
+from .lattice import composition_map, lattice_universes
 from .leakage import CriticalSpectrum, critical_spectrum
 from .mgxs import (
     from_mgxs_file,
@@ -44,6 +46,7 @@ __all__ = [
     "CriticalSpectrum",
     "KineticsParameters",
     "add_adf_tallies",
+    "composition_map",
     "compute_adf",
     "compute_form_functions",
     "compute_kinetics",
@@ -51,5 +54,6 @@ __all__ = [
     "from_mgxs_file",
     "from_mgxs_library",
     "from_statepoint",
+    "lattice_universes",
     "require_openmc",
 ]

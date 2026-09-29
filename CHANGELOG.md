@@ -41,6 +41,13 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **`Geometry.from_openmc` builds the core from an `openmc.RectLattice`**
+  (FR-GEO-7, #42). The pitch and core map come from the lattice, so they can
+  no longer drift from the OpenMC model. `openndm.gc.lattice_universes`
+  returns the universes to tally over, in composition order, so the MGXS
+  library and the map share one ordering. The IAEA quarter core built this
+  way gives the hand-built eigenvalue exactly.
+
 - **The NEACRP thermophysical correlations, cited and opt-in**
   (`openndm.neacrp_fuel_conductivity` and three companions). #70 shipped no
   conductivity correlation on purpose: the published ones are

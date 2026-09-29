@@ -21,7 +21,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | FR-GEO-4 | done | `subdivide=` splits a lattice cell; discontinuity factors follow the composition. |
 | FR-GEO-5 | done | Zero flux, vacuum, reflective and per-group albedo, per face. `outside=` sets the condition on faces looking at an inactive position. |
 | FR-GEO-6 | done | Kernels see only the node/surface graph. No solver code indexes `(i,j,k)`. |
-| FR-GEO-7 | not started | Construction from an `openmc.RectLattice`. |
+| FR-GEO-7 | done | `Geometry.from_openmc` takes pitch and core map from an `openmc.RectLattice`, 2D with a given `dz` or 3D. `openndm.gc.lattice_universes` gives the same universes as MGXS domains, so the library and the map share one ordering. The lattice's `outer` universe maps to `INACTIVE`. |
 
 ## 4.2 Cross sections (FR-XS)
 
@@ -42,7 +42,7 @@ Version 0.1.0. Roughly: M0, M1, M2 and M3 of the specification's phase plan.
 | ID | State | Notes |
 |---|---|---|
 | FR-OMC-1 | done | `from_mgxs_library`, validated end to end against a real OpenMC run (C-1, `tests/validation/`). Reproduces OpenMC's k_inf to 12 pcm, 1.2 sigma. Handles (n,xn) scattering multiplicity, which is worth 230 pcm and which the stand-in tests could not have caught. |
-| FR-OMC-2 | partial | Any domain type is accepted and each domain becomes a composition. Mapping mesh elements onto nodes is left to the caller ordering the domains to match the core map. |
+| FR-OMC-2 | partial | Any domain type is accepted and each domain becomes a composition. Universe domains map onto nodes through `Geometry.from_openmc` (FR-GEO-7). Mapping mesh elements onto nodes is still left to the caller ordering the domains to match the core map. |
 | FR-OMC-3 | partial | `from_mgxs_file` reads `mgxs.h5`. Untested against a real file. |
 | FR-OMC-4 | done | `from_statepoint`. |
 | FR-OMC-5 | done | Both D sources accepted, preference configurable, warning above a configurable disagreement tolerance. C-1 confirms D does not affect an infinite medium, as it must not. |

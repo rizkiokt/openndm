@@ -178,6 +178,37 @@ jobs:
           assert "openmc" not in sys.modules
           PY
 
+  openmc-api:
+    name: OpenMC Python API (FR-GEO-7, FR-OMC)
+    runs-on: ubuntu-latest
+    # These tests build OpenMC objects but never transport a particle, so
+    # unlike openmc-coupling they need no nuclear data and run on every push.
+    # Without this job they are skipped everywhere, because the test matrix
+    # installs from PyPI and OpenMC is only on conda-forge.
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: conda-incubator/setup-miniconda@v4
+        with:
+          miniforge-version: latest
+          activate-environment: openmc-env
+          channels: conda-forge
+
+      - name: Install OpenMC
+        run: conda install -y openmc pytest
+
+      - name: Install OpenNDM
+        run: pip install .
+
+      - name: Tests that need OpenMC's Python API
+        run: >-
+          python -m pytest -v
+          tests/python/test_openmc_lattice.py
+          tests/python/test_gc.py
+
   openmc-coupling:
     name: OpenMC coupling validation (C-1, C-2)
     runs-on: ubuntu-latest
@@ -287,7 +318,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [lint, test, cpp-tests, no-openmc, docs]
+    needs: [lint, test, cpp-tests, no-openmc, openmc-api, docs]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any required job did not succeed

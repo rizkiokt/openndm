@@ -232,6 +232,29 @@ geom = openndm.Geometry.from_lattice(
 `openndm.INACTIVE` (-1) marks a position outside the core; those nodes are not
 created.
 
+### From an OpenMC lattice
+
+When the core already exists as an `openmc.RectLattice`, build the geometry
+from it rather than typing the map again. The pitch sets the node widths, and
+positions holding the lattice's `outer` universe become `INACTIVE`.
+
+```python
+universes = openndm.gc.lattice_universes(core_lattice)
+mgxs_lib.domain_type = "universe"
+mgxs_lib.domains = universes             # composition n is universes[n]
+# ... run OpenMC ...
+xslib = openndm.gc.from_mgxs_library(mgxs_lib)
+geom = openndm.Geometry.from_openmc(
+    core_lattice,
+    dz=[20.0, 15.0, ...],                # 2D lattice only; a 3D one uses its z pitch
+    boundaries={...},
+)
+```
+
+`domains=` takes the universes, or their ids, in composition order when the
+library was built some other way. Everything else `from_lattice` takes, except
+the widths, passes through.
+
 ### Boundary conditions
 
 Per face, keyed `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max`:

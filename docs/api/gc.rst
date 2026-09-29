@@ -59,6 +59,14 @@ Pin form functions
    :undoc-members:
    :show-inheritance:
 
+Core maps from a lattice
+------------------------
+
+.. automodule:: openndm.gc.lattice
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Branch libraries
 ----------------
 

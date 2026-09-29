@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 
 from . import _core
+from .exceptions import InputError
 
 __all__ = ["INACTIVE", "Geometry"]
 
@@ -204,6 +205,79 @@ class Geometry:
             dx=widths[0],
             dy=widths[1],
             dz=widths[2],
+        )
+
+    @classmethod
+    def from_openmc(
+        cls,
+        lattice,
+        *,
+        domains: Sequence | None = None,
+        dz: Sequence[float] | None = None,
+        **options,
+    ) -> Geometry:
+        """Build a Cartesian geometry from an ``openmc.RectLattice`` (FR-GEO-7).
+
+        Parameters
+        ----------
+        lattice : openmc.RectLattice
+            Core lattice, one position per node before ``subdivide``. Its
+            pitch sets the node widths in cm. Positions holding its ``outer``
+            universe become ``INACTIVE``.
+        domains : sequence of openmc.Universe or int, optional
+            Universes, or their ids, in composition order. Pass the sequence
+            the MGXS library was built on; defaults to
+            :func:`openndm.gc.lattice_universes`.
+        dz : sequence of float, optional
+            Axial node widths in cm. Required for a two-dimensional lattice,
+            which is extruded through one plane per width, and refused for a
+            three-dimensional one, whose z pitch already sets them.
+        **options
+            Passed to :meth:`from_lattice`: ``boundaries``, ``albedo``,
+            ``outside``, ``outside_albedo``, ``subdivide`` and ``rotation``.
+
+        Returns
+        -------
+        Geometry
+
+        Raises
+        ------
+        InputError
+            On a missing or redundant ``dz``, on ``pitch``, ``dx`` or ``dy`` in
+            ``options``, or on a universe the domains do not cover.
+        """
+        from .gc.lattice import composition_map
+
+        fixed_by_lattice = sorted({"pitch", "dx", "dy"} & options.keys())
+        if fixed_by_lattice:
+            raise InputError(
+                f"{fixed_by_lattice} come from the lattice's pitch and "
+                "cannot be overridden"
+            )
+
+        composition = composition_map(lattice, domains)
+        x_pitch, y_pitch, *z_pitch = lattice.pitch
+        if lattice.ndim == 3:
+            if dz is not None:
+                raise InputError(
+                    "a three-dimensional lattice sets dz from its z pitch"
+                )
+            dz = np.full(composition.shape[0], z_pitch[0])
+        else:
+            if dz is None:
+                raise InputError(
+                    "a two-dimensional lattice needs dz, the axial node widths"
+                )
+            composition = np.repeat(composition, len(dz), axis=0)
+
+        ny, nx = composition.shape[1:]
+        return cls.from_lattice(
+            composition,
+            pitch=x_pitch,
+            dx=np.full(nx, x_pitch),
+            dy=np.full(ny, y_pitch),
+            dz=dz,
+            **options,
         )
 
     @property
