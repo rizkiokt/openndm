@@ -129,10 +129,12 @@ class XSLibrary:
 
     @property
     def n_groups(self) -> int:
+        """Number of energy groups."""
         return self._lib.n_groups
 
     @property
     def n_compositions(self) -> int:
+        """Number of distinct homogenised compositions."""
         return self._lib.n_compositions
 
     @property
@@ -142,10 +144,18 @@ class XSLibrary:
 
     @property
     def axes(self) -> list:
+        """Branch axes, outermost first, as a new list of ``BranchAxis``.
+
+        Empty for a single-state library.
+        """
         return list(self._lib.axes)
 
     @property
     def finalized(self) -> bool:
+        """True once :meth:`finalize` has validated and cached the library.
+
+        Reset by any mutable access to a composition or to the branch axes.
+        """
         return self._lib.finalized
 
     @property
@@ -155,10 +165,12 @@ class XSLibrary:
 
     @property
     def extrapolation(self) -> str:
+        """Off-grid interpolation policy: ``clamp``, ``linear`` or ``error``."""
         return self._lib.extrapolation.name
 
     @extrapolation.setter
     def extrapolation(self, value: str) -> None:
+        """Set the off-grid policy from its name or an ``Extrapolation``."""
         if isinstance(value, str):
             try:
                 value = _EXTRAPOLATION[value.lower()]

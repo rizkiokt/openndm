@@ -282,14 +282,17 @@ class Geometry:
 
     @property
     def n_nodes(self) -> int:
+        """Number of active nodes in the graph."""
         return self._g.n_nodes
 
     @property
     def n_surfaces(self) -> int:
+        """Number of surfaces in the graph, boundary surfaces included."""
         return self._g.n_surfaces
 
     @property
     def n_compositions(self) -> int:
+        """Number of distinct composition indices the nodes refer to."""
         return self._g.n_compositions
 
     @property
@@ -299,47 +302,66 @@ class Geometry:
 
     @property
     def volumes(self) -> np.ndarray:
-        """Node volumes in cm^3, shape ``(n_nodes,)``."""
+        """Node volumes in cm^3, shape ``(n_nodes,)``.
+
+        A copy, gathered from the node graph on every access.
+        """
         return self._g.volumes
 
     @property
     def total_volume(self) -> float:
+        """Summed volume of the active nodes, in cm^3."""
         return self._g.total_volume
 
     @property
     def compositions(self) -> np.ndarray:
-        """Composition index per node, shape ``(n_nodes,)``."""
+        """Composition index per node, shape ``(n_nodes,)``.
+
+        A copy, gathered from the node graph on every access.
+        """
         return self._g.compositions
 
     @property
     def rotations(self) -> np.ndarray:
-        """Quarter turns counter-clockwise per node, shape ``(n_nodes,)``."""
+        """Quarter turns counter-clockwise per node, shape ``(n_nodes,)``.
+
+        A copy, gathered from the node graph on every access.
+        """
         return self._g.rotations
 
     @property
     def dx(self) -> np.ndarray:
-        """Node widths along x in cm, one per column of ``shape[2]``."""
+        """Node widths along x in cm, one per column of ``shape[2]``.
+
+        The array this Geometry holds, not a copy.
+        """
         return self._width(0)
 
     @property
     def dy(self) -> np.ndarray:
-        """Node widths along y in cm, one per row of ``shape[1]``."""
+        """Node widths along y in cm, one per row of ``shape[1]``.
+
+        The array this Geometry holds, not a copy.
+        """
         return self._width(1)
 
     @property
     def dz(self) -> np.ndarray:
         """Axial node widths in cm, one per plane of ``shape[0]``.
 
-        A control rod bank at a continuous position needs the plane
-        boundaries, and a caller reconstructing them from its own input gets
-        them wrong as soon as ``subdivide`` is used: the widths here are the
-        post-subdivision ones.
+        The array this Geometry holds, not a copy. A control rod bank at a
+        continuous position needs the plane boundaries, and a caller
+        reconstructing them from its own input gets them wrong as soon as
+        ``subdivide`` is used: the widths here are the post-subdivision ones.
         """
         return self._width(2)
 
     @property
     def lattice_to_node(self) -> np.ndarray:
-        """Node index per flat lattice position, -1 where inactive."""
+        """Node index per flat lattice position, -1 where inactive.
+
+        Shape ``(nz * ny * nx,)``. A copy of the C++ mapping.
+        """
         return self._g.lattice_to_node
 
     def expand(self, node_values: np.ndarray, fill: float = np.nan) -> np.ndarray:

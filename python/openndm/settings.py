@@ -58,10 +58,12 @@ class Settings:
 
     @property
     def kernel(self) -> str:
+        """Nodal kernel in use: ``sanm``, ``nem`` or ``fdm``."""
         return self._s.kernel.name
 
     @kernel.setter
     def kernel(self, value) -> None:
+        """Set the kernel from its name or a ``KernelType``."""
         if isinstance(value, str):
             try:
                 value = _KERNELS[value.lower()]
@@ -73,10 +75,12 @@ class Settings:
 
     @property
     def mode(self) -> str:
+        """Calculation mode in use: ``forward``, ``adjoint`` or ``fixed_source``."""
         return self._s.mode.name
 
     @mode.setter
     def mode(self, value) -> None:
+        """Set the calculation mode from its name or a ``SolveMode``."""
         if isinstance(value, str):
             try:
                 value = _MODES[value.lower()]

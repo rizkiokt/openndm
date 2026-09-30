@@ -121,65 +121,108 @@ class StatePoint:
 
     @property
     def k_eff(self) -> float:
+        """Multiplication factor of the recorded solve."""
         return float(self._f.attrs["k_eff"])
 
     @property
     def kernel(self) -> str:
+        """Nodal kernel that produced the file: ``sanm``, ``nem`` or ``fdm``."""
         return self._f.attrs["kernel"].decode()
 
     @property
     def mode(self) -> str:
+        """Calculation mode: ``forward``, ``adjoint`` or ``fixed_source``."""
         return self._f.attrs["mode"].decode()
 
     @property
     def converged(self) -> bool:
+        """Whether the recorded solve met its outer convergence criteria."""
         return bool(self._f.attrs["converged"])
 
     @property
     def version(self) -> str:
+        """OpenNDM version that wrote the file."""
         return self._f.attrs["version"].decode()
 
     @property
     def date_and_time(self) -> str:
+        """ISO 8601 UTC timestamp of the write."""
         return self._f.attrs["date_and_time"].decode()
 
     @property
     def flux(self) -> np.ndarray:
+        """Scalar flux, shape ``(n_nodes, n_groups)``.
+
+        Carries the solver's normalisation, which makes the volume-averaged
+        flux summed over groups 1, so the values are relative rather than in
+        cm^-2 s^-1. A copy read from the file on every access.
+        """
         return self._f["results/flux"][()]
 
     @property
     def power(self) -> np.ndarray:
+        """Relative node power, shape ``(n_nodes,)``.
+
+        Normalised to a mean of 1 over the powered nodes. A copy read from
+        the file on every access.
+        """
         return self._f["results/power"][()]
 
     @property
     def radial_power(self) -> np.ndarray:
+        """Volume-weighted radial power map, shape ``(ny, nx)``.
+
+        Normalised to a mean of 1 over the columns that carry power. A copy
+        read from the file on every access.
+        """
         return self._f["results/radial_power"][()]
 
     @property
     def axial_power(self) -> np.ndarray:
+        """Volume-weighted axial power profile, shape ``(nz,)``.
+
+        A copy read from the file on every access.
+        """
         return self._f["results/axial_power"][()]
 
     @property
     def f_q(self) -> float:
+        """Total peaking factor: peak node power over the core average."""
         return float(self._f["results"].attrs["f_q"])
 
     @property
     def f_dh(self) -> float:
+        """Radial enthalpy-rise peaking factor: peak radial power."""
         return float(self._f["results"].attrs["f_dh"])
 
     @property
     def history(self) -> np.ndarray:
+        """Outer iteration history, shape ``(n_outers,)``.
+
+        Structured array with fields ``outer``, ``k_eff``, ``k_change``,
+        ``source_change`` and ``inner_iterations``. A copy read from the file
+        on every access.
+        """
         return self._f["iteration_history"][()]
 
     @property
     def volumes(self) -> np.ndarray:
+        """Node volumes in cm^3, shape ``(n_nodes,)``.
+
+        A copy read from the file on every access.
+        """
         return self._f["geometry/volume"][()]
 
     @property
     def lattice_shape(self) -> tuple[int, int, int]:
+        """Shape ``(nz, ny, nx)`` of the originating lattice."""
         return tuple(int(v) for v in self._f["geometry"].attrs["lattice_shape"])
 
     def close(self) -> None:
+        """Close the underlying HDF5 file.
+
+        Every array property reads from it, so they raise once it is closed.
+        """
         self._f.close()
 
     def __enter__(self) -> StatePoint:
