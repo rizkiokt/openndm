@@ -36,8 +36,9 @@ def compute_form_functions(
 
     Returns
     -------
-    numpy.ndarray
-        Form functions with the pin lattice's shape. Non-fuel positions are 0.
+    numpy.ndarray, shape (ny, nx)
+        Dimensionless pin-to-assembly-average fission rate ratios, a new
+        array. Non-fuel positions are 0.
 
     Raises
     ------

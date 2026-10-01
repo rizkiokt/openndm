@@ -25,7 +25,15 @@ __all__ = ["BranchDriver", "BranchGrid", "BranchPoint"]
 
 @dataclass(frozen=True)
 class BranchPoint:
-    """One state point of a branch grid."""
+    """One state point of a branch grid.
+
+    Attributes
+    ----------
+    index : int
+        Flat index into the grid, which is also the library's state index.
+    state : dict
+        State variable name to value, in the units of the axis it came from.
+    """
 
     index: int
     state: dict
@@ -44,7 +52,12 @@ class BranchGrid:
     **axes
         One keyword per state variable, each a sequence of grid points, e.g.
         ``BranchGrid(fuel_temperature=[560, 900, 1200], boron=[0, 1500])``.
-        Insertion order becomes axis order.
+        Each must be strictly increasing. Insertion order becomes axis order.
+
+    Attributes
+    ----------
+    axes : dict
+        Axis name to its grid points, in declaration order.
 
     Examples
     --------
@@ -71,10 +84,12 @@ class BranchGrid:
 
     @property
     def names(self) -> list[str]:
+        """Axis names, in declaration order."""
         return list(self.axes)
 
     @property
     def shape(self) -> tuple[int, ...]:
+        """Number of points on each axis, in declaration order."""
         return tuple(a.size for a in self.axes.values())
 
     def __len__(self) -> int:
@@ -118,6 +133,7 @@ class BranchDriver:
         ``model_factory(**state) -> openmc.Model``. Called once per branch
         point with that point's state variables as keyword arguments.
     grid : BranchGrid
+        The state points to run.
     library_factory : callable
         ``library_factory(model, statepoint, **state) -> XSLibrary``, turning
         one completed OpenMC run into a single-state OpenNDM library.
@@ -150,6 +166,7 @@ class BranchDriver:
 
     @property
     def checkpoint_path(self) -> Path:
+        """Path of the JSON checkpoint inside ``workdir``."""
         return self.workdir / "branch_checkpoint.json"
 
     def completed(self) -> set[int]:
@@ -160,6 +177,7 @@ class BranchDriver:
             return {int(k) for k in json.load(f).get("completed", [])}
 
     def _record(self, index: int) -> None:
+        """Add one branch index to the checkpoint on disk."""
         if not self.checkpoint:
             return
         done = self.completed() | {index}
@@ -170,6 +188,7 @@ class BranchDriver:
             )
 
     def branch_dir(self, point: BranchPoint) -> Path:
+        """Return the run directory of one branch point, inside ``workdir``."""
         return self.workdir / f"branch_{point.index:05d}_{point.key}"
 
     def run_one(self, point: BranchPoint) -> XSLibrary:
@@ -242,6 +261,11 @@ class BranchDriver:
         results : mapping of int to XSLibrary
             Keyed by branch index. Must cover every grid point.
 
+        Returns
+        -------
+        XSLibrary
+            Branch-parameterised and finalized.
+
         Raises
         ------
         InputError
@@ -307,7 +331,31 @@ class BranchDriver:
 
         Parameters
         ----------
+        path : path-like
+            Where to write the script. Made executable.
+        command : str
+            Command each array task runs, with ``--index`` and ``--workdir``
+            appended.
         scheduler : {'slurm', 'pbs'}
+            Directive dialect to emit.
+        job_name : str
+            Job name given to the scheduler.
+        time_limit : str
+            Wall-clock limit per array task, as ``HH:MM:SS``.
+        cpus : int
+            Cores per array task, also exported as ``OMP_NUM_THREADS``.
+        extra_directives : sequence of str
+            Further directives, each emitted after the scheduler's prefix.
+
+        Returns
+        -------
+        pathlib.Path
+            The script that was written.
+
+        Raises
+        ------
+        InputError
+            On an unknown ``scheduler``.
         """
         path = Path(path)
         n = len(self.grid)

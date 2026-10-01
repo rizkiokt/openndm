@@ -42,8 +42,8 @@ class AdfResult:
     Attributes
     ----------
     values : numpy.ndarray, shape (n_faces, G)
-        Face-ordered as ``-x, +x, -y, +y, -z, +z``, matching
-        :meth:`openndm.XSLibrary.set_adf`.
+        Dimensionless flux ratios, face-ordered as ``-x, +x, -y, +y, -z, +z``,
+        matching :meth:`openndm.XSLibrary.set_adf`.
     std_dev : numpy.ndarray, shape (n_faces, G)
         Propagated 1-sigma of the ratio, taking the two tallies as
         uncorrelated. They share particle histories, so the true sigma is
@@ -100,10 +100,10 @@ def add_adf_tallies(
     prefix : str
         Tally name prefix, used again by :func:`compute_adf`.
     z_bounds : (float, float)
-        Axial extent of the tally meshes for a two-dimensional lattice, whose
-        own extent is infinite in z. A discontinuity factor is a ratio of flux
-        densities, so any consistent finite extent gives the same answer; the
-        default is a unit height about the origin.
+        Axial extent of the tally meshes in cm, for a two-dimensional
+        lattice, whose own extent is infinite in z. A discontinuity factor is
+        a ratio of flux densities, so any consistent finite extent gives the
+        same answer; the default is a unit height about the origin.
 
     Returns
     -------
@@ -220,12 +220,15 @@ def compute_adf(
     Returns
     -------
     AdfResult
+        Discontinuity factors per face and group, their propagated 1-sigma,
+        and the slab width the ratio was formed with.
     """
     from .mgxs import require_openmc
 
     require_openmc()
 
     def tally_flux(name):
+        """Mean and 1-sigma of one named tally, group-ordered, or two Nones."""
         try:
             tally = statepoint.get_tally(name=name)
         except LookupError:

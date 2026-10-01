@@ -19,9 +19,9 @@ class KineticsParameters:
     ----------
     beta_eff : float
         Total effective delayed neutron fraction.
-    beta : numpy.ndarray
-        Per-precursor-group effective fractions.
-    decay_constant : numpy.ndarray
+    beta : numpy.ndarray, shape (n_families,)
+        Per-precursor-group effective fractions, dimensionless.
+    decay_constant : numpy.ndarray, shape (n_families,)
         Per-precursor-group decay constants in 1/s.
     generation_time : float
         Neutron generation time :math:`\\Lambda` in seconds.
@@ -71,13 +71,16 @@ def compute_kinetics(
     prompt_statepoint : openmc.StatePoint, optional
         Statepoint of a prompt-only calculation, required for the k-ratio
         fallback.
-    decay_constant : array_like, optional
-        Precursor decay constants. Required when OpenMC does not supply them.
+    decay_constant : array_like, shape (n_families,), optional
+        Precursor decay constants in 1/s. Required when OpenMC does not
+        supply them.
     method : {'auto', 'ifp', 'k_ratio'}
 
     Returns
     -------
     KineticsParameters
+        Effective delayed fractions, decay constants in 1/s, the generation
+        time in seconds, and which of the two methods produced them.
 
     Raises
     ------

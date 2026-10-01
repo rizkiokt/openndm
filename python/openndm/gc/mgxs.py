@@ -251,6 +251,7 @@ def from_mgxs_library(
     out = XSLibrary(n_groups, len(domain_list))
 
     def order(a):
+        """Put one group-ordered array in OpenNDM's group order."""
         return a[::-1] if reverse_groups else a
 
     for index, domain in enumerate(domain_list):
@@ -418,10 +419,14 @@ def from_mgxs_file(path, *, reverse_groups: bool = False) -> XSLibrary:
     ----------
     path : path-like
         Path to the ``mgxs.h5`` file.
+    reverse_groups : bool
+        Reverse the group order on ingestion. Leave this alone unless the
+        file uses increasing-energy ordering.
 
     Returns
     -------
     XSLibrary
+        Finalized, single branch state.
 
     Notes
     -----
@@ -491,12 +496,16 @@ def from_statepoint(
     mgxs_library : openmc.mgxs.Library
         The library object describing the tally specification that was used.
         It is loaded from ``statepoint`` in place.
+    domains : sequence, optional
+        Restrict and order the domains; defaults to ``mgxs_library.domains``.
+        The resulting composition index is the position in this sequence.
     **kwargs
         Forwarded to :func:`from_mgxs_library`.
 
     Returns
     -------
     XSLibrary
+        Finalized, single branch state.
     """
     require_openmc()
     mgxs_library.load_from_statepoint(statepoint)

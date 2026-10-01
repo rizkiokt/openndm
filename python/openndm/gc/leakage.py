@@ -61,8 +61,18 @@ defensible fallback.
 def b1_gamma(buckling: float, total: np.ndarray) -> np.ndarray:
     """B1 leakage correction factor :math:`\\gamma_g`.
 
-    Returns an array of ones when ``buckling`` is zero, which is exactly the
-    P1 limit.
+    Parameters
+    ----------
+    buckling : float
+        Geometric buckling :math:`B^2` in cm^-2.
+    total : numpy.ndarray, shape (G,)
+        Total cross section per group in cm^-1.
+
+    Returns
+    -------
+    numpy.ndarray, shape (G,)
+        Dimensionless correction factor per group, a new array. All ones when
+        ``buckling`` is zero, which is exactly the P1 limit.
     """
     total = np.asarray(total, dtype=float)
     x = buckling / np.square(total)
@@ -97,14 +107,17 @@ class CriticalSpectrum:
         leaking (supercritical-infinite-medium) system.
     k_infinity : float
         Eigenvalue at zero buckling.
-    spectrum : numpy.ndarray
-        Critical flux spectrum, normalised to sum to one.
-    diffusion : numpy.ndarray
-        Leakage-corrected diffusion coefficient per group.
+    spectrum : numpy.ndarray, shape (G,)
+        Critical flux spectrum, dimensionless, normalised to sum to one.
+    diffusion : numpy.ndarray, shape (G,)
+        Leakage-corrected diffusion coefficient per group, in cm.
     method : str
         ``'b1'`` or ``'p1'``. Recorded so a downstream comparison can state
         which convention produced the constants.
     iterations : int
+        Bisection steps the search took.
+    metadata : dict
+        Settings the search ran under, currently ``target_k``.
     """
 
     buckling: float
@@ -235,22 +248,34 @@ def critical_spectrum(
     Parameters
     ----------
     total : array_like, shape (G,)
-        Total cross section per group.
+        Total cross section per group in cm^-1.
     scatter : array_like, shape (G, G)
-        Scattering matrix indexed ``[from_group, to_group]``.
-    nu_fission, chi : array_like, shape (G,)
+        Scattering matrix in cm^-1, indexed ``[from_group, to_group]``.
+    nu_fission : array_like, shape (G,)
+        Fission neutron production cross section per group in cm^-1.
+    chi : array_like, shape (G,)
+        Fission spectrum per group, dimensionless.
     transport : array_like, shape (G,), optional
-        Transport cross section. Defaults to ``total`` minus the P1
+        Transport cross section in cm^-1. Defaults to ``total`` minus the P1
         within-group correction, which without P1 data is just ``total``.
     method : {'b1', 'p1'}
         Leakage convention. Recorded on the result.
+    target_k : float
+        Eigenvalue the buckling is searched for.
     bracket : (float, float)
-        Initial search bracket on :math:`B^2`, expanded automatically if the
-        root lies outside it.
+        Initial search bracket on :math:`B^2` in cm^-2, expanded
+        automatically if the root lies outside it.
+    tolerance : float
+        Convergence tolerance on ``k - target_k``.
+    max_iterations : int
+        Bisection step cap.
 
     Returns
     -------
     CriticalSpectrum
+        Critical buckling in cm^-2, the infinite-medium eigenvalue, the
+        critical spectrum and the leakage-corrected diffusion coefficient
+        per group.
 
     Raises
     ------
@@ -291,6 +316,7 @@ def critical_spectrum(
         raise InputError("transport cross section must be positive")
 
     def residual(b2):
+        """``k - target_k`` at one buckling, or None outside the physical region."""
         k, _, _ = _k_of_buckling(
             b2, total, scatter, nu_fission, chi, transport, method
         )

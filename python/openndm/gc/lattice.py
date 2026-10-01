@@ -40,6 +40,7 @@ def _universe_grid(lattice) -> np.ndarray:
 
 
 def _outer_id(lattice) -> int | None:
+    """Id of the lattice's ``outer`` universe, or None when it has none."""
     return None if lattice.outer is None else lattice.outer.id
 
 
