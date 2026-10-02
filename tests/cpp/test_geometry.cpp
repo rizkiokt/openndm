@@ -19,7 +19,14 @@ CartesianSpec uniform(int nx, int ny, int nz, double h)
   return spec;
 }
 
-}  // namespace
+//! True for a boundary surface on the low x face of the core.
+bool is_low_x_boundary(const Surface& surf)
+{
+  return surf.axis == 0 && surf.bc != BoundaryType::interior &&
+         surf.boundary_is_lo_side();
+}
+
+}
 
 TEST_CASE("every node face is wired to exactly one surface", "[geometry]")
 {
@@ -56,11 +63,7 @@ TEST_CASE("surface areas sum to the transverse cross section", "[geometry]")
   const auto g = Geometry::from_cartesian(uniform(2, 3, 4, 10.0));
   double area_x = 0.0;
   for (const auto& surf : g.surfaces()) {
-    // Count only the low boundary faces normal to x.
-    if (surf.axis == 0 && surf.bc != BoundaryType::interior &&
-        surf.boundary_is_lo_side()) {
-      area_x += surf.area;
-    }
+    if (is_low_x_boundary(surf)) area_x += surf.area;
   }
   REQUIRE(area_x == Approx(3 * 10.0 * 4 * 10.0));
   REQUIRE(g.total_volume() == Approx(2 * 3 * 4 * 1000.0));
@@ -81,7 +84,8 @@ TEST_CASE("non-uniform widths give the right volumes", "[geometry]")
 TEST_CASE("an out-of-core neighbour uses the inactive condition", "[geometry]")
 {
   CartesianSpec spec = uniform(2, 2, 1, 10.0);
-  spec.composition[3] = COMP_INACTIVE;  // the (1,1) position
+  const std::size_t position_1_1 = 3;
+  spec.composition[position_1_1] = COMP_INACTIVE;
   spec.bc.fill(BoundaryType::reflective);
   spec.inactive_bc = BoundaryType::vacuum;
   const auto g = Geometry::from_cartesian(spec);
@@ -90,8 +94,9 @@ TEST_CASE("an out-of-core neighbour uses the inactive condition", "[geometry]")
   for (const auto& surf : g.surfaces()) {
     if (surf.bc == BoundaryType::vacuum) ++vacuum;
   }
+  const int faces_looking_at_the_dropped_position = 2;
   REQUIRE(g.n_nodes() == 3);
-  REQUIRE(vacuum == 2);  // the two faces looking at the dropped position
+  REQUIRE(vacuum == faces_looking_at_the_dropped_position);
 }
 
 TEST_CASE("bad geometry input is rejected", "[geometry]")

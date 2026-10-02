@@ -11,17 +11,35 @@ namespace {
 
 //! Average of the quadratic leakage fit over the neighbour node, which is what
 //! the fit is constructed to reproduce.
+//!
+//! The integral of l_self + l1*P1 + l2*P2 over [lo, hi], divided by the width.
 double neighbour_average(
     double l_self, double l1, double l2, double lo, double hi)
 {
-  // integral of (l_self + l1*P1 + l2*P2) over [lo, hi], divided by the width
   const auto antiderivative = [&](double x) {
     return l_self * x + l1 * x * x + l2 * (2.0 * x * x * x - 0.5 * x);
   };
   return (antiderivative(hi) - antiderivative(lo)) / (hi - lo);
 }
 
-}  // namespace
+//! Composite Simpson average of f over the unit node [-1/2, 1/2].
+//!
+//! Enough intervals that the quadrature error sits well inside the default
+//! Approx tolerance the analytic basis is compared against.
+template<typename F>
+double node_average(F f)
+{
+  const int n_intervals = 20000;
+  const double h = 1.0 / n_intervals;
+  double total = f(-0.5) + f(0.5);
+  for (int i = 1; i < n_intervals; ++i) {
+    const double x = -0.5 + i * h;
+    total += (i % 2 == 0 ? 2.0 : 4.0) * f(x);
+  }
+  return total * h / 3.0;
+}
+
+}
 
 TEST_CASE(
     "the transverse leakage fit reproduces all three averages", "[kernel]")
@@ -58,18 +76,6 @@ TEST_CASE("a flat leakage produces a flat fit", "[kernel]")
 
 TEST_CASE("the analytic basis agrees with direct quadrature", "[kernel]")
 {
-  const auto quadrature = [](auto f) {
-    // Composite Simpson over [-1/2, 1/2] with plenty of points.
-    const int n = 20000;
-    const double h = 1.0 / n;
-    double total = f(-0.5) + f(0.5);
-    for (int i = 1; i < n; ++i) {
-      const double x = -0.5 + i * h;
-      total += (i % 2 == 0 ? 2.0 : 4.0) * f(x);
-    }
-    return total * h / 3.0;
-  };
-
   SECTION("hyperbolic branch")
   {
     const double k2 = 6.0;
@@ -77,11 +83,11 @@ TEST_CASE("the analytic basis agrees with direct quadrature", "[kernel]")
     const double k = std::sqrt(k2);
     REQUIRE(basis.hyperbolic);
     REQUIRE(basis.even_avg ==
-            Approx(quadrature([k](double x) { return std::cosh(k * x); })));
-    REQUIRE(basis.odd_m1 == Approx(quadrature([k](double x) {
+            Approx(node_average([k](double x) { return std::cosh(k * x); })));
+    REQUIRE(basis.odd_m1 == Approx(node_average([k](double x) {
       return std::sinh(k * x) * 2.0 * x;
     })));
-    REQUIRE(basis.even_m2 == Approx(quadrature([k](double x) {
+    REQUIRE(basis.even_m2 == Approx(node_average([k](double x) {
       return std::cosh(k * x) * (6.0 * x * x - 0.5);
     })));
     REQUIRE(basis.odd_face == Approx(std::sinh(0.5 * k)));
@@ -95,11 +101,11 @@ TEST_CASE("the analytic basis agrees with direct quadrature", "[kernel]")
     const double w = std::sqrt(-k2);
     REQUIRE_FALSE(basis.hyperbolic);
     REQUIRE(basis.even_avg ==
-            Approx(quadrature([w](double x) { return std::cos(w * x); })));
-    REQUIRE(basis.odd_m1 == Approx(quadrature([w](double x) {
+            Approx(node_average([w](double x) { return std::cos(w * x); })));
+    REQUIRE(basis.odd_m1 == Approx(node_average([w](double x) {
       return std::sin(w * x) * 2.0 * x;
     })));
-    REQUIRE(basis.even_m2 == Approx(quadrature([w](double x) {
+    REQUIRE(basis.even_m2 == Approx(node_average([w](double x) {
       return std::cos(w * x) * (6.0 * x * x - 0.5);
     })));
     REQUIRE(basis.odd_face == Approx(std::sin(0.5 * w)));
@@ -124,9 +130,10 @@ TEST_CASE(
     double a[4] = {0.0, 2.0, 3.0, 1.0};
     double b[2] = {4.0, 5.0};
     REQUIRE(solve_dense(a, b, 2));
-    // 0*x + 2*y = 4 and 3*x + 1*y = 5 give y = 2, x = 1.
-    REQUIRE(b[0] == Approx(1.0));
-    REQUIRE(b[1] == Approx(2.0));
+    const double y_from_first_row = 4.0 / 2.0;
+    const double x_from_second_row = (5.0 - y_from_first_row) / 3.0;
+    REQUIRE(b[0] == Approx(x_from_second_row));
+    REQUIRE(b[1] == Approx(y_from_first_row));
   }
   SECTION("a singular system")
   {

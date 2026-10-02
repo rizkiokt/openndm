@@ -19,19 +19,16 @@ void fill_two_group(Composition& c, double absorption_thermal)
   c.scatter = {0.0, 0.02, 0.0, 0.0};
 }
 
-}  // namespace
+}
 
 TEST_CASE("removal is absorption plus out-scatter", "[xslib]")
 {
   XSLibrary lib(2, 1);
   fill_two_group(lib.composition(0), 0.08);
   lib.finalize();
-  // Read through a const reference: the mutable accessor marks the library
-  // unfinalized by design, because the caller can invalidate the cache
-  // through it.
-  const XSLibrary& read = lib;
-  REQUIRE(read.composition(0).removal[0] == Approx(0.03));
-  REQUIRE(read.composition(0).removal[1] == Approx(0.08));
+  const XSLibrary& read_without_invalidating = lib;
+  REQUIRE(read_without_invalidating.composition(0).removal[0] == Approx(0.03));
+  REQUIRE(read_without_invalidating.composition(0).removal[1] == Approx(0.08));
   REQUIRE(lib.finalized());
 }
 
@@ -74,7 +71,8 @@ TEST_CASE("negative scattering warns but does not fail", "[xslib]")
 {
   XSLibrary lib(2, 1);
   fill_two_group(lib.composition(0), 0.08);
-  lib.composition(0).scatter[2] = -1.0e-6;  // thermal up to fast
+  const std::size_t thermal_up_to_fast = 2;
+  lib.composition(0).scatter[thermal_up_to_fast] = -1.0e-6;
   std::vector<std::string> warnings;
   REQUIRE_NOTHROW(lib.finalize(&warnings));
   REQUIRE_FALSE(warnings.empty());
@@ -114,18 +112,22 @@ TEST_CASE("multilinear interpolation is exact on linear data", "[xslib]")
   lib.finalize();
   REQUIRE(lib.n_states() == 4);
 
-  const auto mid = lib.interpolate({1000.0, 1000.0});
-  REQUIRE(mid.n_states() == 1);
-  REQUIRE(mid.composition(0).absorption[0] == Approx(0.012));
-  REQUIRE(mid.finalized());
+  SECTION("the midpoint of the branch space")
+  {
+    const auto mid = lib.interpolate({1000.0, 1000.0});
+    REQUIRE(mid.n_states() == 1);
+    REQUIRE(mid.composition(0).absorption[0] == Approx(0.012));
+    REQUIRE(mid.finalized());
+  }
 
-  // Reproducing the corners exactly is the check that catches an index
-  // ordering mismatch between the axes and the flat state array.
-  for (int state = 0; state < 4; ++state) {
-    const auto corner = lib.interpolate({values[state][0], values[state][1]});
-    const double expected =
-        0.01 + 1.0e-6 * values[state][0] + 1.0e-6 * values[state][1];
-    REQUIRE(corner.composition(0).absorption[0] == Approx(expected));
+  SECTION("each corner, which catches an axis-to-state index mismatch")
+  {
+    for (int state = 0; state < 4; ++state) {
+      const auto corner = lib.interpolate({values[state][0], values[state][1]});
+      const double expected =
+          0.01 + 1.0e-6 * values[state][0] + 1.0e-6 * values[state][1];
+      REQUIRE(corner.composition(0).absorption[0] == Approx(expected));
+    }
   }
 }
 

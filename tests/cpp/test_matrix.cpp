@@ -36,16 +36,22 @@ GroupMatrix laplacian(const SparsePattern& pattern, double shift)
   return A;
 }
 
-}  // namespace
-
-TEST_CASE("deterministic reductions do not depend on ordering", "[matrix]")
+//! Values spanning many magnitudes, which make plain summation order dependent.
+std::vector<double> wide_magnitude_values(int n)
 {
-  // Values spanning many magnitudes make plain summation order dependent.
-  std::vector<double> x(10000);
+  std::vector<double> x(static_cast<std::size_t>(n));
   std::mt19937 rng(12345);
   std::uniform_real_distribution<double> dist(-1.0e6, 1.0e6);
   for (auto& v : x) v = dist(rng);
-  std::vector<double> y = x;
+  return x;
+}
+
+}
+
+TEST_CASE("deterministic reductions do not depend on ordering", "[matrix]")
+{
+  const std::vector<double> x = wide_magnitude_values(10000);
+  const std::vector<double> y = x;
 
   const double first = deterministic_dot(x, y);
   for (int repeat = 0; repeat < 5; ++repeat) {
@@ -97,7 +103,7 @@ TEST_CASE("BiCGSTAB with ILU0 solves a shifted Laplacian", "[matrix]")
   }
 }
 
-TEST_CASE("BiCGSTAB accepts a good initial guess", "[matrix]")
+TEST_CASE("BiCGSTAB does no work when the initial guess is exact", "[matrix]")
 {
   const int n = 50;
   const auto pattern = line_pattern(n);
@@ -111,5 +117,5 @@ TEST_CASE("BiCGSTAB accepts a good initial guess", "[matrix]")
   std::vector<double> x = exact;
   const auto result = bicgstab(A, b, x, precond, 1.0e-12, 100);
   REQUIRE(result.converged);
-  REQUIRE(result.iterations == 0);  // already converged, no work needed
+  REQUIRE(result.iterations == 0);
 }

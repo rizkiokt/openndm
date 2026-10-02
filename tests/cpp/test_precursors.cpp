@@ -20,6 +20,7 @@ DelayedData six_group()
   return d;
 }
 
+//! A single delayed group with fraction beta and decay constant lambda in s^-1.
 DelayedData one_group(double beta, double lambda)
 {
   DelayedData d;
@@ -28,7 +29,46 @@ DelayedData one_group(double beta, double lambda)
   return d;
 }
 
-}  // namespace
+//! Limit of the zeroth decay integral as lambda*dt goes to zero.
+//!
+//! The closed form (1-exp(-lambda*dt))/lambda is a catastrophic cancellation
+//! there, so the implementation has to reach this limit another way.
+double decay_integral_0_limit(double dt)
+{
+  return dt;
+}
+
+//! Limit of the first decay integral as lambda*dt goes to zero.
+//!
+//! (dt-I0)/lambda loses every significant digit long before lambda*dt
+//! underflows, so without the limit I1 is noise.
+double decay_integral_1_limit(double dt)
+{
+  return 0.5 * dt * dt;
+}
+
+//! Exact concentration for a fission source held constant from C(0) = c0.
+//!
+//! C(t) = C_eq + (C_0 - C_eq) exp(-lambda t).
+double constant_source_exact(double c_eq, double c0, double lambda, double t)
+{
+  return c_eq + (c0 - c_eq) * std::exp(-lambda * t);
+}
+
+//! Exact concentration for F(t) = a + b t starting from C(0) = 0.
+//!
+//! beta[(a/l)(1-E) + (b/l)(t - (1-E)/l)] with l = lambda and E = exp(-l t).
+//! The integration takes F as linear across the step, so it must reproduce
+//! this to round-off however coarse the step is.
+double ramp_source_exact(
+    double beta, double lambda, double a, double b, double t)
+{
+  const double e = std::exp(-lambda * t);
+  return beta *
+         ((a / lambda) * (1.0 - e) + (b / lambda) * (t - (1.0 - e) / lambda));
+}
+
+}
 
 TEST_CASE("the decay integrals match their closed forms", "[precursors]")
 {
@@ -44,15 +84,12 @@ TEST_CASE("the decay integrals match their closed forms", "[precursors]")
 TEST_CASE("the decay integrals stay accurate as lambda*dt goes to zero",
     "[precursors]")
 {
-  // The closed forms are (1-exp(-x))/lambda and (dt-I0)/lambda, both of which
-  // are catastrophic cancellations at small x: I1 loses every significant
-  // digit long before x underflows. The limits are dt and dt^2/2.
   const double dt = 1.0e-3;
   for (const double lambda : {1.0e-6, 1.0e-9, 1.0e-12, 0.0}) {
     const double i0 = decay_integral_0(lambda, dt);
     const double i1 = decay_integral_1(lambda, dt);
-    REQUIRE(i0 == Approx(dt).epsilon(1.0e-8));
-    REQUIRE(i1 == Approx(0.5 * dt * dt).epsilon(1.0e-8));
+    REQUIRE(i0 == Approx(decay_integral_0_limit(dt)).epsilon(1.0e-8));
+    REQUIRE(i1 == Approx(decay_integral_1_limit(dt)).epsilon(1.0e-8));
     REQUIRE(std::isfinite(i1));
   }
 }
@@ -71,11 +108,9 @@ TEST_CASE("equilibrium is beta*F/lambda", "[precursors]")
   }
 }
 
-TEST_CASE("equilibrium is a fixed point of the integration", "[precursors]")
+TEST_CASE("equilibrium is a fixed point of the integration at any step size",
+    "[precursors]")
 {
-  // A reactor sitting at steady state must stay there for any step size. If
-  // the integration and the equilibrium disagree, every transient starts with
-  // a spurious jump that looks like physics.
   const DelayedData delayed = six_group();
   PrecursorState state(1, delayed);
   const std::vector<double> f = {2.5};
@@ -93,8 +128,6 @@ TEST_CASE("equilibrium is a fixed point of the integration", "[precursors]")
 TEST_CASE("a step up in fission source approaches the new equilibrium",
     "[precursors]")
 {
-  // With F held constant the exact solution is
-  //   C(t) = C_eq + (C_0 - C_eq) exp(-lambda t)
   const double beta = 6.5e-3;
   const double lambda = 0.0785;
   const DelayedData delayed = one_group(beta, lambda);
@@ -109,17 +142,13 @@ TEST_CASE("a step up in fission source approaches the new equilibrium",
   for (int step = 0; step < 200; ++step) {
     state.advance(f, f, dt);
     t += dt;
-    const double exact = c_eq + (c0 - c_eq) * std::exp(-lambda * t);
+    const double exact = constant_source_exact(c_eq, c0, lambda, t);
     REQUIRE(state.concentration(0, 0) == Approx(exact).epsilon(1e-12));
   }
 }
 
 TEST_CASE("a ramp in fission source is integrated exactly", "[precursors]")
 {
-  // The integration assumes F is linear across the step, so a genuinely
-  // linear F must be reproduced to round-off however coarse the step is.
-  // For F(t) = a + b t starting from C(0) = 0 the exact solution is
-  //   C = beta[ (a/l)(1-E) + (b/l)(t - (1-E)/l) ],  E = exp(-l t)
   const double beta = 5.0e-3;
   const double lambda = 0.3;
   const double a = 1.0;
@@ -133,9 +162,7 @@ TEST_CASE("a ramp in fission source is integrated exactly", "[precursors]")
       state.advance({a + b * t}, {a + b * (t + dt)}, dt);
       t += dt;
     }
-    const double e = std::exp(-lambda * t);
-    const double exact = beta * ((a / lambda) * (1.0 - e) +
-                                    (b / lambda) * (t - (1.0 - e) / lambda));
+    const double exact = ramp_source_exact(beta, lambda, a, b, t);
     REQUIRE(state.concentration(0, 0) == Approx(exact).epsilon(1e-12));
   }
 }
