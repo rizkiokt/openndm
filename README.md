@@ -26,9 +26,8 @@ which of those requirements are implemented today.
 
 ## Status
 
-**Pre-1.0 (v0.2.0 on PyPI, with unreleased work on `main`).** The static
-solver is verified against an analytic solution and the published IAEA-2D/3D
-and BIBLIS-2D benchmarks. Transients and steady thermal-hydraulic feedback are
+**Pre-1.0 (v0.3.0).** The static solver is verified against an analytic
+solution and the published IAEA-2D/3D and BIBLIS-2D benchmarks. Transients and steady thermal-hydraulic feedback are
 implemented; transients with feedback and pin power reconstruction are not.
 `docs/status.md` maps every requirement ID to its state — read it before
 assuming a feature exists.

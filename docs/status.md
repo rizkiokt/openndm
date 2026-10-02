@@ -7,7 +7,7 @@ Legend: **done** — implemented and covered by a test. **partial** —
 implemented with a stated limitation. **not started** — the API may name it,
 but nothing behind it works.
 
-Version 0.2.0 plus unreleased work on `main`. Roughly: M0 to M3 of the
+Version 0.3.0. Roughly: M0 to M3 of the
 specification's phase plan, with parts of M5 (steady thermal-hydraulic
 feedback and a coupled boron search), M6 (transients, LMW and the NEACRP
 static cases) and M8 (VTK export).
@@ -180,7 +180,7 @@ like it.
 | V-4 | done | Adjoint eigenvalue equality, and first-order perturbation theory against a direct re-solve, which tests the adjoint flux shape rather than only the operator transpose. |
 | NFR-EXT-1 | done | See FR-GEO-6. |
 | NFR-EXT-2 | done | Group count, precursor count and branch axes are all run-time. |
-| NFR-EXT-3 | partial | cp310-cp313 wheels build in CI on manylinux_2_28 and macOS arm64, with x86_64 macOS cross-compiled from the arm64 runner because GitHub is retiring the Intel one. The release pipeline is tag-triggered and uses trusted publishing, refusing to build unless the tag, `pyproject.toml` and `CMakeLists.txt` agree on the version, and there is a conda-forge recipe. v0.2.0 is tagged and published to PyPI as wheels and an sdist. The conda-forge recipe is not yet merged, so `conda install` does not work. |
+| NFR-EXT-3 | partial | cp310-cp313 wheels build in CI on manylinux_2_28 and macOS arm64, with x86_64 macOS cross-compiled from the arm64 runner because GitHub is retiring the Intel one. The release pipeline is tag-triggered and uses trusted publishing, refusing to build unless the tag, `pyproject.toml` and `CMakeLists.txt` agree on the version, and there is a conda-forge recipe. Releases are published to PyPI as wheels and an sdist. The conda-forge recipe is not yet merged, so `conda install` does not work. |
 | NFR-EXT-4 | done | No dependency beyond a C++17 compiler; the build fetches nothing at configure time. |
 | NFR-EXT-5 | not started | The public `extern "C"` API. |
 

@@ -3,9 +3,9 @@
 What is planned, in what order, and why that order. For what already exists,
 read [`status.md`](status.md) — this document does not duplicate it.
 
-Version 0.2.0 covers M0–M3 of the specification's phase plan: geometry, cross
-sections, the three kernels, static calculation modes, the OpenMC coupling,
-and output. Phases 1 to 3 below have since landed on `main`; what remains
+Version 0.2.0 covered M0–M3 of the specification's phase plan: geometry,
+cross sections, the three kernels, static calculation modes, the OpenMC
+coupling, and output. Version 0.3.0 adds phases 1 to 3 below; what remains
 follows them.
 
 ## The ordering principle
