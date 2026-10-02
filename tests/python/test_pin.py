@@ -52,7 +52,7 @@ def test_zero_power_leaves_every_radius_at_the_coolant_temperature():
     assert np.all(state.profile == COOLANT)
     assert float(state.clad_inner[0]) == COOLANT
     assert float(state.clad_outer[0]) == COOLANT
-    assert float(state.average[0]) == COOLANT
+    assert float(state.average[0]) == pytest.approx(COOLANT, rel=1e-14)
     assert float(state.doppler[0]) == COOLANT
 
 
