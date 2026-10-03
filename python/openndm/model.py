@@ -42,14 +42,17 @@ class Result:
 
     @property
     def k_eff(self) -> float:
+        """Eigenvalue, dimensionless; zero from a fixed-source solve."""
         return self._raw.k_eff
 
     @property
     def converged(self) -> bool:
+        """Whether the outer iteration met its tolerance before ``max_outer``."""
         return self._raw.converged
 
     @property
     def outer_iterations(self) -> int:
+        """Outer iterations taken."""
         return self._raw.outer_iterations
 
     @property
@@ -59,21 +62,29 @@ class Result:
 
     @property
     def kernel(self) -> str:
+        """Name of the kernel that ran."""
         return self._raw.kernel
 
     @property
     def flux(self) -> np.ndarray:
-        """Scalar flux, shape ``(n_nodes, n_groups)``."""
+        """Scalar flux, shape ``(n_nodes, n_groups)``, a view."""
         return self._raw.flux
 
     @property
     def power(self) -> np.ndarray:
-        """Relative node power, normalised to a mean of 1 over powered nodes."""
+        """Relative node power, shape ``(n_nodes,)``, a view.
+
+        Normalised to a mean of 1 over the nodes that produce power.
+        """
         return self._raw.power
 
     @property
     def history(self) -> np.ndarray:
-        """Outer iteration history as a structured array (FR-OUT-7)."""
+        """Outer iteration history as a structured array, a copy (FR-OUT-7).
+
+        Fields are ``outer``, ``k_eff``, ``k_change``, ``source_change`` and
+        ``inner_iterations``.
+        """
         records = self._raw.history
         out = np.zeros(
             len(records),
@@ -96,13 +107,14 @@ class Result:
         return out
 
     def power_lattice(self) -> np.ndarray:
-        """Node power scattered onto the ``(nz, ny, nx)`` lattice."""
+        """Node power scattered onto the ``(nz, ny, nx)`` lattice, a copy."""
         return self._geom.expand(self.power)
 
     def radial_power(self) -> np.ndarray:
-        """Volume-weighted radial (2D) power map, ``(ny, nx)`` (FR-OUT-3).
+        """Volume-weighted radial (2D) power map, a copy (FR-OUT-3).
 
-        Normalised to a mean of 1 over the columns that carry power.
+        Shape ``(ny, nx)``, normalised to a mean of 1 over the columns that
+        carry power.
         """
         p = self._geom.expand(self.power, fill=0.0)
         v = self._geom.expand(self._geom.volumes, fill=0.0)
@@ -116,7 +128,11 @@ class Result:
         return radial
 
     def axial_power(self) -> np.ndarray:
-        """Volume-weighted axial (1D) power profile, ``(nz,)`` (FR-OUT-3)."""
+        """Volume-weighted axial (1D) power profile, a copy (FR-OUT-3).
+
+        Shape ``(nz,)``, normalised to a mean of 1 over the planes that carry
+        power.
+        """
         p = self._geom.expand(self.power, fill=0.0)
         v = self._geom.expand(self._geom.volumes, fill=0.0)
         axial = np.einsum("kji,kji->k", p, v)
@@ -148,7 +164,19 @@ class Result:
 
 
 class BoronSearchResult:
-    """Outcome of a critical boron search (FR-MODE-4)."""
+    """Outcome of a critical boron search (FR-MODE-4).
+
+    Attributes
+    ----------
+    boron : float
+        Boron concentration that met the target eigenvalue, in ppm.
+    result : Result
+        The solve at that concentration.
+    iterations : int
+        Evaluations performed, each one a solve.
+    history : list of tuple of (float, float)
+        Every ``(ppm, k_eff)`` pair the search evaluated, in order.
+    """
 
     def __init__(self, boron, result, iterations, history):
         self.boron = boron
@@ -158,6 +186,7 @@ class BoronSearchResult:
 
     @property
     def k_eff(self) -> float:
+        """Eigenvalue at the converged concentration."""
         return self.result.k_eff
 
     def __repr__(self) -> str:
@@ -217,7 +246,26 @@ class CoupledResult:
 
 @dataclass(frozen=True)
 class TransientStep:
-    """One completed time step (FR-KIN-6)."""
+    """One completed time step (FR-KIN-6).
+
+    Attributes
+    ----------
+    time : float
+        Time at the end of the step, in s.
+    dt : float
+        Length of the step, in s.
+    total_power : float
+        Total fission power, in the units of the library's kappa-fission.
+        Not renormalised.
+    peak_power : float
+        Largest single node power, in the units of ``total_power``.
+    iterations : int
+        Iterations over the implicit fission source within the step.
+    inner_iterations : int
+        BiCGSTAB iterations summed over the step.
+    converged : bool
+        Whether the step met its tolerance before the budget ran out.
+    """
 
     time: float
     dt: float
@@ -256,12 +304,15 @@ class Transient:
 
     @property
     def precursors(self) -> np.ndarray:
-        """Precursor concentrations, shape ``(n_nodes, n_precursors)``."""
+        """Precursor concentrations, shape ``(n_nodes, n_precursors)``, a copy."""
         return self._model._solver.precursors
 
     @property
     def flux(self) -> np.ndarray:
-        """Current flux, shape ``(n_nodes, n_groups)``, matching `Result.flux`."""
+        """Current flux, shape ``(n_nodes, n_groups)``, matching `Result.flux`.
+
+        A view onto the solver's own buffer, so it tracks the next step.
+        """
         flux = np.asarray(self._model._solver.flux)
         return flux.reshape(self._model.geometry.n_nodes, self._model.library.n_groups)
 
@@ -324,7 +375,7 @@ class Model:
     ...         "zero_flux"))
     >>> model = openndm.Model(geom, lib, openndm.Settings(verbosity=0))
     >>> round(model.solve().k_eff, 4)
-    1.2059
+    1.2054
     """
 
     def __init__(

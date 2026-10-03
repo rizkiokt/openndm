@@ -115,10 +115,12 @@ class DopplerFeedback:
 
     @property
     def compositions(self) -> tuple[int, ...]:
+        """Indices of the compositions that feel the feedback."""
         return self._compositions
 
     @property
     def groups(self) -> tuple[int, ...]:
+        """Indices of the groups the law scales."""
         return self._groups
 
     def factor(self, temperature: float) -> float:

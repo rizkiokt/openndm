@@ -259,6 +259,7 @@ class ControlRods:
 
     @property
     def banks(self) -> tuple[str, ...]:
+        """Bank names, in the order they were given."""
         return tuple(self._banks)
 
     @property

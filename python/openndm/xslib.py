@@ -115,8 +115,8 @@ class XSLibrary:
     >>> lib = XSLibrary(2, 1)
     >>> lib.set_composition(
     ...     0, D=[1.5, 0.4], absorption=[0.01, 0.08],
-    ...     nu_fission=[0.0, 0.135], chi=[1.0, 0.0],
-    ...     scatter=[[0.0, 0.02], [0.0, 0.0]],
+    ...     nu_fission=[0.0, 0.135], kappa_fission=[0.0, 0.135],
+    ...     chi=[1.0, 0.0], scatter=[[0.0, 0.02], [0.0, 0.0]],
     ... )
     >>> lib.finalize()
     []
