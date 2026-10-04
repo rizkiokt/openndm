@@ -43,16 +43,37 @@ class ThermalSolver(Protocol):
     """
 
     def set_heat_source(self, q: np.ndarray) -> None:
-        """Set the power deposited in each node, in W."""
+        """Set the power deposited in each node, in W.
+
+        Parameters
+        ----------
+        q : ndarray, shape (n_nodes,)
+            Power per node, in W.
+        """
 
     def solve(self) -> None:
         """Bring the temperatures and densities into equilibrium with it."""
 
     def get_temperatures(self) -> Mapping[str, np.ndarray]:
-        """Temperature per node, in K, keyed by field name."""
+        """Temperature per node, in K, keyed by field name.
+
+        Returns
+        -------
+        mapping of str to ndarray
+            One array of shape ``(n_nodes,)`` per field, in K. May be a view
+            onto the solver's own buffer, so :class:`PicardCoupling` copies
+            each field before storing it.
+        """
 
     def get_densities(self) -> Mapping[str, np.ndarray]:
-        """Density per node, in kg/m^3, keyed by field name."""
+        """Density per node, in kg/m^3, keyed by field name.
+
+        Returns
+        -------
+        mapping of str to ndarray
+            One array of shape ``(n_nodes,)`` per field, in kg/m^3, under the
+            same ownership caveat as :meth:`get_temperatures`.
+        """
 
 
 @dataclass(frozen=True)
@@ -81,15 +102,19 @@ class CouplingResult:
 
     Attributes
     ----------
-    power : ndarray
+    power : ndarray, shape (n_nodes,)
         Node power the last neutronics solve produced, in W. A copy.
     temperatures : dict of str to ndarray
         Temperature per node, in K, as the thermal solver last reported it.
+        One array of shape ``(n_nodes,)`` per field, each a copy.
     densities : dict of str to ndarray
         Density per node, in kg/m^3, as the thermal solver last reported it.
+        One array of shape ``(n_nodes,)`` per field, each a copy.
     iterations : int
         Iterations performed.
     converged : bool
+        Always True; the loop raises rather than returning an unconverged
+        state.
     history : list of CouplingStep
         One entry per iteration, in order.
     """
@@ -291,10 +316,11 @@ class AxialMapping:
 
     Attributes
     ----------
-    source_edges : ndarray
-        The boundaries given, in cm.
-    target_edges : ndarray
-        The boundaries given, in cm.
+    source_edges : ndarray, shape (n_source + 1,)
+        The boundaries given, in cm, as float. A float array passed in is
+        stored as given rather than copied.
+    target_edges : ndarray, shape (n_target + 1,)
+        The same, for the target mesh.
     overlap : ndarray, shape (n_target, n_source)
         Length shared by each target and source cell, in cm.
 
@@ -392,7 +418,13 @@ class AxialMapping:
         return weighted / np.diff(self.target_edges)
 
     def reverse(self) -> AxialMapping:
-        """The mapping the other way, target mesh to source mesh."""
+        """The mapping the other way, target mesh to source mesh.
+
+        Returns
+        -------
+        AxialMapping
+            A new mapping with the two meshes exchanged.
+        """
         return AxialMapping(self.target_edges, self.source_edges)
 
     def _checked(self, values) -> np.ndarray:
@@ -469,7 +501,7 @@ class CompositionMapping:
 
     @property
     def weights(self) -> np.ndarray:
-        """Weight per node. A copy."""
+        """Weight per node, shape ``(n_nodes,)``. A copy."""
         return self._weights.copy()
 
     def average(self, node_values) -> np.ndarray:
@@ -516,6 +548,8 @@ class CompositionMapping:
         Parameters
         ----------
         composition_values : array_like, shape (n_compositions,)
+            One value per composition, in whatever unit the caller gave
+            :meth:`average`.
 
         Returns
         -------

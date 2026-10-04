@@ -330,12 +330,18 @@ class ChannelModel:
 
     @property
     def outlet_enthalpy(self) -> np.ndarray:
-        """Specific enthalpy leaving each channel, J/kg. A copy."""
+        """Specific enthalpy leaving each channel, J/kg, shape ``(n_channels,)``.
+
+        A copy.
+        """
         return self._outlet_enthalpy.copy()
 
     @property
     def outlet_temperature(self) -> np.ndarray:
-        """Temperature leaving each channel, K, shape ``(n_channels,)``."""
+        """Temperature leaving each channel, K, shape ``(n_channels,)``.
+
+        A new array, computed from the outlet enthalpy on each access.
+        """
         return np.asarray(
             self._water.temperature(self.pressure, self._outlet_enthalpy),
             dtype=float,
@@ -343,7 +349,10 @@ class ChannelModel:
 
     @property
     def mass_flux(self) -> np.ndarray:
-        """Coolant mass flux per channel, kg/(m^2 s)."""
+        """Coolant mass flux per channel, kg/(m^2 s), shape ``(n_channels,)``.
+
+        A new array.
+        """
         return self._mass_flow / self.pins.flow_area
 
     @property
@@ -370,6 +379,7 @@ class ChannelModel:
         """Power per unit pin length in each node, W/m, shape ``(n_nodes,)``.
 
         What the fuel raises, so the directly deposited fraction is excluded.
+        A new array.
         """
         pin_length = self.pins.n_pins * self._node_heights()
         return (1.0 - self.direct_heating) * self._power / pin_length
@@ -518,7 +528,8 @@ class ChannelModel:
         Returns
         -------
         dict of str to ndarray
-            Copies, not views onto the model's own buffers.
+            One array of shape ``(n_nodes,)`` per field, in K. Copies, not
+            views onto the model's own buffers.
         """
         fields = {"moderator_temperature": self._temperature.copy()}
         if self._pin_state is not None:
@@ -532,7 +543,8 @@ class ChannelModel:
         Returns
         -------
         dict of str to ndarray
-            Copies, not views onto the model's own buffers.
+            One array of shape ``(n_nodes,)``. Copies, not views onto the
+            model's own buffers.
         """
         return {"moderator_density": self._density.copy()}
 

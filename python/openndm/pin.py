@@ -67,7 +67,8 @@ class PinState:
     Attributes
     ----------
     profile, clad_inner, clad_outer, average, doppler
-        As above. Every array is a copy the caller owns.
+        As above. A float array passed in is stored as given, not copied;
+        the arrays :meth:`PinConduction.solve` builds are fresh.
     """
 
     def __init__(self, profile, clad_inner, clad_outer, average, doppler):
@@ -205,6 +206,8 @@ class PinConduction:
         Returns
         -------
         PinState
+            Pellet, cladding, average and Doppler temperatures in K. Every
+            array is new; nothing is retained between solves.
 
         Raises
         ------
@@ -308,12 +311,14 @@ def neacrp_fuel_conductivity(temperature) -> np.ndarray:
 
     Parameters
     ----------
-    temperature : array_like
+    temperature : array_like, shape (...)
         Fuel temperature, K.
 
     Returns
     -------
-    ndarray
+    ndarray, shape (...)
+        Pellet conductivity in W/(m K), shaped like ``temperature``. A new
+        array.
 
     Raises
     ------
@@ -346,12 +351,14 @@ def neacrp_clad_conductivity(temperature) -> np.ndarray:
 
     Parameters
     ----------
-    temperature : array_like
+    temperature : array_like, shape (...)
         Cladding temperature, K.
 
     Returns
     -------
-    ndarray
+    ndarray, shape (...)
+        Cladding conductivity in W/(m K), shaped like ``temperature``. A new
+        array.
 
     Examples
     --------
@@ -374,12 +381,14 @@ def neacrp_fuel_heat_capacity(temperature) -> np.ndarray:
 
     Parameters
     ----------
-    temperature : array_like
+    temperature : array_like, shape (...)
         Fuel temperature, K.
 
     Returns
     -------
-    ndarray
+    ndarray, shape (...)
+        Pellet specific heat capacity in J/(kg K), shaped like
+        ``temperature``. A new array.
 
     Examples
     --------
@@ -400,12 +409,14 @@ def neacrp_clad_heat_capacity(temperature) -> np.ndarray:
 
     Parameters
     ----------
-    temperature : array_like
+    temperature : array_like, shape (...)
         Cladding temperature, K.
 
     Returns
     -------
-    ndarray
+    ndarray, shape (...)
+        Cladding specific heat capacity in J/(kg K), shaped like
+        ``temperature``. A new array.
 
     Examples
     --------
