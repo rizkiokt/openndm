@@ -42,6 +42,7 @@ def write_statepoint(path, result, model, *, extra: dict | None = None) -> Path:
     Returns
     -------
     pathlib.Path
+        The file that was written.
     """
     import h5py
 
@@ -90,7 +91,20 @@ def write_statepoint(path, result, model, *, extra: dict | None = None) -> Path:
 class StatePoint:
     """Reader for an OpenNDM statepoint, mirroring ``openmc.StatePoint``.
 
-    Use it as a context manager, or call :meth:`close` when done.
+    Use it as a context manager, or call :meth:`close` when done. Every array
+    property reads its dataset afresh and returns a copy, never a view onto
+    the file.
+
+    Parameters
+    ----------
+    path : path-like
+        Statepoint written by :func:`write_statepoint`.
+
+    Raises
+    ------
+    InputError
+        If the file is not an OpenNDM statepoint, or carries a
+        ``format_version`` this build does not read.
 
     Examples
     --------
@@ -121,65 +135,91 @@ class StatePoint:
 
     @property
     def k_eff(self) -> float:
+        """Eigenvalue of the solve that wrote the file."""
         return float(self._f.attrs["k_eff"])
 
     @property
     def kernel(self) -> str:
+        """Nodal kernel that ran, one of ``'fdm'``, ``'nem'``, ``'sanm'``."""
         return self._f.attrs["kernel"].decode()
 
     @property
     def mode(self) -> str:
+        """Calculation mode, one of ``'forward'``, ``'adjoint'``, ``'fixed_source'``."""
         return self._f.attrs["mode"].decode()
 
     @property
     def converged(self) -> bool:
+        """Whether the outer iteration met its convergence criteria."""
         return bool(self._f.attrs["converged"])
 
     @property
     def version(self) -> str:
+        """OpenNDM version that wrote the file."""
         return self._f.attrs["version"].decode()
 
     @property
     def date_and_time(self) -> str:
+        """UTC time the file was written, as an ISO 8601 string."""
         return self._f.attrs["date_and_time"].decode()
 
     @property
     def flux(self) -> np.ndarray:
+        """Scalar flux, shape ``(n_nodes, n_groups)``, as a copy.
+
+        Normalised so the volume-averaged total flux over all groups is one.
+        """
         return self._f["results/flux"][()]
 
     @property
     def power(self) -> np.ndarray:
+        """Relative node power, shape ``(n_nodes,)``, as a copy.
+
+        Normalised to a mean of one over the nodes that carry power.
+        """
         return self._f["results/power"][()]
 
     @property
     def radial_power(self) -> np.ndarray:
+        """Volume-weighted radial power map, shape ``(ny, nx)``, as a copy."""
         return self._f["results/radial_power"][()]
 
     @property
     def axial_power(self) -> np.ndarray:
+        """Volume-weighted axial power profile, shape ``(nz,)``, as a copy."""
         return self._f["results/axial_power"][()]
 
     @property
     def f_q(self) -> float:
+        """Total peaking factor: peak node power over the core average."""
         return float(self._f["results"].attrs["f_q"])
 
     @property
     def f_dh(self) -> float:
+        """Radial enthalpy-rise peaking factor: peak radial power."""
         return float(self._f["results"].attrs["f_dh"])
 
     @property
     def history(self) -> np.ndarray:
+        """Outer iteration history as a structured array, as a copy.
+
+        The fields are ``outer``, ``k_eff``, ``k_change``, ``source_change``
+        and ``inner_iterations``.
+        """
         return self._f["iteration_history"][()]
 
     @property
     def volumes(self) -> np.ndarray:
+        """Node volumes in cm^3, shape ``(n_nodes,)``, as a copy."""
         return self._f["geometry/volume"][()]
 
     @property
     def lattice_shape(self) -> tuple[int, int, int]:
+        """Lattice extent as ``(nz, ny, nx)``."""
         return tuple(int(v) for v in self._f["geometry"].attrs["lattice_shape"])
 
     def close(self) -> None:
+        """Close the underlying HDF5 file."""
         self._f.close()
 
     def __enter__(self) -> StatePoint:
