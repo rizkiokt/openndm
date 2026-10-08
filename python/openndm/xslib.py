@@ -170,7 +170,13 @@ class XSLibrary:
 
     @extrapolation.setter
     def extrapolation(self, value: str) -> None:
-        """Set the off-grid policy from its name or an ``Extrapolation``."""
+        """Set the off-grid policy from its name or an ``Extrapolation``.
+
+        Parameters
+        ----------
+        value : {'clamp', 'linear', 'error'} or Extrapolation
+            Policy applied to a state point outside the branch grid.
+        """
         if isinstance(value, str):
             try:
                 value = _EXTRAPOLATION[value.lower()]
@@ -188,7 +194,9 @@ class XSLibrary:
         ----------
         axes : sequence of (name, points)
             Each axis is a name such as ``'fuel_temperature'`` and a strictly
-            increasing sequence of grid points.
+            increasing sequence of grid points, in the units of the state
+            variable the name denotes: K for a temperature, ppm for a boron
+            concentration.
 
         Notes
         -----
@@ -226,18 +234,32 @@ class XSLibrary:
             Composition index.
         state : int
             Branch grid point index; 0 for a single-state library.
-        D : array_like, optional
+        D : array_like, shape (G,), optional
             Diffusion coefficient per group, in cm. Mutually exclusive with
             ``transport``.
-        transport : array_like, optional
-            Transport cross section per group; ``D`` is set to ``1/(3*Sigma_tr)``.
-        absorption, nu_fission, kappa_fission, chi, inv_velocity : array_like
-            Per-group values. Anything omitted stays zero.
-        scatter : array_like, shape (G, G)
-            Scattering matrix indexed ``scatter[from_group][to_group]``.
-        std : mapping, optional
-            1-sigma uncertainties keyed by field name, e.g.
+        transport : array_like, shape (G,), optional
+            Transport cross section per group, in cm^-1; ``D`` is set to
+            ``1/(3*Sigma_tr)``.
+        absorption, nu_fission : array_like, shape (G,), optional
+            Absorption and production cross section per group, in cm^-1.
+        kappa_fission : array_like, shape (G,), optional
+            Energy release per unit path, in J cm^-1. This is what makes
+            power; ``nu_fission`` alone moves ``k_eff`` and nothing else.
+        chi : array_like, shape (G,), optional
+            Fission spectrum, dimensionless and summing to one over groups.
+        inv_velocity : array_like, shape (G,), optional
+            Reciprocal group velocity, in s cm^-1. Needed by a transient only.
+        scatter : array_like, shape (G, G), optional
+            Scattering matrix in cm^-1, indexed
+            ``scatter[from_group][to_group]``.
+        std : mapping of str to array_like, optional
+            1-sigma uncertainties keyed by field name, each in the units of
+            the field it belongs to, e.g.
             ``{'absorption': [...], 'nu_fission': [...]}`` (FR-XS-9).
+
+        Notes
+        -----
+        Anything omitted stays zero.
         """
         G = self.n_groups
         comp = self._lib.mutable_composition(int(index), int(state))
@@ -282,10 +304,14 @@ class XSLibrary:
 
         Parameters
         ----------
+        index : int
+            Composition index.
         values : array_like, shape (2 * n_axes, G) or (G,)
-            Per-face, per-group factors in the face order
+            Per-face, per-group factors, dimensionless, in the face order
             ``-x, +x, -y, +y, -z, +z``. A ``(G,)`` array is broadcast to every
             face.
+        n_axes : int, optional
+            Axes the factors cover: 3 for a 3D mesh, 2 for a radial-only set.
         """
         arr = np.asarray(values, dtype=float)
         if arr.ndim == 1:
@@ -303,16 +329,18 @@ class XSLibrary:
         Parameters
         ----------
         index : int
+            Composition index.
         quarter_turns : int
             0 to 3, counter-clockwise about +z, as KOMODO's ``%ADF`` ``ROT``
             defines it.
         n_axes : int, optional
+            Axes to read, in the face order ``-x, +x, -y, +y, -z, +z``.
 
         Returns
         -------
         ndarray, shape (2 * n_axes, G)
-            The set the assembly would present after turning. Four quarter
-            turns return the original exactly.
+            The dimensionless set the assembly would present after turning. A
+            new array. Four quarter turns return the original exactly.
 
         See Also
         --------
@@ -324,7 +352,21 @@ class XSLibrary:
         return rotate_adf(self.adf(index, n_axes), quarter_turns)
 
     def adf(self, index: int, n_axes: int = 3) -> np.ndarray:
-        """Discontinuity factors as a ``(2 * n_axes, G)`` array."""
+        """Discontinuity factors of one composition.
+
+        Parameters
+        ----------
+        index : int
+            Composition index.
+        n_axes : int, optional
+            Axes to read, in the face order ``-x, +x, -y, +y, -z, +z``.
+
+        Returns
+        -------
+        ndarray, shape (2 * n_axes, G)
+            Dimensionless per-face, per-group factors. A new array, not a
+            view onto the C++ library.
+        """
         return np.array(
             [
                 [self._lib.adf_value(int(index), f, g) for g in range(self.n_groups)]
@@ -337,10 +379,14 @@ class XSLibrary:
 
         Parameters
         ----------
-        beta, decay_constant : array_like
-            Delayed fraction and decay constant per precursor group, at most 8.
+        beta : array_like, shape (n_precursors,)
+            Delayed neutron fraction per precursor group, dimensionless. At
+            most 8 groups.
+        decay_constant : array_like, shape (n_precursors,)
+            Precursor decay constant per group, in s^-1.
         chi_delayed : array_like, shape (n_precursors, G), optional
-            Delayed spectrum; defaults to the prompt spectrum when omitted.
+            Delayed spectrum, dimensionless; defaults to the prompt spectrum
+            when omitted.
         """
         d = self._lib.delayed
         d.beta = [float(b) for b in beta]
@@ -357,10 +403,17 @@ class XSLibrary:
     def finalize(self, *, warn: bool = True) -> list[str]:
         """Validate and cache derived data (FR-XS-8).
 
-        Returns the list of non-fatal findings, which are also issued as
-        Python warnings unless ``warn=False``. Negative scattering transfers
-        are reported this way rather than raised, because Monte Carlo noise
-        produces them routinely.
+        Parameters
+        ----------
+        warn : bool, optional
+            Issue each finding as a Python warning as well as returning it.
+
+        Returns
+        -------
+        list of str
+            Non-fatal findings. Negative scattering transfers are reported
+            this way rather than raised, because Monte Carlo noise produces
+            them routinely.
 
         Raises
         ------
@@ -378,8 +431,19 @@ class XSLibrary:
     def composition(self, index: int, state: int = 0):
         """Snapshot of one composition's group constants, for inspection.
 
-        The returned record is a copy: mutating it does not change the
-        library. Use :meth:`set_composition` to write.
+        Parameters
+        ----------
+        index : int
+            Composition index.
+        state : int, optional
+            Branch grid point index; 0 for a single-state library.
+
+        Returns
+        -------
+        Composition
+            A copy, with the fields and units of :meth:`set_composition`.
+            Mutating it does not change the library; use
+            :meth:`set_composition` to write.
         """
         return self._lib.composition(int(index), int(state))
 
@@ -528,8 +592,19 @@ class XSLibrary:
     def array(self, field: str, state: int = 0) -> np.ndarray:
         """Stack one field across compositions.
 
-        Returns a ``(n_compositions, G)`` array, or ``(n_compositions, G, G)``
-        for ``'scatter'``.
+        Parameters
+        ----------
+        field : str
+            Field name as :meth:`set_composition` spells it, such as
+            ``'absorption'`` or ``'scatter'``.
+        state : int, optional
+            Branch grid point index; 0 for a single-state library.
+
+        Returns
+        -------
+        ndarray, shape (n_compositions, G)
+            A new array in the units of the field, or
+            ``(n_compositions, G, G)`` for ``'scatter'``.
         """
         rows = [
             np.asarray(getattr(self.composition(c, state), field), dtype=float)
@@ -555,6 +630,14 @@ class XSLibrary:
     def to_hdf5(self, path) -> None:
         """Write the library to ``xslib.h5`` (FR-IN-3).
 
+        Parameters
+        ----------
+        path : path-like
+            Destination file. ``.h5`` is the conventional suffix and is not
+            enforced.
+
+        Notes
+        -----
         The layout is versioned through the root ``format_version`` attribute
         and follows OpenMC's conventions: scalars as attributes, arrays as
         datasets, one group per composition.
@@ -635,7 +718,24 @@ class XSLibrary:
 
     @classmethod
     def from_hdf5(cls, path) -> XSLibrary:
-        """Read a library written by :meth:`to_hdf5`."""
+        """Read a library written by :meth:`to_hdf5`.
+
+        Parameters
+        ----------
+        path : path-like
+            File to read.
+
+        Returns
+        -------
+        XSLibrary
+            Finalized, with any findings suppressed: the library was already
+            validated when it was written.
+
+        Raises
+        ------
+        InputError
+            On a file whose ``format_version`` this build does not read.
+        """
         import h5py
 
         with h5py.File(path, "r") as f:
