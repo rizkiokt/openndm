@@ -43,6 +43,20 @@ class Geometry:
     The Python object is a thin wrapper: solver kernels see only the abstract
     node/surface connectivity, never ``(i, j, k)`` indices, which is what lets
     a hexagonal builder be added later without touching them (FR-GEO-6).
+
+    Parameters
+    ----------
+    core : openndm._core.Geometry
+        The node/surface graph to wrap.
+    shape : tuple of int, optional
+        Lattice shape ``(nz, ny, nx)``; read from ``core`` when omitted.
+    dx, dy, dz : array_like of float, optional
+        Node widths in cm along each axis, one per lattice slice after
+        subdivision. Recovered from the graph on first access when omitted.
+
+    See Also
+    --------
+    Geometry.from_lattice : Build one from a composition map.
     """
 
     def __init__(self, core: _core.Geometry, *, shape=None, dx=None, dy=None,
@@ -79,10 +93,10 @@ class Geometry:
             marking a position outside the core (FR-GEO-2). A 2D
             ``(ny, nx)`` array is promoted to a single axial plane.
         pitch : float or (dx, dy, dz)
-            Uniform node size. Ignored along an axis for which an explicit
-            width array is given.
+            Uniform node size in cm. Ignored along an axis for which an
+            explicit width array is given.
         dx, dy, dz : sequence of float, optional
-            Explicit non-uniform node widths (FR-GEO-1), one per *lattice*
+            Explicit non-uniform node widths in cm (FR-GEO-1), one per *lattice*
             cell, before subdivision. ``subdivide`` splits each of them into
             equal parts, so the extent along the axis does not depend on how
             finely it is meshed.
@@ -117,6 +131,15 @@ class Geometry:
         Returns
         -------
         Geometry
+            One node per active lattice position, after subdivision.
+
+        Raises
+        ------
+        ValueError
+            On a composition map that is neither 2D nor 3D, a ``subdivide``
+            below 1, a width array that does not cover its axis, a rotation
+            map whose shape or turn count is wrong, or an unknown boundary
+            face or condition.
 
         Examples
         --------
@@ -239,6 +262,7 @@ class Geometry:
         Returns
         -------
         Geometry
+            One node per lattice position, after ``subdivide``.
 
         Raises
         ------
@@ -367,7 +391,23 @@ class Geometry:
     def expand(self, node_values: np.ndarray, fill: float = np.nan) -> np.ndarray:
         """Scatter a per-node array back onto the ``(nz, ny, nx)`` lattice.
 
-        Inactive positions take ``fill``.
+        Parameters
+        ----------
+        node_values : array_like, shape (n_nodes, ...)
+            One value, or one trailing row, per active node. Trailing
+            dimensions are carried through.
+        fill : float, optional
+            Value given to the inactive positions.
+
+        Returns
+        -------
+        ndarray, shape (nz, ny, nx, ...)
+            A new array, in the units of ``node_values``.
+
+        Raises
+        ------
+        ValueError
+            If ``node_values`` does not hold one entry per node.
         """
         values = np.asarray(node_values, dtype=float)
         if values.shape[0] != self.n_nodes:
@@ -403,7 +443,15 @@ class Geometry:
         return widths
 
     def set_composition(self, node: int, composition: int) -> None:
-        """Reassign one node's composition in place (FR-OPT-7)."""
+        """Reassign one node's composition in place (FR-OPT-7).
+
+        Parameters
+        ----------
+        node : int
+            Node index, as :attr:`lattice_to_node` numbers them.
+        composition : int
+            Composition index into the library.
+        """
         self._g.set_composition(int(node), int(composition))
 
     def set_rotation(self, node: int, quarter_turns: int) -> None:
@@ -412,6 +460,7 @@ class Geometry:
         Parameters
         ----------
         node : int
+            Node index, as :attr:`lattice_to_node` numbers them.
         quarter_turns : int
             0 to 3. Only the discontinuity factors turn with it.
         """

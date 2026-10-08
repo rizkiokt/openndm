@@ -30,8 +30,19 @@ def plot_radial(result, ax=None, *, annotate: bool = True, cmap: str = "viridis"
     Parameters
     ----------
     result : Result
-    annotate : bool
+        Solve result. Its ``radial_power()`` map is drawn, dimensionless and
+        normalised to a mean of 1 over the columns that carry power.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on. A new 6x5 inch figure is made when omitted.
+    annotate : bool, optional
         Write the value into each powered position.
+    cmap : str, optional
+        Matplotlib colormap for the image.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The axes drawn on, ``ax`` itself when one was given.
     """
     plt = _pyplot()
     if ax is None:
@@ -53,7 +64,24 @@ def plot_radial(result, ax=None, *, annotate: bool = True, cmap: str = "viridis"
 
 
 def plot_axial(result, ax=None, *, heights=None):
-    """Plot the axial power profile."""
+    """Plot the axial power profile.
+
+    Parameters
+    ----------
+    result : Result
+        Solve result. Its ``axial_power()`` profile is drawn, dimensionless
+        and normalised to a mean of 1 over the planes that carry power.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on. A new 4x5 inch figure is made when omitted.
+    heights : array_like of float, optional
+        Plane positions in cm for the vertical axis, one per axial plane.
+        Plane index is used when omitted.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The axes drawn on, ``ax`` itself when one was given.
+    """
     plt = _pyplot()
     if ax is None:
         _, ax = plt.subplots(figsize=(4, 5))
@@ -67,7 +95,21 @@ def plot_axial(result, ax=None, *, heights=None):
 
 
 def plot_convergence(result, ax=None):
-    """Plot the outer iteration history (FR-OUT-5)."""
+    """Plot the outer iteration history (FR-OUT-5).
+
+    Parameters
+    ----------
+    result : Result
+        Solve result. The ``k_change`` and ``source_change`` fields of its
+        ``history`` are drawn against the outer iteration, log scaled.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on. A new 6x4 inch figure is made when omitted.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The axes drawn on, ``ax`` itself when one was given.
+    """
     plt = _pyplot()
     if ax is None:
         _, ax = plt.subplots(figsize=(6, 4))
