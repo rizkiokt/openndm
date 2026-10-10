@@ -50,15 +50,17 @@ class RodWorth:
     ----------
     bank : str or None
         The bank swept, or None for a multi-bank sequence.
-    steps : ndarray
+    steps : ndarray, shape (n_points,)
         Position of each point, in steps. The sequence index for a
         multi-bank sweep.
-    tip_height : ndarray
-        Tip height above the bottom of the mesh, in cm.
-    k_eff : ndarray
-    integral : ndarray
+    tip_height : ndarray, shape (n_points,)
+        Tip height above the bottom of the mesh, in cm. The lowest tip among
+        the banks named at that point, for a multi-bank sweep.
+    k_eff : ndarray, shape (n_points,)
+        Eigenvalue solved at each point.
+    integral : ndarray, shape (n_points,)
         Worth relative to the reference position, in pcm.
-    differential : ndarray
+    differential : ndarray, shape (n_points,)
         The derivative of :attr:`integral` with respect to position, in pcm
         per step. Central differences inside the sweep, one-sided at its
         ends, over the actual spacing -- so a non-uniform sweep is handled,
@@ -167,7 +169,19 @@ class ControlRodBank:
             raise InputError(f"bank {self.name!r}: max_steps must not be negative")
 
     def tip_height(self, steps: float) -> float:
-        """Height of the rod tip above the bottom of the mesh, in cm."""
+        """Height of the rod tip above the bottom of the mesh.
+
+        Parameters
+        ----------
+        steps : float
+            Bank position in steps. Not bounded by ``max_steps`` here, so an
+            unreachable position still gives the height it would have.
+
+        Returns
+        -------
+        float
+            Tip height in cm.
+        """
         return self.zero_position + float(steps) * self.step_size
 
 
@@ -264,13 +278,30 @@ class ControlRods:
 
     @property
     def positions(self) -> dict[str, float | None]:
-        """Position of each bank in steps; ``None`` means fully withdrawn."""
+        """Position of each bank in steps; ``None`` means fully withdrawn.
+
+        A copy, so writing to it does not move a bank. Pass it to
+        :meth:`insert` to restore a state.
+        """
         return dict(self._positions)
 
     def tip_height(self, name: str) -> float:
-        """Tip height of one bank above the bottom of the mesh, in cm.
+        """Tip height of one bank above the bottom of the mesh.
 
-        A fully withdrawn bank returns the top of the mesh.
+        Parameters
+        ----------
+        name : str
+            Bank name.
+
+        Returns
+        -------
+        float
+            Tip height in cm. The top of the mesh for a fully withdrawn bank.
+
+        Raises
+        ------
+        InputError
+            If no bank carries that name.
         """
         bank = self._bank(name)
         steps = self._positions[name]
@@ -281,11 +312,27 @@ class ControlRods:
     def insert(self, positions: Mapping[str, float | None] | None = None, **kwargs):
         """Set bank positions in steps and rewrite the node compositions.
 
-        Accepts a mapping, keyword arguments, or both. A bank left unnamed
-        keeps its current position; ``None`` withdraws one fully.
-
         Call :meth:`~openndm.Model.refresh` afterwards if a solver already
         holds this geometry.
+
+        Parameters
+        ----------
+        positions : mapping of str to float or None, optional
+            Position in steps per bank name, or ``None`` to withdraw one
+            fully. A bank left unnamed keeps its current position.
+        **kwargs
+            The same, given as keyword arguments. Merged over ``positions``.
+
+        Returns
+        -------
+        ControlRods
+            This object, so a call chains.
+
+        Raises
+        ------
+        InputError
+            If a name is not a bank of this object, or a position is
+            negative or above the bank's ``max_steps``.
         """
         requested: dict[str, float | None] = {}
         requested.update(positions or {})
@@ -310,7 +357,23 @@ class ControlRods:
         return self
 
     def withdraw(self, *names: str):
-        """Fully withdraw the named banks, or all of them if none are named."""
+        """Fully withdraw the named banks, or all of them if none are named.
+
+        Parameters
+        ----------
+        *names : str
+            Bank names.
+
+        Returns
+        -------
+        ControlRods
+            This object, so a call chains.
+
+        Raises
+        ------
+        InputError
+            If a name is not a bank of this object.
+        """
         targets = names or tuple(self._banks)
         return self.insert(dict.fromkeys(targets, None))
 
@@ -324,20 +387,23 @@ class ControlRods:
         so volume weighting over-counts the rodded absorption. Correcting it
         needs a flux, and a flux needs a solve, so this iterates.
 
-        Returns the final :class:`~openndm.Result`. With no bank cusping, or
-        with every tip on a plane boundary, it is a single solve.
-
         Parameters
         ----------
         model : Model
             Must hold this object's geometry and library.
-        max_sweeps : int
+        max_sweeps : int, optional
             Cap on re-weightings after the first solve.
-        tolerance : float
+        tolerance : float, optional
             Stop once the largest relative change in a mixed cross section
             falls below this.
         **overrides
             Settings overridden for every solve, e.g. ``warm_start=True``.
+
+        Returns
+        -------
+        Result
+            The last solve. With no bank cusping, or with every tip on a
+            plane boundary, it is a single solve.
         """
         result = model.solve(**overrides)
         for _ in range(max_sweeps):
@@ -412,6 +478,14 @@ class ControlRods:
         Returns
         -------
         RodWorth
+            One point per entry of ``positions``, in the order given.
+
+        Raises
+        ------
+        InputError
+            If ``positions`` is missing or empty, names a bank this object
+            does not hold, or gives a multi-bank sweep a reference that is
+            not a mapping.
 
         Notes
         -----
