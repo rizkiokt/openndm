@@ -42,17 +42,21 @@ def write_vtk(path, result, model, *, extra: dict | None = None) -> Path:
         Destination file. ``.vtu`` is the conventional suffix for this
         format and is not enforced.
     result : Result
-        The object returned by :meth:`openndm.Model.solve`.
+        The object returned by :meth:`openndm.Model.solve`. Its ``power``,
+        ``flux`` and ``k_eff`` are the fields written.
     model : Model
         Provides the geometry the cells are built from.
     extra : mapping of str to array_like, optional
         Further per-node fields to write alongside, each of shape
-        ``(n_nodes,)``. Use it for anything the solver does not produce, such
-        as a temperature distribution from a coupled run.
+        ``(n_nodes,)``, indexed by node and read as float. Units are the
+        caller's; the file records only the name. Use it for anything the
+        solver does not produce, such as a temperature distribution from a
+        coupled run.
 
     Returns
     -------
     pathlib.Path
+        The file written, which is ``path`` as a :class:`pathlib.Path`.
 
     Raises
     ------
@@ -62,9 +66,14 @@ def write_vtk(path, result, model, *, extra: dict | None = None) -> Path:
 
     Notes
     -----
-    Cell data is ``power``, ``flux_g1`` to ``flux_gG`` and ``composition``,
-    in node order. Groups are numbered from one, as a reactor physicist reads
-    them off a legend, rather than from zero as the arrays are indexed.
+    Point coordinates are in cm from a lattice corner at the origin, and
+    cover the whole lattice rather than the active positions alone.
+
+    Cell data is ``power``, ``flux_g1`` to ``flux_gG``, ``composition`` and
+    then each ``extra`` field, one value per cell. Groups are numbered from
+    one, as a reactor physicist reads them off a legend, rather than from
+    zero as the arrays are indexed. Cells are written in lattice order, z
+    slowest and x fastest, with the out-of-core positions left out.
 
     The eigenvalue is written as field data, so ParaView shows it without it
     having to be painted onto every cell.
@@ -84,7 +93,10 @@ def write_vtk(path, result, model, *, extra: dict | None = None) -> Path:
 
 
 def _active_nodes(geometry) -> np.ndarray:
-    """Node index of every active lattice position, in ``(z, y, x)`` order."""
+    """Node index of every active lattice position, shape ``(n_nodes,)``.
+
+    In ``(z, y, x)`` lattice order, which is the order the cells are written.
+    """
     mapping = geometry.lattice_to_node.reshape(geometry.shape)
     return mapping[mapping >= 0]
 
@@ -114,12 +126,12 @@ def _cell_fields(result, geometry, nodes, extra) -> dict[str, np.ndarray]:
 
 
 def _edges(widths: np.ndarray) -> np.ndarray:
-    """Cell boundaries along one axis, starting at zero."""
+    """Cell boundaries along one axis in cm, starting at zero."""
     return np.concatenate([[0.0], np.cumsum(widths)])
 
 
 def _points(geometry) -> np.ndarray:
-    """Corner coordinates of the full lattice, x fastest, shape (n, 3)."""
+    """Corner coordinates of the full lattice in cm, x fastest, shape (n, 3)."""
     x, y, z = (_edges(w) for w in (geometry.dx, geometry.dy, geometry.dz))
     zz, yy, xx = np.meshgrid(z, y, x, indexing="ij")
     return np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
