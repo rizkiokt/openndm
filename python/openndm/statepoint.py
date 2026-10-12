@@ -34,14 +34,30 @@ def write_statepoint(path, result, model, *, extra: dict | None = None) -> Path:
         The object returned by :meth:`openndm.Model.solve`.
     model : Model
         Provides the geometry and library metadata written alongside.
-    extra : mapping, optional
-        Additional scalar metadata stored as root attributes. Use it to record
-        conventions that a downstream comparison needs, such as which leakage
-        correction produced the group constants.
+    extra : mapping of str to scalar, optional
+        Additional scalar metadata stored as root attributes, a string going
+        in as bytes like every other string in the file. A key that repeats
+        one of the attributes below replaces it. Use it to record conventions
+        that a downstream comparison needs, such as which leakage correction
+        produced the group constants.
 
     Returns
     -------
     pathlib.Path
+        The file written, which is ``path`` as a :class:`pathlib.Path`.
+
+    Notes
+    -----
+    Root attributes are ``filetype``, ``format_version``, ``version``,
+    ``date_and_time``, ``kernel``, ``mode``, ``k_eff``, ``converged``,
+    ``outer_iterations`` and ``runtime_seconds``, the last in seconds.
+
+    The ``geometry`` group holds node volumes in cm^3, the composition index
+    per node and the flat ``lattice_to_node`` mapping. The ``results`` group
+    holds ``flux`` of shape ``(n_nodes, n_groups)``, ``power`` of shape
+    ``(n_nodes,)``, ``radial_power`` of shape ``(ny, nx)`` and ``axial_power``
+    of shape ``(nz,)``, all relative rather than in absolute units.
+    :class:`StatePoint` reads the layout back.
     """
     import h5py
 
@@ -90,7 +106,20 @@ def write_statepoint(path, result, model, *, extra: dict | None = None) -> Path:
 class StatePoint:
     """Reader for an OpenNDM statepoint, mirroring ``openmc.StatePoint``.
 
-    Use it as a context manager, or call :meth:`close` when done.
+    Use it as a context manager, or call :meth:`close` when done. Every
+    property reads from the open file, so none of them outlives the close.
+
+    Parameters
+    ----------
+    path : path-like
+        A statepoint written by :func:`write_statepoint`. Held open for
+        reading until :meth:`close`.
+
+    Raises
+    ------
+    InputError
+        If the file is not an OpenNDM statepoint, or carries a
+        ``format_version`` this build does not read.
 
     Examples
     --------
@@ -121,7 +150,7 @@ class StatePoint:
 
     @property
     def k_eff(self) -> float:
-        """Multiplication factor of the recorded solve."""
+        """Multiplication factor of the recorded solve, dimensionless."""
         return float(self._f.attrs["k_eff"])
 
     @property
@@ -200,8 +229,9 @@ class StatePoint:
         """Outer iteration history, shape ``(n_outers,)``.
 
         Structured array with fields ``outer``, ``k_eff``, ``k_change``,
-        ``source_change`` and ``inner_iterations``. A copy read from the file
-        on every access.
+        ``source_change`` and ``inner_iterations``. The two iteration counts
+        are integers, the three convergence values dimensionless floats. A
+        copy read from the file on every access.
         """
         return self._f["iteration_history"][()]
 
