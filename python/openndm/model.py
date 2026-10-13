@@ -107,14 +107,25 @@ class Result:
         return out
 
     def power_lattice(self) -> np.ndarray:
-        """Node power scattered onto the ``(nz, ny, nx)`` lattice, a copy."""
+        """Scatter the node power back onto the lattice.
+
+        Returns
+        -------
+        ndarray, shape (nz, ny, nx)
+            Relative node power, a copy, carrying the normalisation of
+            :attr:`power`. Positions with no active node hold ``nan``.
+        """
         return self._geom.expand(self.power)
 
     def radial_power(self) -> np.ndarray:
-        """Volume-weighted radial (2D) power map, a copy (FR-OUT-3).
+        """Collapse the node power onto the radial plane (FR-OUT-3).
 
-        Shape ``(ny, nx)``, normalised to a mean of 1 over the columns that
-        carry power.
+        Returns
+        -------
+        ndarray, shape (ny, nx)
+            Volume-weighted power per column, a copy, dimensionless and
+            normalised to a mean of 1 over the columns that carry power.
+            Columns without power hold 0.
         """
         p = self._geom.expand(self.power, fill=0.0)
         v = self._geom.expand(self._geom.volumes, fill=0.0)
@@ -128,10 +139,14 @@ class Result:
         return radial
 
     def axial_power(self) -> np.ndarray:
-        """Volume-weighted axial (1D) power profile, a copy (FR-OUT-3).
+        """Collapse the node power onto the axial mesh (FR-OUT-3).
 
-        Shape ``(nz,)``, normalised to a mean of 1 over the planes that carry
-        power.
+        Returns
+        -------
+        ndarray, shape (nz,)
+            Volume-weighted power per plane, a copy, dimensionless and
+            normalised to a mean of 1 over the planes that carry power.
+            Planes without power hold 0.
         """
         p = self._geom.expand(self.power, fill=0.0)
         v = self._geom.expand(self._geom.volumes, fill=0.0)
@@ -304,7 +319,11 @@ class Transient:
 
     @property
     def precursors(self) -> np.ndarray:
-        """Precursor concentrations, shape ``(n_nodes, n_precursors)``, a copy."""
+        """Precursor concentrations, shape ``(n_nodes, n_precursors)``, a copy.
+
+        In the normalisation of the fission source that produced them, so
+        comparable with the flux rather than absolute.
+        """
         return self._model._solver.precursors
 
     @property
@@ -317,11 +336,28 @@ class Transient:
         return flux.reshape(self._model.geometry.n_nodes, self._model.library.n_groups)
 
     def step(self, dt: float, settings: Settings | None = None, **overrides):
-        """Advance by ``dt`` seconds.
+        """Advance the transient by one step.
+
+        Parameters
+        ----------
+        dt : float
+            Length of the step, in s.
+        settings : Settings, optional
+            Overrides the settings :meth:`Model.start_transient` resolved,
+            for this step only.
+        **overrides
+            Individual settings overridden for this step, e.g.
+            ``step(1e-3, theta=1.0)``.
 
         Returns
         -------
         TransientStep
+            Power and iteration counts at the end of the step.
+
+        Raises
+        ------
+        InputError
+            If the library has been modified since it was finalized.
         """
         self._model._require_finalized()
         resolved = (
@@ -355,10 +391,20 @@ class Model:
     Parameters
     ----------
     geometry : Geometry
+        Node and surface mesh to solve on. Held by reference, so mutating it
+        and calling :meth:`refresh` is the supported perturbation path.
     library : XSLibrary
         Must be finalized. A branch-parameterised library must be collapsed
-        with :meth:`XSLibrary.interpolate` first.
+        with :meth:`XSLibrary.interpolate` first. Held by reference as well.
     settings : Settings, optional
+        Defaults applied to every solve. The defaults of :class:`Settings`
+        if omitted.
+
+    Raises
+    ------
+    InputError
+        If the library is not finalized, or still carries more than one
+        branch state.
 
     Examples
     --------
@@ -433,6 +479,22 @@ class Model:
 
         The adjoint reuses the nonlinear coupling coefficients from a forward
         solve, so a cold call runs the forward problem first.
+
+        Parameters
+        ----------
+        **overrides
+            Individual settings overridden for this call, as for
+            :meth:`solve`.
+
+        Returns
+        -------
+        Result
+            Adjoint solve, whose ``flux`` is the adjoint flux.
+
+        Raises
+        ------
+        ConvergenceError
+            If the outer iteration exhausts ``max_outer``.
         """
         return self.solve(mode="adjoint", **overrides)
 
@@ -442,7 +504,23 @@ class Model:
         Parameters
         ----------
         source : array_like, shape (n_nodes, n_groups)
-            External source density per node and group.
+            External source density per node and group, in cm^-3 s^-1.
+        **overrides
+            Individual settings overridden for this call, as for
+            :meth:`solve`.
+
+        Returns
+        -------
+        Result
+            Fixed-source solve. Its ``k_eff`` is zero, there being no
+            eigenvalue to report.
+
+        Raises
+        ------
+        InputError
+            If ``source`` is not shaped ``(n_nodes, n_groups)``.
+        ConvergenceError
+            If the solve exhausts ``max_outer``.
         """
         arr = np.asarray(source, dtype=float)
         expected = (self.geometry.n_nodes, self.library.n_groups)
@@ -682,6 +760,23 @@ class Model:
             ``mutate(model, case)``, applied before each solve.
         cases : sequence
             Opaque case descriptors handed to ``mutate``.
+        warm_start : bool, optional
+            Whether each solve after the first starts from the previous
+            case's flux. The first is always cold.
+        **overrides
+            Individual settings overridden for every solve, as for
+            :meth:`solve`.
+
+        Returns
+        -------
+        list of Result
+            One result per case, in the order given.
+
+        Raises
+        ------
+        ConvergenceError
+            From the first case that fails to converge. The results of the
+            cases before it are lost with the exception.
         """
         results = []
         for i, case in enumerate(cases):
@@ -699,7 +794,16 @@ class Model:
         side and ``-J * area`` where it is on the high side; that works
         unchanged for a boundary surface, where only one side exists.
 
-        Requires a completed solve.
+        Returns
+        -------
+        ndarray, shape (n_surfaces, n_groups)
+            Net current per surface and group, a copy, in the normalisation
+            of :attr:`Result.flux` rather than absolute.
+
+        Raises
+        ------
+        InputError
+            If no solve has completed.
         """
         return self._solver.surface_currents()
 
@@ -728,6 +832,16 @@ class Model:
         expect around ``1e-5``, set by ``Settings.inner_tolerance``; tightening
         both that and ``fission_source_tolerance`` brings it to about
         ``1e-10``. Compare against those rather than against a fixed number.
+
+        Returns
+        -------
+        ndarray, shape (n_nodes, n_groups)
+            Normalised residual per node and group, a copy, dimensionless.
+
+        Raises
+        ------
+        InputError
+            If no solve has completed.
         """
         result = self._last_result
         if result is None:
@@ -775,10 +889,24 @@ class Model:
 
         Precursors start at the equilibrium of the initial fission source.
 
+        Parameters
+        ----------
+        settings : Settings, optional
+            Overrides the model's settings for the transient.
+        **overrides
+            Individual settings overridden the same way, e.g.
+            ``start_transient(theta=1.0)``.
+
         Returns
         -------
         Transient
-            Driver with a :meth:`Transient.step` method.
+            Driver with a :meth:`Transient.step` method. It resolves these
+            settings once, so a later step takes them unless given its own.
+
+        Raises
+        ------
+        InputError
+            If the library has been modified since it was finalized.
         """
         self._require_finalized()
         resolved = self._settings(settings, overrides)
@@ -821,6 +949,12 @@ class Model:
         a, b : int
             Flat radial indices into the ``(ny, nx)`` lattice; the whole axial
             column moves with the assembly.
+
+        Raises
+        ------
+        InputError
+            If either position is inactive on any plane. The planes swapped
+            before it was reached keep their new compositions.
         """
         nz, ny, nx = self.geometry.shape
         mapping = self.geometry.lattice_to_node.reshape(nz, ny, nx)
