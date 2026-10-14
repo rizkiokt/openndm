@@ -60,6 +60,23 @@ class DopplerFeedback:
     groups : sequence of int, optional
         Groups that feel it. Every group by default. The LRA specification
         applies it to the thermal group alone.
+
+    Attributes
+    ----------
+    gamma : float
+        Feedback coefficient, in :math:`K^{-1/2}`.
+    reference_temperature : float
+        :math:`T_0`, in K.
+    field : str
+        Cross section the law scales.
+
+    Raises
+    ------
+    InputError
+        On a field the law cannot scale, a reference temperature at or below
+        absolute zero, a library that still carries a branch dependence of
+        its own, an empty composition list, or a composition or group outside
+        the library.
     """
 
     def __init__(
@@ -124,7 +141,24 @@ class DopplerFeedback:
         return self._groups
 
     def factor(self, temperature: float) -> float:
-        """The multiplier at one temperature."""
+        """The multiplier at one temperature.
+
+        Parameters
+        ----------
+        temperature : float
+            Composition temperature, K.
+
+        Returns
+        -------
+        float
+            Dimensionless factor the snapshotted cross section is scaled by.
+            One at the reference temperature.
+
+        Raises
+        ------
+        InputError
+            On a negative temperature.
+        """
         if not (temperature >= 0.0):
             raise InputError(f"temperature must not be negative, got {temperature}")
         return 1.0 + self.gamma * (
@@ -134,11 +168,20 @@ class DopplerFeedback:
     def apply(self, temperatures) -> None:
         """Set the temperature of each composition and rewrite the library.
 
-        Accepts one temperature for all of them, or one per composition in
-        the order given to the constructor.
-
         The library is re-finalized here, so a model holding it only needs
         :meth:`~openndm.Model.refresh`.
+
+        Parameters
+        ----------
+        temperatures : float or array_like, shape (n_compositions,)
+            Temperature in K: one for all of them, or one per composition in
+            the order given to the constructor.
+
+        Raises
+        ------
+        InputError
+            On a count that is neither one nor one per composition, or on a
+            factor that drives the scaled cross section negative.
         """
         values = np.atleast_1d(np.asarray(temperatures, dtype=float))
         if values.size == 1:
