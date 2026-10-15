@@ -57,7 +57,15 @@ class AdfResult:
     slab_fraction: float
 
     def apply_to(self, library, composition: int) -> None:
-        """Store these factors on a library composition."""
+        """Store these factors on a library composition.
+
+        Parameters
+        ----------
+        library : XSLibrary
+            Modified in place, through :meth:`~openndm.XSLibrary.set_adf`.
+        composition : int
+            Composition index the factors belong to.
+        """
         library.set_adf(composition, self.values, n_axes=self.values.shape[0] // 2)
 
     def __repr__(self) -> str:
@@ -222,6 +230,11 @@ def compute_adf(
     AdfResult
         Discontinuity factors per face and group, their propagated 1-sigma,
         and the slab width the ratio was formed with.
+
+    Raises
+    ------
+    InputError
+        If the statepoint holds no whole-assembly tally under ``prefix``.
     """
     from .mgxs import require_openmc
 

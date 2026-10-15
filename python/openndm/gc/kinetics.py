@@ -40,7 +40,15 @@ class KineticsParameters:
     std_dev: dict
 
     def apply_to(self, library) -> None:
-        """Store the delayed data on a library (FR-XS-3)."""
+        """Store the delayed data on a library (FR-XS-3).
+
+        Parameters
+        ----------
+        library : XSLibrary
+            Modified in place through
+            :meth:`~openndm.XSLibrary.set_delayed`: its per-family fractions
+            and decay constants are replaced.
+        """
         library.set_delayed(self.beta, self.decay_constant)
 
     def __repr__(self) -> str:
@@ -75,6 +83,9 @@ def compute_kinetics(
         Precursor decay constants in 1/s. Required when OpenMC does not
         supply them.
     method : {'auto', 'ifp', 'k_ratio'}
+        Which estimate to form. ``'auto'`` uses the iterated fission
+        probability data when the statepoint carries it and falls back to the
+        k-ratio; naming one demands it.
 
     Returns
     -------

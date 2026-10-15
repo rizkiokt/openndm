@@ -136,6 +136,14 @@ class CriticalSpectrum:
         calculation, not the already-condensed coarse-group library. What this
         does give you is the buckling and the corrected D, which is the part
         the nodal solve is most sensitive to.
+
+        Parameters
+        ----------
+        library : XSLibrary
+            Modified in place, through
+            :meth:`~openndm.XSLibrary.set_composition`.
+        composition : int
+            Composition index whose diffusion coefficient is replaced.
         """
         library.set_composition(composition, D=self.diffusion)
 
