@@ -68,6 +68,17 @@ def require_openmc():
 
     OpenNDM's solver runs without OpenMC; only this subpackage needs it
     (FR-OMC-14).
+
+    Returns
+    -------
+    module
+        The imported :mod:`openmc` module.
+
+    Raises
+    ------
+    ImportError
+        If OpenMC is not installed, carrying the pip and conda commands that
+        install it.
     """
     try:
         import openmc
@@ -427,6 +438,12 @@ def from_mgxs_file(path, *, reverse_groups: bool = False) -> XSLibrary:
     -------
     XSLibrary
         Finalized, single branch state.
+
+    Raises
+    ------
+    InputError
+        If any ``xsdata`` entry carries no scattering matrix, or no total
+        cross section.
 
     Notes
     -----

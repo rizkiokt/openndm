@@ -115,7 +115,14 @@ class BranchGrid:
         return BranchPoint(index=index, state=dict(reversed(list(state.items()))))
 
     def to_library_axes(self) -> list[tuple[str, np.ndarray]]:
-        """Axis specification for :meth:`openndm.XSLibrary.set_axes`."""
+        """Axis specification for :meth:`openndm.XSLibrary.set_axes`.
+
+        Returns
+        -------
+        list of (str, ndarray)
+            Axis name and its grid points, in declaration order. Each array
+            is the grid's own, not a copy.
+        """
         return [(name, points) for name, points in self.axes.items()]
 
     def __repr__(self) -> str:
@@ -170,7 +177,14 @@ class BranchDriver:
         return self.workdir / "branch_checkpoint.json"
 
     def completed(self) -> set[int]:
-        """Branch indices already finished, read from the checkpoint."""
+        """Branch indices already finished, read from the checkpoint.
+
+        Returns
+        -------
+        set of int
+            Flat grid indices recorded as done, empty when no checkpoint
+            file exists.
+        """
         if not self.checkpoint_path.exists():
             return set()
         with open(self.checkpoint_path) as f:
@@ -188,11 +202,36 @@ class BranchDriver:
             )
 
     def branch_dir(self, point: BranchPoint) -> Path:
-        """Return the run directory of one branch point, inside ``workdir``."""
+        """Return the run directory of one branch point, inside ``workdir``.
+
+        Parameters
+        ----------
+        point : BranchPoint
+            Grid point whose directory is wanted.
+
+        Returns
+        -------
+        pathlib.Path
+            The directory path. Not created here.
+        """
         return self.workdir / f"branch_{point.index:05d}_{point.key}"
 
     def run_one(self, point: BranchPoint) -> XSLibrary:
-        """Execute one branch point and return its single-state library."""
+        """Execute one branch point and return its single-state library.
+
+        Creates the branch directory, runs OpenMC in it, and records the
+        point as completed when ``checkpoint`` is set.
+
+        Parameters
+        ----------
+        point : BranchPoint
+            Grid point to run.
+
+        Returns
+        -------
+        XSLibrary
+            Whatever ``library_factory`` built from this point's run.
+        """
         from .mgxs import require_openmc
 
         require_openmc()
