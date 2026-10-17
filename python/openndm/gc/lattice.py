@@ -86,8 +86,8 @@ def composition_map(lattice, domains: Sequence | None = None) -> np.ndarray:
     -------
     numpy.ndarray of int, shape (nz, ny, nx)
         Composition per position, ``INACTIVE`` where the lattice holds its
-        ``outer`` universe. ``nz`` is 1 for a two-dimensional lattice, and row
-        0 is the lowest y.
+        ``outer`` universe, as a new array. ``nz`` is 1 for a two-dimensional
+        lattice, and row 0 is the lowest y.
 
     Raises
     ------

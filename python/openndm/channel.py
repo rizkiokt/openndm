@@ -625,7 +625,8 @@ def absolute_power(
     Returns
     -------
     ndarray, shape (n_nodes,)
-        Power per node in W, summing to ``total_power * percent / 100``.
+        Power per node in W, summing to ``total_power * percent / 100``. A
+        new array.
 
     Raises
     ------
