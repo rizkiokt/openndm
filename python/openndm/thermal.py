@@ -515,9 +515,10 @@ class CompositionMapping:
         Returns
         -------
         ndarray, shape (n_compositions,)
-            A composition no node carries, or whose weights sum to zero,
-            takes the weighted mean of the whole field, so the result is
-            always a usable branch coordinate.
+            Weighted mean per composition, in the units of ``node_values``,
+            as a new array. A composition no node carries, or whose weights
+            sum to zero, takes the weighted mean of the whole field, so the
+            result is always a usable branch coordinate.
 
         Raises
         ------
