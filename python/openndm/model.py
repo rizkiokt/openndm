@@ -564,7 +564,12 @@ class Model:
         guess : float
             Starting concentration in ppm.
         bracket : (float, float)
-            Hard limits on the search.
+            Hard limits on the search, in ppm.
+        tolerance : float, optional
+            Absolute ``k_eff`` distance from ``target_k`` at which the search
+            stops.
+        max_iterations : int, optional
+            Iteration cap for the search.
         evaluate_state : callable, optional
             ``evaluate_state()`` returning the :class:`Result` at the current
             boron, in place of a single static solve. This is what couples
@@ -573,6 +578,10 @@ class Model:
             converged coupled state rather than an isolated one. It is
             called after ``apply_boron`` and is responsible for its own
             refresh.
+        **overrides
+            Individual settings overridden for every solve in the search, as
+            for :meth:`solve`. Ignored when ``evaluate_state`` is given, which
+            runs its own solves.
 
         Returns
         -------

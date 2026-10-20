@@ -13,7 +13,7 @@ __all__ = ["KineticsParameters", "compute_kinetics"]
 
 @dataclass
 class KineticsParameters:
-    """Effective delayed neutron data for a transient calculation.
+    r"""Effective delayed neutron data for a transient calculation.
 
     Attributes
     ----------
@@ -24,7 +24,7 @@ class KineticsParameters:
     decay_constant : numpy.ndarray, shape (n_families,)
         Per-precursor-group decay constants in 1/s.
     generation_time : float
-        Neutron generation time :math:`\\Lambda` in seconds.
+        Neutron generation time :math:`\Lambda` in seconds.
     method : str
         ``'ifp'`` when OpenMC's iterated fission probability data was used,
         ``'k_ratio'`` for the prompt/total eigenvalue-ratio fallback.
@@ -65,11 +65,11 @@ def compute_kinetics(
     decay_constant=None,
     method: str = "auto",
 ) -> KineticsParameters:
-    """Extract :math:`\\beta_{\\rm eff}` and :math:`\\Lambda` from OpenMC.
+    r"""Extract :math:`\beta_{\rm eff}` and :math:`\Lambda` from OpenMC.
 
     Prefers OpenMC's iterated fission probability results, which are properly
     adjoint weighted. Falls back to the k-ratio estimate
-    :math:`\\beta_{\\rm eff} \\approx 1 - k_p/k` when IFP data is absent, which
+    :math:`\beta_{\rm eff} \approx 1 - k_p/k` when IFP data is absent, which
     needs a second, prompt-only statepoint.
 
     Parameters

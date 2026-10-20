@@ -1,4 +1,4 @@
-"""Critical spectrum and buckling search (FR-OMC-8).
+r"""Critical spectrum and buckling search (FR-OMC-8).
 
 An infinite-lattice OpenMC calculation produces group constants for a medium
 with no net leakage. A core calculation needs constants generated at, or
@@ -13,25 +13,25 @@ For a homogeneous medium with buckling :math:`B^2`, the group balance is
 
 .. math::
 
-    \\left(\\Sigma_{t,g} + D_g(B^2)\\,B^2\\right)\\phi_g
-        - \\sum_{g'}\\Sigma_{s0,g'\\to g}\\phi_{g'}
-        = \\frac{\\chi_g}{k}\\sum_{g'}\\nu\\Sigma_{f,g'}\\phi_{g'} .
+    \left(\Sigma_{t,g} + D_g(B^2)\,B^2\right)\phi_g
+        - \sum_{g'}\Sigma_{s0,g'\to g}\phi_{g'}
+        = \frac{\chi_g}{k}\sum_{g'}\nu\Sigma_{f,g'}\phi_{g'} .
 
 Because the fission source is rank one, :math:`k(B^2)` is available in closed
-form as :math:`k = \\nu\\Sigma_f^{\\mathsf T} M(B^2)^{-1}\\chi`, and the search
+form as :math:`k = \nu\Sigma_f^{\mathsf T} M(B^2)^{-1}\chi`, and the search
 reduces to a scalar root find on :math:`B^2`.
 
 The two conventions differ only in :math:`D_g`:
 
 ``p1``
-    :math:`D_g = 1 / (3\\Sigma_{tr,g})`, independent of buckling.
+    :math:`D_g = 1 / (3\Sigma_{tr,g})`, independent of buckling.
 ``b1``
-    :math:`D_g = \\gamma_g / (3\\Sigma_{tr,g})` with the standard correction
-    factor :math:`\\gamma_g = x_g / \\left(3(1/\\alpha_g - 1)\\right)`,
-    :math:`x_g = B^2/\\Sigma_{t,g}^2`, and
-    :math:`\\alpha_g = \\arctan(\\sqrt{x_g})/\\sqrt{x_g}` for
+    :math:`D_g = \gamma_g / (3\Sigma_{tr,g})` with the standard correction
+    factor :math:`\gamma_g = x_g / \left(3(1/\alpha_g - 1)\right)`,
+    :math:`x_g = B^2/\Sigma_{t,g}^2`, and
+    :math:`\alpha_g = \arctan(\sqrt{x_g})/\sqrt{x_g}` for
     :math:`B^2 > 0` (the ``artanh`` branch for :math:`B^2 < 0`).
-    :math:`\\gamma \\to 1` as :math:`B \\to 0`, so B1 reduces to P1.
+    :math:`\gamma \to 1` as :math:`B \to 0`, so B1 reduces to P1.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ defensible fallback.
 
 
 def b1_gamma(buckling: float, total: np.ndarray) -> np.ndarray:
-    """B1 leakage correction factor :math:`\\gamma_g`.
+    r"""B1 leakage correction factor :math:`\gamma_g`.
 
     Parameters
     ----------
