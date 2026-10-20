@@ -84,7 +84,7 @@ class Geometry:
         subdivide: int | Sequence[int] = 1,
         rotation: np.ndarray | None = None,
     ) -> Geometry:
-        """Build a Cartesian geometry from a ``(nz, ny, nx)`` composition map.
+        r"""Build a Cartesian geometry from a ``(nz, ny, nx)`` composition map.
 
         Parameters
         ----------
@@ -106,13 +106,16 @@ class Geometry:
             ``'zero_flux'``, ``'vacuum'``, ``'reflective'`` or ``'albedo'``
             (FR-GEO-5). Anything unset defaults to ``'vacuum'``.
         albedo : mapping, optional
-            Per-face albedo :math:`\\beta_g = J^-/J^+`, one value per group.
+            Per-face albedo :math:`\beta_g = J^-/J^+`, one value per group.
             Required for a face set to ``'albedo'``.
         outside : str
             Condition applied where an *interior* face looks at an inactive
             position. This is deliberately separate from ``boundaries``: on a
             quarter-core map the mesh edges carry the symmetry conditions, and
             an out-of-core position must not inherit them.
+        outside_albedo : sequence of float, optional
+            Albedo :math:`\beta_g = J^-/J^+` applied at those interior faces,
+            one value per group. Required when ``outside`` is ``'albedo'``.
         subdivide : int or (nx, ny, nz)
             Split each lattice cell into this many nodes per direction
             (FR-GEO-4). Discontinuity factors follow the composition, so a
