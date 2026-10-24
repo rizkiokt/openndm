@@ -418,7 +418,7 @@ class AxialMapping:
         return weighted / np.diff(self.target_edges)
 
     def reverse(self) -> AxialMapping:
-        """The mapping the other way, target mesh to source mesh.
+        """Return the mapping the other way, target mesh to source mesh.
 
         Returns
         -------

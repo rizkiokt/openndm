@@ -138,7 +138,7 @@ def _points(geometry) -> np.ndarray:
 
 
 def _connectivity(geometry) -> np.ndarray:
-    """The eight corner point indices of each active cell, shape (n, 8)."""
+    """Return the eight corner point indices of each active cell, shape (n, 8)."""
     _, ny, nx = geometry.shape
     mapping = geometry.lattice_to_node.reshape(geometry.shape)
     planes, rows, columns = np.nonzero(mapping >= 0)
