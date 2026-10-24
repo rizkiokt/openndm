@@ -301,9 +301,9 @@ def _checked_conductivity(name: str, value) -> Callable[[np.ndarray], np.ndarray
 
 
 def neacrp_fuel_conductivity(temperature) -> np.ndarray:
-    """UO2 heat conductivity in W/(m K), NEACRP-L-335 Section 2.7.
+    r"""UO2 heat conductivity in W/(m K), NEACRP-L-335 Section 2.7.
 
-    .. math:: \\lambda_{UO_2} = 1.05 + \\frac{2150}{T - 73.15}
+    .. math:: \lambda_{UO_2} = 1.05 + \frac{2150}{T - 73.15}
 
     Falls from about 10.5 W/(m K) at 300 K to 3.0 at 1200 K. The
     specification states no validity range; the pole at 73.15 K is refused
@@ -340,10 +340,10 @@ def neacrp_fuel_conductivity(temperature) -> np.ndarray:
 
 
 def neacrp_clad_conductivity(temperature) -> np.ndarray:
-    """Zircaloy-4 heat conductivity in W/(m K), NEACRP-L-335 Section 2.7.
+    r"""Zircaloy-4 heat conductivity in W/(m K), NEACRP-L-335 Section 2.7.
 
-    .. math:: \\lambda_{Zr} = 7.51 + 2.09\\times10^{-2} T
-              - 1.45\\times10^{-5} T^2 + 7.67\\times10^{-9} T^3
+    .. math:: \lambda_{Zr} = 7.51 + 2.09\times10^{-2} T
+              - 1.45\times10^{-5} T^2 + 7.67\times10^{-9} T^3
 
     Rises from about 12.7 W/(m K) at 300 K to 21.6 at 1000 K. The cubic
     climbs steeply beyond that and the specification states no upper bound,
@@ -370,10 +370,10 @@ def neacrp_clad_conductivity(temperature) -> np.ndarray:
 
 
 def neacrp_fuel_heat_capacity(temperature) -> np.ndarray:
-    """UO2 specific heat capacity in J/(kg K), NEACRP-L-335 Section 2.7.
+    r"""UO2 specific heat capacity in J/(kg K), NEACRP-L-335 Section 2.7.
 
-    .. math:: c_{p,UO_2} = 162.3 + 0.3038 T - 2.391\\times10^{-4} T^2
-              + 6.404\\times10^{-8} T^3
+    .. math:: c_{p,UO_2} = 162.3 + 0.3038 T - 2.391\times10^{-4} T^2
+              + 6.404\times10^{-8} T^3
 
     Nothing reads this yet. Steady conduction does not need a heat capacity;
     a transient one will, and it belongs with the three relations printed

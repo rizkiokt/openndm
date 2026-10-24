@@ -34,14 +34,14 @@ __all__ = ["ControlRodBank", "ControlRods", "RodWorth"]
 
 @dataclass(frozen=True)
 class RodWorth:
-    """A bank worth curve (FR-MODE-5).
+    r"""A bank worth curve (FR-MODE-5).
 
     Worth is a reactivity difference, not a difference in ``k_eff``:
 
-    .. math:: w(p) = \\rho_{ref} - \\rho(p) = 1/k(p) - 1/k_{ref}
+    .. math:: w(p) = \rho_{ref} - \rho(p) = 1/k(p) - 1/k_{ref}
 
     reported in pcm and signed so that **inserting a bank gives positive
-    worth**, which is the usual convention. Using :math:`\\Delta k/k` instead
+    worth**, which is the usual convention. Using :math:`\Delta k/k` instead
     is a common shortcut that drifts from this by of order its own square,
     which matters once a bank is worth several thousand pcm, and it does not
     stay additive over a sequence of insertions.
