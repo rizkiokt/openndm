@@ -471,11 +471,11 @@ result.runtime               # seconds
 result.kernel                # which kernel produced it
 
 result.flux                  # (n_nodes, n_groups), zero-copy view
-result.power                 # (n_nodes,), mean 1.0 over powered nodes
+result.power                 # (n_nodes,), volume-weighted mean 1.0
 result.power_lattice()       # (nz, ny, nx)
 result.radial_power()        # (ny, nx), volume weighted
 result.axial_power()         # (nz,)
-result.f_q                   # peak node power
+result.f_q                   # peak node power density
 result.f_dh                  # peak radial power
 result.history               # structured array of the outer iteration
 ```
@@ -483,16 +483,9 @@ result.history               # structured array of the outer iteration
 `flux` and `power` are views onto the C++ buffers and stay valid as long as
 the `Result` does. Copy them if you intend to outlive it.
 
-`power` is integrated over each node and normalised to its arithmetic mean
-over powered nodes, so on a non-uniform mesh `f_q` is not a peak-to-average
-power *density*. Divide by volume and normalise yourself when the mesh is not
-uniform:
-
-```python
-density = result.power / geom.volumes
-powered = density > 0
-f_q = density.max() / np.average(density[powered], weights=geom.volumes[powered])
-```
+`power` is a power density normalised to a volume-weighted mean of 1 over
+powered nodes, so `f_q` is peak-to-core-average on any mesh. Multiply by
+`geom.volumes` for the power in each node.
 
 ### Plots
 

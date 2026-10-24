@@ -65,6 +65,7 @@ SETTINGS = openndm.Settings(
     kernel="sanm",
     k_tolerance=1.0e-9,
     fission_source_tolerance=1.0e-8,
+    inner_tolerance=1.0e-7,
     max_outer=2000,
 )
 
@@ -94,23 +95,6 @@ def solve_case(case, settings=SETTINGS):
         tolerance=1.0e-7,
     )
     return search, geometry
-
-
-def volume_weighted_peaking(result, geometry):
-    """Peak node power over the volume-weighted core average.
-
-    ``Result.f_q`` normalises to an arithmetic mean over powered nodes, which
-    is the same thing only on a uniform mesh. This deck's axial layers run
-    from 7.7 cm to 30 cm, so the two differ by 27 percent and the arithmetic
-    one is not the core average any peaking factor means.
-    """
-    power = result.power
-    volume = geometry.volumes
-    powered = power > 0.0
-    average = float(
-        (power[powered] * volume[powered]).sum() / volume[powered].sum()
-    )
-    return float(power.max()) / average
 
 
 def thermal_model(case, fine):
@@ -219,9 +203,8 @@ def report_coupled(case, search, geometry, thermal):
     print(f"  {'critical boron, ppm':<22}{search.boron:12.1f}"
           f"{expected['boron_ppm']:12.1f}"
           f"{search.boron - expected['boron_ppm']:+13.1f} ")
-    peaking = volume_weighted_peaking(result, geometry)
-    print(f"  {'F_Q (volume mean)':<22}{peaking:12.3f}{expected['f_q']:12.3f}"
-          f"{100.0 * (peaking / expected['f_q'] - 1.0):+13.2f}%")
+    print(f"  {'F_Q':<22}{result.f_q:12.3f}{expected['f_q']:12.3f}"
+          f"{100.0 * (result.f_q / expected['f_q'] - 1.0):+13.2f}%")
     print(f"  {'F_xy (as F_dH)':<22}{result.f_dh:12.3f}{expected['f_xy']:12.3f}"
           f"{100.0 * (result.f_dh / expected['f_xy'] - 1.0):+13.2f}%")
     print(f"  {'T_Doppler, C':<22}{doppler:12.1f}{expected['t_doppler']:12.1f}"
@@ -250,10 +233,7 @@ def report(case, search, geometry):
     print(f"  {'quantity':<22}{'OpenNDM':>12}{'reference':>12}{'difference':>14}")
     print(f"  {'critical boron, ppm':<22}{search.boron:12.1f}"
           f"{expected['boron_ppm']:12.1f}{boron_error:+13.1f} ")
-    peaking = volume_weighted_peaking(result, geometry)
-    print(f"  {'F_Q (volume mean)':<22}{peaking:12.3f}{expected['f_q']:12.3f}"
-          f"{100.0 * (peaking / expected['f_q'] - 1.0):+13.2f}%")
-    print(f"  {'F_Q (Result.f_q)':<22}{result.f_q:12.3f}{expected['f_q']:12.3f}"
+    print(f"  {'F_Q':<22}{result.f_q:12.3f}{expected['f_q']:12.3f}"
           f"{100.0 * (result.f_q / expected['f_q'] - 1.0):+13.2f}%")
     print(f"  {'F_xy (as F_dH)':<22}{result.f_dh:12.3f}{expected['f_xy']:12.3f}"
           f"{100.0 * (result.f_dh / expected['f_xy'] - 1.0):+13.2f}%")
@@ -293,9 +273,6 @@ def main():
     print("\ncritical boron error, ppm")
     for case, error in errors.items():
         print(f"  {case}  {error:+8.1f}")
-    print("\nResult.f_q normalises to an arithmetic mean over powered nodes,")
-    print("which is the core average only on a uniform mesh. This deck's axial")
-    print("layers run 7.7 cm to 30 cm, so both rows are shown.")
     print("\nF_xy is compared against the radial peaking OpenNDM reports as")
     print("F_dH. NEACRP-L-335 Section 4 defines B3, the maximum power peaking")
     print("factor, which is F_Q; it does not define F_xy, so that row states")

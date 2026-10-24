@@ -20,9 +20,9 @@ struct Result {
   double k_eff = 0.0;  //!< zero from a fixed-source solve, which has none
   //! Scalar flux, node*G + g.
   std::vector<double> flux;
-  //! Relative node power, normalised to a mean of one over the nodes that
-  //! produce power, which is the convention peaking factors are quoted
-  //! against. Dimensionless.
+  //! Relative node power density, normalised to a volume-weighted mean of
+  //! one over the nodes that produce power, which is the core average
+  //! peaking factors are quoted against. Dimensionless.
   std::vector<double> power;
   //! One entry per outer iteration taken, in order.
   std::vector<IterationRecord> history;
@@ -175,9 +175,9 @@ private:
   //! comparable between meshes and between runs.
   void normalise_to_unit_mean_flux();
 
-  //! Relative node power from the retained flux, normalised to a mean of one
-  //! over the powered nodes, which is the convention peaking factors are
-  //! quoted against (FR-OUT-3).
+  //! Relative node power density from the retained flux, normalised to a
+  //! volume-weighted mean of one over the powered nodes, which is the core
+  //! average peaking factors are quoted against (FR-OUT-3).
   void compute_power(std::vector<double>& power) const;
 
   //! Un-normalised fission power per node, sum_g kappa_f phi V.
