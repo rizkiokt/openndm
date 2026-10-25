@@ -82,7 +82,7 @@ static cases) and M8 (VTK export).
 | FR-MODE-4 | done | Secant with a bisection fallback; the boron model is supplied by the caller. `evaluate_state=` replaces the single static solve with any callable returning a `Result`, which is what composes the search with FR-MODE-6: a coupled boron search evaluates each candidate against a converged thermal-hydraulic state rather than an isolated one. |
 | FR-MODE-5 | done | `ControlRodBank` and `ControlRods` give banks a radial map, a composition substitution and a position in steps on KOMODO's `%CROD` convention. Verified against `benchmarks/iaea3d`, which places the same rods by hand, node for node. `worth_curve` returns integral and differential worth over a sequence of static solves, for one bank or a prepared multi-bank sequence, warm starting between points; it agrees with worth computed from two direct solves to 0.01 pcm. A partially rodded node takes a homogenised mixture written into a spare composition: volume-weighted from `insert`, flux-weighted through `converge_cusping`, which iterates solve and re-weight. Against a fine-mesh reference the largest error falls 784 -> 259 -> 55 pcm across no cusping, volume and flux weighting, the last being the size of the coarse mesh's own discretisation error. |
 | FR-MODE-6 | done | `Model.solve_coupled`: solve, hand the power to a `ThermalSolver`, push what comes back into the cross sections, repeat until the node power stops moving. The feedback model stays in the caller's `apply_state`, the way `search_boron` keeps the boron model in the caller's hands. A library with no temperature dependence returns the uncoupled eigenvalue to 1e-12 in one iteration; on a test slab with a 5% Doppler swing the loop converges in 10 iterations and moves `k_eff` by -3590 pcm, monotonically in power. Every iteration calls `refresh()`, which keeps the flux and `D̂`, so with `warm_start=True` each solve starts from the last. Exercised against a published reference by `benchmarks/neacrp`: a boron search evaluated against a converged coupled state reaches the NEACRP critical boron within 2.1 ppm and the core-average Doppler temperature within 1.2 K on all three full power cases. |
-| FR-MODE-7 | not started | Both halves exist, but the thermal-hydraulics is steady only: `PinConduction` has no heat capacity term and there is no transient coupling driver. |
+| FR-MODE-7 | partial | `PinConduction.step` advances the pin temperatures by backward Euler, storing heat in the pellet rings and the cladding. The channel model and the driver coupling it to `Transient` are not written. |
 | FR-MODE-8 | done | `Model.sweep`, reusing geometry and library, warm starting by default. |
 
 ## 4.6 Kinetics (FR-KIN)
@@ -101,8 +101,9 @@ flat to 1 part in 1e10, prompt jump to 0.5%, asymptotic period against the
 inhour equation to 0.2%, and the observed order in time. See
 [`theory.md`](theory.md) §10 and §11.
 
-**FR-MODE-7** (transient with feedback) still needs a time-dependent
-thermal-hydraulic model and a driver that couples it to `Transient`.
+**FR-MODE-7** (transient with feedback) has transient pin conduction and
+still needs a transient channel model and a driver that couples it to
+`Transient`.
 
 ## 4.7 Thermal hydraulics (FR-TH)
 

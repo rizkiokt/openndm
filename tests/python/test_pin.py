@@ -233,6 +233,131 @@ def test_the_pin_objects_are_described_by_their_reprs():
     assert "peak centre" in repr(solved())
 
 
+FUEL_DENSITY = 10400.0
+CLAD_DENSITY = 6550.0
+FUEL_CP = 300.0
+CLAD_CP = 330.0
+
+
+def transient_conduction(**kwargs):
+    settings = {
+        "fuel_density": FUEL_DENSITY,
+        "clad_density": CLAD_DENSITY,
+        "fuel_heat_capacity": FUEL_CP,
+        "clad_heat_capacity": CLAD_CP,
+    }
+    settings.update(kwargs)
+    return conduction(**settings)
+
+
+def at_coolant(model, n_nodes=1):
+    return model.solve(np.zeros(n_nodes), np.full(n_nodes, COOLANT))
+
+
+def test_an_unbounded_step_lands_on_the_steady_state():
+    model = transient_conduction()
+    rates = np.array([RATE, 0.5 * RATE, 0.0])
+    coolant = np.array([COOLANT, COOLANT - 10.0, COOLANT - 20.0])
+    steady = model.solve(rates, coolant)
+    stepped = model.step(rates, coolant, at_coolant(model, 3), 1.0e15)
+    np.testing.assert_allclose(stepped.profile, steady.profile, rtol=1.0e-12)
+    np.testing.assert_allclose(stepped.clad_outer, steady.clad_outer, rtol=1.0e-12)
+    np.testing.assert_allclose(stepped.surface_heat_rate, rates, atol=1.0e-6)
+
+
+def test_a_steady_solve_reports_the_heat_rate_leaving_the_cladding():
+    state = solved()
+    assert state.surface_heat_rate[0] == RATE
+
+
+def test_marching_at_constant_power_relaxes_onto_the_steady_state():
+    model = transient_conduction(
+        fuel_conductivity=openndm.neacrp_fuel_conductivity,
+        clad_conductivity=openndm.neacrp_clad_conductivity,
+        fuel_heat_capacity=openndm.neacrp_fuel_heat_capacity,
+        clad_heat_capacity=openndm.neacrp_clad_heat_capacity,
+    )
+    steady = solved(model)
+    state = at_coolant(model)
+    for _ in range(200):
+        state = model.step(np.array([RATE]), np.array([COOLANT]), state, 0.5)
+    np.testing.assert_allclose(state.profile, steady.profile, rtol=1.0e-10)
+
+
+def test_a_step_conserves_the_energy_it_stores():
+    """Heat raised minus heat rejected is the change in stored heat, exactly."""
+    model = transient_conduction()
+    rates = np.array([RATE, 2.0 * RATE])
+    coolant = np.full(2, COOLANT)
+    dt = 0.3
+    before = at_coolant(model, 2)
+    after = model.step(rates, coolant, before, dt)
+    retained = (rates - after.surface_heat_rate) * dt
+    stored = model.stored_energy(after) - model.stored_energy(before)
+    np.testing.assert_allclose(retained, stored, rtol=1.0e-10)
+    assert np.all(after.surface_heat_rate < rates)
+
+
+def test_a_lumped_pin_heats_up_on_its_analytic_time_constant():
+    """With negligible internal resistance the pin is one heat capacity
+    behind the film, so its temperature rises as 1 - exp(-t/tau), and
+    backward Euler approaches that at first order.
+    """
+    model = transient_conduction(
+        fuel_conductivity=1.0e9,
+        clad_conductivity=1.0e9,
+        gap_conductance=1.0e14,
+    )
+    clad_area = np.pi * (PINS.clad_outer_radius**2 - PINS.clad_inner_radius**2)
+    capacity = (
+        FUEL_DENSITY * FUEL_CP * np.pi * PINS.fuel_radius**2
+        + CLAD_DENSITY * CLAD_CP * clad_area
+    )
+    conductance = FILM_H * 2.0 * np.pi * PINS.clad_outer_radius
+    tau = capacity / conductance
+    exact = COOLANT + RATE / conductance * (1.0 - np.exp(-1.0))
+
+    def average_at_tau(n_steps):
+        state = at_coolant(model)
+        rate, coolant = np.array([RATE]), np.array([COOLANT])
+        for _ in range(n_steps):
+            state = model.step(rate, coolant, state, tau / n_steps)
+        return state.average[0]
+
+    errors = [abs(average_at_tau(n) - exact) for n in (16, 32, 64)]
+    orders = np.log2(np.array(errors[:-1]) / np.array(errors[1:]))
+    assert np.all(orders > 0.95), orders
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"fuel_density": 0.0}, {"clad_density": -1.0}, {"fuel_heat_capacity": 0.0}],
+)
+def test_the_transient_properties_must_be_positive(kwargs):
+    with pytest.raises(openndm.InputError):
+        transient_conduction(**kwargs)
+
+
+def test_a_step_without_heat_capacities_is_refused():
+    model = conduction()
+    assert not model.is_transient
+    with pytest.raises(openndm.InputError, match="heat_capacity"):
+        model.step(np.array([RATE]), np.array([COOLANT]), solved(model), 1.0)
+
+
+@pytest.mark.parametrize("dt", [0.0, -1.0])
+def test_a_step_must_move_forward_in_time(dt):
+    model = transient_conduction()
+    with pytest.raises(openndm.InputError, match="positive"):
+        model.step(np.array([RATE]), np.array([COOLANT]), at_coolant(model), dt)
+
+
+def test_a_step_from_a_state_of_another_shape_is_refused():
+    model = transient_conduction()
+    with pytest.raises(openndm.InputError, match="previous state"):
+        model.step(np.array([RATE]), np.array([COOLANT]), at_coolant(model, 2), 1.0)
+
+
 def channel_with_conduction(**kwargs):
     geometry = openndm.Geometry.from_lattice(
         np.zeros((10, 1, 1), dtype=int), pitch=(21.606, 21.606, 30.0)

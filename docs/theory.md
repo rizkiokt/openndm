@@ -814,6 +814,43 @@ being liquid and that depends on pressure.
 
 ---
 
+## 13. Transient pin conduction
+
+`PinConduction.step` advances the radial heat equation by one backward Euler
+step. The pellet keeps the ring mesh of the steady model, with radii
+$r_0 = 0 < r_1 < \dots < r_N = R$, and each ring stores heat at its mean
+boundary temperature $\bar T_i = (T_i + T_{i+1})/2$. Over a step $\Delta t$
+the effective source in ring $i$ is uniform:
+
+$$ s_i = q''' - \rho_f c_{p,f}\,\frac{\bar T_i - \bar T_i^{\,n}}{\Delta t} $$
+
+With a uniform source and an inflow $Q_i = \sum_{m<i} s_m \pi (r_{m+1}^2 -
+r_m^2)$ per unit length at its inner radius, conduction across the ring
+integrates exactly:
+
+$$ T_i - T_{i+1} = \frac{s_i (r_{i+1}^2 - r_i^2)}{4k_i} +
+   \frac{Q_i - s_i \pi r_i^2}{2\pi k_i}\ln\frac{r_{i+1}}{r_i} $$
+
+In steady state $s_i = q'''$, the logarithmic term vanishes, and the march of
+the steady model is recovered exactly; an infinite step lands on it.
+
+The gap stores nothing. The cladding is one lumped heat capacity at the mean
+of its two surfaces, so the heat reaching the coolant is
+
+$$ Q_c = Q_N - \rho_c c_{p,c} A_c \frac{\bar T_c - \bar T_c^{\,n}}{\Delta t} $$
+
+and the cladding drop uses the mean of the heat entering and leaving it,
+$(Q_N + Q_c)\ln(r_{co}/r_{ci}) / (4\pi k_c)$. The film carries $Q_c$.
+
+Conductivities are evaluated at each ring's outer boundary, as in the steady
+model, and heat capacities at the ring mean. Both are iterated with the
+temperatures until the change falls below $10^{-9}$ K. At constant properties
+the step conserves the discrete stored energy
+$\sum_i \rho_f c_{p,f} \pi(r_{i+1}^2 - r_i^2)\bar T_i + \rho_c c_{p,c} A_c \bar T_c$
+exactly.
+
+---
+
 ## References
 
 The formulations above follow the standard nodal literature:
