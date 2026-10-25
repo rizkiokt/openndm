@@ -449,6 +449,86 @@ def test_the_coupled_fields_drive_the_picard_loop():
     assert "fuel_temperature" in result.temperatures
 
 
+MASS_FLOW = 82.12102
+
+
+def axial_power(n_nodes, peak=1.5e6):
+    return peak * np.sin(np.linspace(0.2, 2.9, n_nodes))
+
+
+def transient_channel(**kwargs):
+    return channel_with_conduction(
+        conduction=transient_conduction(), direct_heating=0.02, **kwargs
+    )
+
+
+def test_an_unbounded_channel_step_lands_on_the_steady_state():
+    geometry, stepped = transient_channel()
+    _, steady = transient_channel()
+    power = axial_power(geometry.n_nodes)
+    steady.set_heat_source(power)
+    steady.solve()
+    stepped.set_heat_source(power)
+    stepped.advance(1.0e15)
+    np.testing.assert_allclose(
+        stepped.pin_state.profile, steady.pin_state.profile, rtol=1.0e-12
+    )
+    np.testing.assert_allclose(stepped.enthalpy, steady.enthalpy, rtol=1.0e-12)
+
+
+def test_a_channel_step_splits_the_power_between_the_pins_and_the_coolant():
+    """Power raised is heat stored in the pins plus heat carried out."""
+    geometry, channel = transient_channel()
+    model = channel.pin_state
+    inlet = channel.outlet_enthalpy.copy()
+    stored_before = transient_conduction().stored_energy(model)
+    power = axial_power(geometry.n_nodes)
+    dt = 0.2
+    channel.set_heat_source(power)
+    channel.advance(dt)
+
+    pin_length = PINS.n_pins * np.asarray(geometry.dz) / 100.0
+    stored_after = transient_conduction().stored_energy(channel.pin_state)
+    stored = ((stored_after - stored_before) * pin_length).sum()
+    carried = float((channel.outlet_enthalpy - inlet).sum()) * MASS_FLOW * dt
+    assert stored + carried == pytest.approx(power.sum() * dt, rel=1.0e-12)
+    assert carried < power.sum() * dt
+
+
+def test_the_outlet_lags_a_power_step_and_settles_on_the_new_steady_state():
+    geometry, channel = transient_channel()
+    _, steady = transient_channel()
+    power = axial_power(geometry.n_nodes)
+    steady.set_heat_source(power)
+    steady.solve()
+    final = float(steady.outlet_temperature[0])
+
+    channel.set_heat_source(power)
+    outlets = []
+    for _ in range(100):
+        channel.advance(1.0)
+        outlets.append(float(channel.outlet_temperature[0]))
+
+    assert outlets[0] < final - 1.0
+    assert np.all(np.diff(outlets) > -1.0e-9)
+    assert outlets[-1] == pytest.approx(final, abs=1.0e-6)
+
+
+def test_the_transient_channel_satisfies_the_transient_protocol():
+    _, channel = transient_channel()
+    assert isinstance(channel, openndm.TransientThermalSolver)
+    assert isinstance(channel, openndm.ThermalSolver)
+
+
+@pytest.mark.parametrize("model", [None, "steady"])
+def test_a_channel_without_transient_conduction_refuses_to_advance(model):
+    _, channel = channel_with_conduction(
+        conduction=None if model is None else conduction()
+    )
+    with pytest.raises(openndm.InputError, match="heat capacities"):
+        channel.advance(1.0)
+
+
 def test_the_neacrp_correlations_are_importable_from_the_package():
     assert openndm.neacrp_fuel_conductivity is not None
     assert openndm.neacrp_clad_conductivity is not None
