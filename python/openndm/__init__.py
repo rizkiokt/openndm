@@ -60,6 +60,7 @@ from .thermal import (
     CouplingStep,
     PicardCoupling,
     ThermalSolver,
+    TransientThermalSolver,
 )
 from .vtk import write_vtk
 from .water import (
@@ -104,6 +105,7 @@ __all__ = [
     "ThermalSolver",
     "Transient",
     "TransientStep",
+    "TransientThermalSolver",
     "WaterProperties",
     "XSLibrary",
     "__version__",

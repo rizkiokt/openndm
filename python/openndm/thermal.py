@@ -27,6 +27,7 @@ __all__ = [
     "CouplingStep",
     "PicardCoupling",
     "ThermalSolver",
+    "TransientThermalSolver",
 ]
 
 ApplyState = Callable[[Mapping[str, np.ndarray], Mapping[str, np.ndarray]], None]
@@ -73,6 +74,21 @@ class ThermalSolver(Protocol):
         mapping of str to ndarray
             One array of shape ``(n_nodes,)`` per field, in kg/m^3, under the
             same ownership caveat as :meth:`get_temperatures`.
+        """
+
+
+@runtime_checkable
+class TransientThermalSolver(ThermalSolver, Protocol):
+    """A thermal solver that can also be stepped in time (FR-MODE-7)."""
+
+    def advance(self, dt: float) -> None:
+        """Advance to the end of a step of ``dt`` seconds.
+
+        Parameters
+        ----------
+        dt : float
+            Step length, s. The heat source set last is the power at the end
+            of the step.
         """
 
 
