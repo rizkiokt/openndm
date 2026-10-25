@@ -574,7 +574,7 @@ class XSLibrary:
         return target
 
     def _collapse_target(self, out: XSLibrary | None) -> XSLibrary:
-        """The library a per-composition collapse writes into."""
+        """Return the library a per-composition collapse writes into."""
         if out is None:
             return XSLibrary(self.n_groups, self.n_compositions)
         if (out.n_groups, out.n_compositions) != (

@@ -68,14 +68,20 @@ line-length = 88
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4", "NPY", "RUF"]
-ignore = ["B028"]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "NPY", "RUF", "D"]
+# Magic methods such as __repr__ explain themselves.
+ignore = ["B028", "D105"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011"]
+# The docstring rules cover the package's public API, not test or deck code.
+"tests/*" = ["B011", "D"]
+"benchmarks/*" = ["D"]
 # Benchmark decks are standalone scripts that put the shared module on the
 # path before importing it, so imports cannot all sit at the top.
 "benchmarks/*/run.py" = ["E402"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
 
 [tool.ruff.lint.isort]
 known-first-party = ["openndm"]

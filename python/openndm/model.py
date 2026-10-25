@@ -506,7 +506,7 @@ class Model:
         return self.solve(mode="adjoint", **overrides)
 
     def solve_fixed_source(self, source, **overrides) -> Result:
-        """Fixed external source, including subcritical multiplication.
+        """Solve with a fixed external source, including subcritical multiplication.
 
         Parameters
         ----------

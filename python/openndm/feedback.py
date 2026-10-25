@@ -141,7 +141,7 @@ class DopplerFeedback:
         return self._groups
 
     def factor(self, temperature: float) -> float:
-        """The multiplier at one temperature.
+        """Return the multiplier at one temperature.
 
         Parameters
         ----------
