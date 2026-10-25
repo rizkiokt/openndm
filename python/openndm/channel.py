@@ -606,9 +606,8 @@ def absolute_power(
 ) -> np.ndarray:
     """Turn a relative node power into watts per node.
 
-    :attr:`~openndm.Result.power` is normalised to a mean of one over the
-    powered nodes, so a node's share of the total is its relative power
-    weighted by its volume.
+    :attr:`~openndm.Result.power` is a relative power density, so a node's
+    share of the total is its relative power weighted by its volume.
 
     Parameters
     ----------

@@ -6,6 +6,18 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **`Result.power` is a power density, normalised to a volume-weighted mean of
+  1** (#98). It was the power integrated over each node, which
+  `absolute_power`, `radial_power` and `axial_power` then weighted by volume
+  again. Uniform meshes are unchanged: analytic, IAEA-2D, IAEA-3D and
+  BIBLIS-2D print the same digits. On NEACRP's uneven axial mesh A1's `f_q`
+  goes from 4.03 to 3.09 against 2.87, and the coupled cases now hand the
+  thermal-hydraulics the right power shape: A2's peak centreline temperature
+  moves from +83 K to -8 K against the reference, F_Q from +9.1% to +3.8%,
+  and the critical boron from -1.7 to -0.8 ppm.
+
 ## [0.3.0] - 2026-09-29
 
 ### Documentation

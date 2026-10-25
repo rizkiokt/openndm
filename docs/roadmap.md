@@ -112,7 +112,7 @@ Picard iteration.
 | `ChannelModel`, single phase, and `two_phase=True` homogeneous equilibrium | **done** |
 | `PinConduction` and the effective Doppler temperature | **done** |
 | `Model.solve_coupled`, and `search_boron(evaluate_state=...)` against a coupled state | **done** |
-| NEACRP A1–C2 initial steady states against NEA/NSC/DOC(93)25 | **done** — boron within 3.5 ppm cold, 1.7 ppm hot |
+| NEACRP A1–C2 initial steady states against NEA/NSC/DOC(93)25 | **done** — boron within 3.5 ppm cold, 2.1 ppm hot |
 
 Still open in this phase: IF97 region 3, cross-flow and a momentum equation,
 a shipped film or slip correlation, and a time-dependent conduction model.
@@ -126,7 +126,7 @@ a shipped film or slip correlation, and a time-dependent conduction model.
 | Adaptive time stepping (FR-KIN-3) | Named by NFR-PERF-4 |
 | Parallel ILU0 triangular solves | NFR-PERF-7 fails at 32% parallel efficiency against 60% |
 | Faster outer convergence | FR-OPT-3's warm start reaches 1.15× against the 2× target |
-| NEACRP peaking factors | F_Q is 6 to 13% high and the reference's definition is not yet settled; `Result.f_q` normalises to an arithmetic node mean, which differs from the volume-weighted mean on a non-uniform axial mesh |
+| NEACRP peaking factors | F_Q is 2.5 to 9.7% high and the reference's definition is not yet settled |
 
 The items once listed as unscheduled have all landed: ADF rotation (#66), the
 performance acceptance run (#83), VTK export (#76) and the first release,

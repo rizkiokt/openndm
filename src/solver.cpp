@@ -327,25 +327,24 @@ void Solver::compute_power(std::vector<double>& power) const
   const int n = geom_.n_nodes();
   const int G = xs_.n_groups();
   power.assign(static_cast<std::size_t>(n), 0.0);
-  int n_fuel = 0;
+  double powered_volume = 0.0;
   double total = 0.0;
   for (int i = 0; i < n; ++i) {
     const Node& node = geom_.nodes()[static_cast<std::size_t>(i)];
     const Composition& c = xs_.composition(node.composition);
-    double p = 0.0;
+    double density = 0.0;
     for (int g = 0; g < G; ++g) {
-      p += c.kappa_fission[static_cast<std::size_t>(g)] *
-           flux_[static_cast<std::size_t>(i) * G + g];
+      density += c.kappa_fission[static_cast<std::size_t>(g)] *
+                 flux_[static_cast<std::size_t>(i) * G + g];
     }
-    p *= node.volume;
-    power[static_cast<std::size_t>(i)] = p;
-    if (p > 0.0) {
-      total += p;
-      ++n_fuel;
+    power[static_cast<std::size_t>(i)] = density;
+    if (density > 0.0) {
+      total += density * node.volume;
+      powered_volume += node.volume;
     }
   }
-  if (total > 0.0 && n_fuel > 0) {
-    const double norm = static_cast<double>(n_fuel) / total;
+  if (total > 0.0) {
+    const double norm = powered_volume / total;
     for (auto& p : power) p *= norm;
   }
 }

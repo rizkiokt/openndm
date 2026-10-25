@@ -72,9 +72,10 @@ class Result:
 
     @property
     def power(self) -> np.ndarray:
-        """Relative node power, shape ``(n_nodes,)``, a view.
+        """Relative node power density, shape ``(n_nodes,)``, a view.
 
-        Normalised to a mean of 1 over the nodes that produce power.
+        Normalised to a volume-weighted mean of 1 over the nodes that produce
+        power, so it is the ratio to the core average on any mesh.
         """
         return self._raw.power
 
@@ -112,7 +113,7 @@ class Result:
         Returns
         -------
         ndarray, shape (nz, ny, nx)
-            Relative node power, a copy, carrying the normalisation of
+            Relative node power density, a copy, carrying the normalisation of
             :attr:`power`. Positions with no active node hold ``nan``.
         """
         return self._geom.expand(self.power)
@@ -124,18 +125,24 @@ class Result:
         -------
         ndarray, shape (ny, nx)
             Volume-weighted power per column, a copy, dimensionless and
-            normalised to a mean of 1 over the columns that carry power.
-            Columns without power hold 0.
+            normalised to a volume-weighted mean of 1 over the columns that
+            carry power. Columns without power hold 0.
         """
         p = self._geom.expand(self.power, fill=0.0)
         v = self._geom.expand(self._geom.volumes, fill=0.0)
         radial = np.einsum("kji,kji->ji", p, v)
-        area = v.sum(axis=0)
+        column_volume = v.sum(axis=0)
         with np.errstate(invalid="ignore", divide="ignore"):
-            radial = np.where(area > 0, radial / np.where(area > 0, area, 1), 0.0)
+            radial = np.where(
+                column_volume > 0,
+                radial / np.where(column_volume > 0, column_volume, 1),
+                0.0,
+            )
         active = radial > 0
         if active.any():
-            radial = radial / radial[active].mean()
+            radial = radial / np.average(
+                radial[active], weights=column_volume[active]
+            )
         return radial
 
     def axial_power(self) -> np.ndarray:
@@ -145,8 +152,8 @@ class Result:
         -------
         ndarray, shape (nz,)
             Volume-weighted power per plane, a copy, dimensionless and
-            normalised to a mean of 1 over the planes that carry power.
-            Planes without power hold 0.
+            normalised to a volume-weighted mean of 1 over the planes that
+            carry power. Planes without power hold 0.
         """
         p = self._geom.expand(self.power, fill=0.0)
         v = self._geom.expand(self._geom.volumes, fill=0.0)
@@ -156,12 +163,12 @@ class Result:
             axial = np.where(volume > 0, axial / np.where(volume > 0, volume, 1), 0.0)
         active = axial > 0
         if active.any():
-            axial = axial / axial[active].mean()
+            axial = axial / np.average(axial[active], weights=volume[active])
         return axial
 
     @property
     def f_q(self) -> float:
-        """Total peaking factor: peak node power over the core average."""
+        """Total peaking factor: peak node power density over the core average."""
         p = self.power
         return float(p.max()) if p.size else 0.0
 

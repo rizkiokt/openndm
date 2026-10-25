@@ -186,7 +186,7 @@ have caught, two of which fail silently — see
 | IAEA-2D PWR | published `k_eff = 1.02959` | SANM **+21.5 pcm** at one node per assembly |
 | IAEA-3D PWR | published `k_eff = 1.02903` | SANM **+69.2 pcm** at a 20 cm axial mesh |
 | BIBLIS-2D PWR | published `k_eff = 1.02511` | SANM **−1.4 pcm** at one node per assembly |
-| NEACRP rod ejection, initial states | published critical boron | within **3.5 ppm** cold, **1.7 ppm** coupled at full power |
+| NEACRP rod ejection, initial states | published critical boron | within **3.5 ppm** cold, **2.1 ppm** coupled at full power |
 | LMW transient | none in the specification | reported, not compared |
 
 All four static decks meet the specification's 100 pcm acceptance

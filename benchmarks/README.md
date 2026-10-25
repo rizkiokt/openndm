@@ -10,7 +10,7 @@ own directory.
 | `iaea3d/` | 2-group PWR, quarter core, 3D | Published `k_eff = 1.02903` | SANM +69.2 pcm at 20 cm axial mesh | **Verified** |
 | `biblis2d/` | 2-group PWR, quarter core, 2D, 8 compositions | Published `k_eff = 1.02511` | SANM −1.4 pcm at one node per assembly | **Verified** |
 | `lmw/` | 2-group PWR rod transient, 3D | None in the specification | Power history, converged in mesh, not in time step | **Reported, not compared** |
-| `neacrp/` | 2-group PWR rod ejection, 3D, 11 compositions, coupled | Published critical boron, NEA/NSC/DOC(93)25 Table 3.1 | Boron within **3.5 ppm** cold and **1.7 ppm** coupled; Doppler within **0.7 K** | **Verified on boron and temperature; peaking open** |
+| `neacrp/` | 2-group PWR rod ejection, 3D, 11 compositions, coupled | Published critical boron, NEA/NSC/DOC(93)25 Table 3.1 | Boron within **3.5 ppm** cold and **2.1 ppm** coupled; Doppler within **1.2 K** | **Verified on boron and temperature; peaking open** |
 
 The specification's acceptance criterion is 100 pcm on `k_eff` for a static
 benchmark with a published solution. All four static decks meet it. LMW is a
@@ -380,11 +380,11 @@ carries no heat and the coupling has nothing to do, so the geometry, the cross
 section expansion, the rod banks and the boron search are tested on their own.
 
 ```
-case   critical boron, ppm      F_xy            F_Q (volume mean)
+case   critical boron, ppm      F_xy            F_Q
        OpenNDM  reference        OpenNDM  ref    OpenNDM  ref
-A1       564.9      567.7   -2.8   2.006  1.909   3.175  2.874
-B1      1251.4     1254.6   -3.2   1.335  1.276   2.120  1.932
-C1      1131.8     1135.3   -3.5   1.550  1.445   2.464  2.187
+A1       565.0      567.7   -2.7   2.005  1.909   3.086  2.874
+B1      1251.4     1254.6   -3.2   1.335  1.276   2.064  1.932
+C1      1131.8     1135.3   -3.5   1.549  1.445   2.399  2.187
 ```
 
 **The boron is the result worth having.** Within 3.5 ppm on every case, all
@@ -393,8 +393,8 @@ For comparison the NODAL3 code reports a maximum deviation of 10.1 ppm against
 the same reference. A systematic -3 ppm says a small consistent difference in
 the model, not a mistake in it.
 
-**The peaking factors are not verified.** F_xy is 4.6 to 7.3 percent high and
-F_Q 9.8 to 12.7 percent high, consistently across the three cases. Two things
+**The peaking factors are not verified.** F_xy is 4.6 to 7.2 percent high and
+F_Q 6.9 to 9.7 percent high, consistently across the three cases. Two things
 are unresolved and neither has been chased:
 
 NEACRP-L-335 Section 4 asks for B3, "maximum power peaking factor", which is
@@ -407,12 +407,13 @@ is not the difference. A peaking factor reported per assembly rather than per
 node would be lower by about the right amount, but that is a guess and it has
 not been checked against the source.
 
-**`Result.f_q` is not a core-average peaking on this mesh.** It normalises to
-an arithmetic mean over powered nodes, which equals the volume-weighted mean
-only when every node has the same volume. This deck's axial layers run from
-7.7 cm to 30 cm, and the two means differ by 27 percent: `Result.f_q` gives
-4.03 for A1 where the volume-weighted figure is 3.18. The deck reports both
-and compares the volume-weighted one. See the issue this raised.
+**This deck found a power normalisation bug** (#98). `Result.power` used to be
+the power integrated over each node, while `absolute_power`, `radial_power`
+and `axial_power` treated it as a density and weighted it by volume a second
+time. Every earlier deck has a uniform mesh, where the two agree. This one's
+axial layers run from 7.7 cm to 30 cm, so `Result.f_q` read 4.03 for A1, and
+the thermal-hydraulics was handed a power shape skewed towards the thick
+layers. `Result.power` is now a density with a volume-weighted mean of 1.
 
 ## neacrp at full power — the coupled comparison
 
@@ -422,12 +423,12 @@ state rather than an isolated solve. These are what exercise the coupling.
 ```
 case   critical boron, ppm     F_xy          T_Doppler, C    T_centre peak, C
        OpenNDM  reference       OpenNDM  ref   OpenNDM  ref     OpenNDM  ref
-A2      1158.9     1160.6  -1.7   1.208 1.198    546.8 546.1     1755.3 1671.9
-B2      1190.6     1189.4  +1.2   1.193 1.170    544.2 543.7     1623.2 1576.6
-C2      1158.9     1160.6  -1.7   1.208 1.198    546.8 546.1     1755.3 1671.9
+A2      1159.8     1160.6  -0.8   1.207 1.198    544.9 546.1     1663.5 1671.9
+B2      1191.5     1189.4  +2.1   1.194 1.170    542.5 543.7     1560.6 1576.6
+C2      1159.8     1160.6  -0.8   1.207 1.198    544.9 546.1     1663.5 1671.9
 ```
 
-**Boron within 1.7 ppm and the core-average Doppler temperature within 0.7 K**
+**Boron within 2.1 ppm and the core-average Doppler temperature within 1.2 K**
 on every case. The coupled cases are closer than the cold ones, which is the
 right way round: at hot zero power the boron carries the whole reactivity
 balance alone, while at full power the temperature feedback the deck models
@@ -461,20 +462,18 @@ and it is what let the iteration survive the excursion.
 
 ### What is still open
 
-**F_Q is 6 to 9 percent high** at full power and 10 to 13 percent cold, and the
-definition is not settled -- see the section above. The same offset cold and
-hot says it is not the coupling.
+**F_Q is 2.5 to 3.8 percent high** at full power and 6.9 to 9.7 percent cold,
+and the definition is not settled -- see the section above.
 
-**The peak centreline temperature is 47 to 83 K high.** This is where the one
-input the specification does not give has real leverage: Section 2.10 fixes
-the gap conductance and says nothing about heat transfer to the coolant, and
-`run.py` uses 3.0e4 W/(m^2 K) as a stated choice. Lowering it would raise the
-surface temperature and move the peak further out, raising it would pull the
-peak in and push the average Doppler temperature off the 0.7 K it currently
-sits at. **It has not been adjusted to improve any of these numbers**, and it
-should not be: the average Doppler temperature agreeing to under a kelvin
-while the peak is 80 K out is information about the model, and tuning a free
-parameter until both look better would destroy it.
+**The peak centreline temperature is 8 to 16 K low.** It was 47 to 83 K high
+until #98, which handed the channel model a power shape weighted by volume
+twice. The film coefficient, 3.0e4 W/(m^2 K), is the one input the
+specification does not give, and it has not been adjusted to improve any of
+these numbers.
+
+The coupled deck solves its inner systems to 1e-7 rather than the default
+1e-5. At 1e-5 the node power carries about 2e-4 of solver noise, above the
+1e-6 coupling tolerance, and A2 cycles without converging at 1100 ppm.
 
 **Rod worth is absent.** Table 3.1 gives it for all six cases, and it needs the
 ejected assembly identified from Figures 3.1 to 3.6, which are images in the

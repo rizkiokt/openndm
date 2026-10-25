@@ -26,13 +26,36 @@ def test_result_reports_convergence_metadata(iaea_model):
     assert abs(result.history["k_change"][-1]) < 1.0e-9
 
 
-def test_power_is_normalised_to_a_mean_of_one(iaea_model):
+def test_power_is_normalised_to_a_volume_weighted_mean_of_one(iaea_model):
     result = iaea_model.solve()
-    powered = result.power[result.power > 0]
-    assert powered.mean() == pytest.approx(1.0)
+    powered = result.power > 0
+    volumes = iaea_model.geometry.volumes
+    assert np.average(
+        result.power[powered], weights=volumes[powered]
+    ) == pytest.approx(1.0)
     assert result.f_q > 1.0
     assert result.f_dh > 1.0
     assert result.f_q >= result.f_dh * (1.0 - 1.0e-12)
+
+
+def test_a_flat_flux_on_an_uneven_mesh_has_no_peaking(tight):
+    """Power is a density, so node volume cannot masquerade as peaking."""
+    geometry = openndm.Geometry.from_lattice(
+        np.zeros((4, 2, 2), dtype=int),
+        pitch=(10.0, 10.0, 10.0),
+        dx=[10.0, 30.0],
+        dz=[5.0, 20.0, 10.0, 30.0],
+        boundaries=dict.fromkeys(
+            ["x_min", "x_max", "y_min", "y_max", "z_min", "z_max"], "reflective"
+        ),
+    )
+    model = openndm.Model(geometry, _absorber_library(nu_fission=0.1), tight)
+    result = model.solve()
+    np.testing.assert_allclose(result.power, 1.0, rtol=1.0e-8)
+    np.testing.assert_allclose(result.radial_power(), 1.0, rtol=1.0e-8)
+    np.testing.assert_allclose(result.axial_power(), 1.0, rtol=1.0e-8)
+    assert result.f_q == pytest.approx(1.0, rel=1.0e-8)
+    assert result.f_dh == pytest.approx(1.0, rel=1.0e-8)
 
 
 def test_reflector_nodes_carry_no_power(iaea_model):
