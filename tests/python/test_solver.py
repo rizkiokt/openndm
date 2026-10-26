@@ -329,7 +329,7 @@ def test_settings_reject_an_unknown_option():
 
 
 def test_settings_reject_an_unknown_kernel():
-    with pytest.raises(ValueError, match="unknown kernel"):
+    with pytest.raises(openndm.InputError, match="unknown kernel"):
         openndm.Settings(kernel="magic")
 
 

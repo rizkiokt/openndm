@@ -30,7 +30,7 @@ def _boundary(value):
         try:
             return _BC[value.lower()]
         except KeyError:
-            raise ValueError(
+            raise InputError(
                 f"unknown boundary condition {value!r}; "
                 f"choose from {sorted(_BC)}"
             ) from None
@@ -138,7 +138,7 @@ class Geometry:
 
         Raises
         ------
-        ValueError
+        InputError
             On a composition map that is neither 2D nor 3D, a ``subdivide``
             below 1, a width array that does not cover its axis, a rotation
             map whose shape or turn count is wrong, or an unknown boundary
@@ -156,14 +156,14 @@ class Geometry:
         if comp.ndim == 2:
             comp = comp[np.newaxis, :, :]
         if comp.ndim != 3:
-            raise ValueError(
+            raise InputError(
                 f"composition map must be 2D or 3D, got {comp.ndim}D"
             )
 
         original_shape = comp.shape
         sub = np.broadcast_to(np.asarray(subdivide, dtype=int), (3,))
         if np.any(sub < 1):
-            raise ValueError("subdivide must be at least 1 in every direction")
+            raise InputError("subdivide must be at least 1 in every direction")
         if np.any(sub > 1):
             comp = np.repeat(comp, sub[2], axis=0)
             comp = np.repeat(comp, sub[1], axis=1)
@@ -181,7 +181,7 @@ class Geometry:
                 shared_width = np.asarray(explicit, dtype=float) / sub_n
                 w = np.repeat(shared_width, sub_n)
                 if w.size != n:
-                    raise ValueError(
+                    raise InputError(
                         f"axis {axis}: {w.size} widths for {n} nodes"
                     )
                 widths.append(w)
@@ -195,12 +195,12 @@ class Geometry:
             if turns.ndim == 2:
                 turns = turns[np.newaxis, :, :]
             if turns.shape != original_shape:
-                raise ValueError(
+                raise InputError(
                     f"rotation map must have shape {original_shape} to match "
                     f"the composition map, got {turns.shape}"
                 )
             if np.any(turns < 0) | np.any(turns > 3):
-                raise ValueError(
+                raise InputError(
                     "rotation must be 0, 1, 2 or 3 quarter turns "
                     "counter-clockwise"
                 )
@@ -214,7 +214,7 @@ class Geometry:
         bc.update({k.lower(): v for k, v in (boundaries or {}).items()})
         unknown = set(bc) - set(_FACES)
         if unknown:
-            raise ValueError(
+            raise InputError(
                 f"unknown boundary face(s) {sorted(unknown)}; "
                 f"expected {list(_FACES)}"
             )
@@ -409,12 +409,12 @@ class Geometry:
 
         Raises
         ------
-        ValueError
+        InputError
             If ``node_values`` does not hold one entry per node.
         """
         values = np.asarray(node_values, dtype=float)
         if values.shape[0] != self.n_nodes:
-            raise ValueError(
+            raise InputError(
                 f"expected {self.n_nodes} node values, got {values.shape[0]}"
             )
         mapping = self.lattice_to_node
@@ -438,7 +438,7 @@ class Geometry:
         for node in self._g.nodes:
             widths[node.ijk[axis]] = node.width[axis]
         if np.any(widths <= 0.0):
-            raise ValueError(
+            raise InputError(
                 f"could not recover the {_AXIS_NAMES[axis]} mesh: "
                 f"{_AXIS_SLICES[axis]}(s) "
                 f"{np.flatnonzero(widths <= 0.0).tolist()} have no active node"
