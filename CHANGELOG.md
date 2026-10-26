@@ -6,6 +6,16 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`PinConduction.step`, transient pin conduction** (FR-MODE-7). Backward
+  Euler with heat stored in each pellet ring and the cladding, given
+  `fuel_density`, `clad_density`, `fuel_heat_capacity` and
+  `clad_heat_capacity`. An unbounded step reproduces `solve` to 1e-12, a step
+  conserves the stored energy to 1e-10, and a lumped pin converges on its
+  analytic time constant at order 1.0. `PinState.surface_heat_rate` is the
+  heat reaching the coolant, which in a transient is not the fission power.
+
 ### Fixed
 
 - **`Result.power` is a power density, normalised to a volume-weighted mean of
