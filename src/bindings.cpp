@@ -355,6 +355,12 @@ PYBIND11_MODULE(_core, m)
           })
       .def("reset", &Solver::reset)
       .def("refresh", &Solver::refresh)
+      .def("node_fission_power",
+          [](const Solver& s) {
+            const auto data = s.node_fission_power();
+            return py::array_t<double>(
+                static_cast<py::ssize_t>(data.size()), data.data());
+          })
       .def("surface_currents",
           [](const Solver& s) {
             const auto data = s.surface_currents();

@@ -19,6 +19,13 @@ All notable changes to OpenNDM are recorded here. The format follows
   `TransientThermalSolver` protocol it satisfies. The coolant takes the heat
   leaving the cladding and stores none of its own. A step conserves energy
   between pins and coolant to 1e-12, and an unbounded step reproduces `solve`.
+- **`Model.start_coupled_transient`, a transient with feedback** (FR-MODE-7).
+  Each step advances the neutronics on the thermal state at its start, then
+  the thermal solver on the power at its end, then calls `apply_state`.
+  First order in the step: a 1.2 beta Doppler burst converges on point
+  kinetics with feedback at order 1.0, peak power within 0.75% at 1 ms. A
+  null transient from `solve_coupled` holds its power to 1e-10. Also
+  `Transient.fission_power`, the node power of the current flux.
 
 ### Fixed
 

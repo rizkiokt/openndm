@@ -312,6 +312,16 @@ Result Solver::solve_fixed_source(
   return result;
 }
 
+std::vector<double> Solver::node_fission_power() const
+{
+  if (!has_solution_) {
+    throw InputError("no solution available; call solve() first");
+  }
+  std::vector<double> power;
+  fission_power(flux_, power);
+  return power;
+}
+
 std::vector<double> Solver::surface_currents() const
 {
   if (!has_solution_) {
