@@ -849,6 +849,13 @@ the step conserves the discrete stored energy
 $\sum_i \rho_f c_{p,f} \pi(r_{i+1}^2 - r_i^2)\bar T_i + \rho_c c_{p,c} A_c \bar T_c$
 exactly.
 
+`ChannelModel.advance` heats the coolant with $Q_c$ per unit pin length, plus
+the directly deposited fraction of the fission power, and integrates the
+enthalpy up the channel as in steady state. The coolant itself stores no
+heat, so its transit time is neglected. The film couples the pin and the
+coolant, and the two are iterated until the coolant temperature changes by
+less than $10^{-9}$ K.
+
 ---
 
 ## References
