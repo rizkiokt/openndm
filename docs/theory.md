@@ -858,6 +858,31 @@ less than $10^{-9}$ K.
 
 ---
 
+## 14. Transient with feedback
+
+`CoupledTransient.step` advances one step $t_n \to t_{n+1}$ in three parts:
+
+1. The neutronic step of §10, on the cross sections the thermal state at
+   $t_n$ implies.
+2. The node power at $t_{n+1}$, $P_i = s\sum_g \kappa\Sigma_{f,g}\phi_g V_i$,
+   handed to the thermal solver, which advances to $t_{n+1}$. The scale $s$
+   is fixed at the start, so the initial state carries `total_power`.
+3. The thermal state at $t_{n+1}$ written into the library through
+   `apply_state`, ready for the next step.
+
+The feedback is lagged by one step, so the scheme is first order in
+$\Delta t$ whatever $\theta$ is. Iterating the three parts within a step
+would remove the lag, but the neutronic step advances the precursors in
+place and has no way back.
+
+Verified on a prompt-supercritical insertion of $1.2\beta$ in a
+leakage-free box with an adiabatic fuel lump and square-root Doppler
+feedback, which is point kinetics with feedback exactly. Against an RK4
+integration of the three ODEs, the peak power error is 3.0%, 1.5% and 0.75%
+at 4, 2 and 1 ms, and the final temperature error 3.0, 1.5 and 0.76 K.
+
+---
+
 ## References
 
 The formulations above follow the standard nodal literature:

@@ -157,6 +157,12 @@ public:
   //! unchanged for a boundary surface where only one side exists.
   std::vector<double> surface_currents() const;
 
+  //! Un-normalised fission power per node for the retained flux,
+  //! sum_g kappa_f phi V, in the units of the library's kappa-fission.
+  //!
+  //! \throws InputError if there is no solution yet.
+  std::vector<double> node_fission_power() const;
+
   //! Number of surfaces, so a binding can shape the current array.
   int geometry_surfaces() const { return geom_.n_surfaces(); }
 
