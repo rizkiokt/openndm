@@ -901,11 +901,8 @@ do not.
 
 ### What is not implemented
 
-No exponential transformation, no adaptive time stepping, no decay heat, and no
-thermal-hydraulic feedback inside a transient (FR-MODE-7). The built-in
-thermal-hydraulics of the next section is steady state only: `PinConduction`
-has no heat capacity term, and there is no driver coupling it to `Transient`.
-The nonlinear nodal coupling coefficients are held at their static values
+No exponential transformation, no adaptive time stepping and no decay heat. A
+transient with thermal-hydraulic feedback is in the next section. The nonlinear nodal coupling coefficients are held at their static values
 inside a step, so the nodal kernels drift from consistency as the flux shape
 moves; FDM has nothing to freeze.
 
@@ -1078,6 +1075,38 @@ library object, and replacing it would strand the solver on the old one.
 
 The grid is interpolated once per *distinct* state row, so compositions sitting
 at the same condition cost one interpolation between them.
+
+### A transient with feedback
+
+Give the conduction model densities and heat capacities, reach a coupled
+steady state, then step from it:
+
+```python
+conduction = openndm.PinConduction(
+    pins, fuel_conductivity=openndm.neacrp_fuel_conductivity,
+    clad_conductivity=openndm.neacrp_clad_conductivity,
+    gap_conductance=1.0e4, film_coefficient=3.0e4,
+    fuel_density=10400.0, clad_density=6550.0,
+    fuel_heat_capacity=openndm.neacrp_fuel_heat_capacity,
+    clad_heat_capacity=openndm.neacrp_clad_heat_capacity,
+)
+# ... build the channel with conduction=conduction, as above
+model.solve_coupled(channel, apply_state, total_power=693.75e6)
+coupled = model.start_coupled_transient(channel, apply_state, total_power=693.75e6)
+
+rods.insert({"bank1": 0})     # perturb between steps, as for any transient
+for _ in range(200):
+    record = coupled.step(0.005)
+    print(record.time, record.power, record.peak_node_power)   # W
+```
+
+Each step runs the neutronics on the thermal state at its start, then
+advances the channel on the power at its end, then calls `apply_state`. The
+feedback lags by a step, so this is first order in `dt`. The coolant stores
+no heat; its transit time is neglected.
+
+Any solver with an `advance(dt)` method beside the four below can stand in
+for the channel; `openndm.TransientThermalSolver` checks it.
 
 ### Attaching your own solver
 

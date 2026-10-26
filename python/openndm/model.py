@@ -12,12 +12,14 @@ from .channel import absolute_power
 from .exceptions import ConvergenceError, InputError
 from .geometry import Geometry
 from .settings import Settings
-from .thermal import PicardCoupling
+from .thermal import PicardCoupling, TransientThermalSolver
 from .xslib import XSLibrary
 
 __all__ = [
     "BoronSearchResult",
     "CoupledResult",
+    "CoupledTransient",
+    "CoupledTransientStep",
     "Model",
     "Result",
     "Transient",
@@ -342,6 +344,16 @@ class Transient:
         flux = np.asarray(self._model._solver.flux)
         return flux.reshape(self._model.geometry.n_nodes, self._model.library.n_groups)
 
+    @property
+    def fission_power(self) -> np.ndarray:
+        r"""Fission power per node, shape ``(n_nodes,)``, a copy.
+
+        :math:`\sum_g \kappa\Sigma_{f,g}\phi_g V` for the current flux, in
+        the units of the library's kappa-fission, not renormalised. It sums
+        to :attr:`TransientStep.total_power`.
+        """
+        return self._model._solver.node_fission_power()
+
     def step(self, dt: float, settings: Settings | None = None, **overrides):
         """Advance the transient by one step.
 
@@ -385,6 +397,120 @@ class Transient:
 
     def __repr__(self) -> str:
         return f"<Transient t={self.time:.6g}s>"
+
+
+@dataclass(frozen=True)
+class CoupledTransientStep:
+    """One completed step of a transient with feedback (FR-MODE-7).
+
+    Attributes
+    ----------
+    neutronics : TransientStep
+        The neutronic step, in the library's power units.
+    power : float
+        Total power at the end of the step, W.
+    peak_node_power : float
+        Largest node power at the end of the step, W.
+    """
+
+    neutronics: TransientStep
+    power: float
+    peak_node_power: float
+
+    @property
+    def time(self) -> float:
+        """Time at the end of the step, s."""
+        return self.neutronics.time
+
+    def __repr__(self) -> str:
+        return f"<CoupledTransientStep t={self.time:.6g}s power={self.power:.6g} W>"
+
+
+class CoupledTransient:
+    """A time-dependent solve with thermal feedback in progress (FR-MODE-7).
+
+    Created by :meth:`Model.start_coupled_transient`. Each step advances the
+    neutronics on the cross sections the thermal state at the start of the
+    step implies, then advances the thermal solver on the power at the end
+    of it, then hands the new thermal state to ``apply_state``. The feedback
+    is therefore lagged by one step, which is first order in the step
+    length. See ``docs/theory.md`` §14.
+    """
+
+    def __init__(self, transient, thermal, apply_state, watts_per_unit):
+        self._transient = transient
+        self._thermal = thermal
+        self._apply_state = apply_state
+        self._watts_per_unit = watts_per_unit
+        self._node_power = transient.fission_power * watts_per_unit
+
+    @property
+    def time(self) -> float:
+        """Seconds since the transient started."""
+        return self._transient.time
+
+    @property
+    def transient(self) -> Transient:
+        """The neutronic transient this drives."""
+        return self._transient
+
+    @property
+    def thermal(self):
+        """The thermal solver this drives."""
+        return self._thermal
+
+    @property
+    def node_power(self) -> np.ndarray:
+        """Power per node at the end of the last step, W, shape ``(n_nodes,)``.
+
+        A copy.
+        """
+        return self._node_power.copy()
+
+    def step(self, dt: float, settings: Settings | None = None, **overrides):
+        """Advance the neutronics and the thermal state by one step.
+
+        Parameters
+        ----------
+        dt : float
+            Length of the step, s.
+        settings : Settings, optional
+            Overrides the transient's settings for this step only.
+        **overrides
+            Individual settings overridden for this step.
+
+        Returns
+        -------
+        CoupledTransientStep
+            The neutronic step and the power in W at its end.
+
+        Raises
+        ------
+        InputError
+            If ``apply_state`` left the library unfinalized, or on what
+            :meth:`Transient.step` and the thermal solver refuse.
+        """
+        record = self._transient.step(dt, settings, **overrides)
+        self._node_power = self._transient.fission_power * self._watts_per_unit
+        self._thermal.set_heat_source(self._node_power)
+        self._thermal.advance(dt)
+        temperatures = {
+            name: np.array(value, dtype=float, copy=True)
+            for name, value in self._thermal.get_temperatures().items()
+        }
+        densities = {
+            name: np.array(value, dtype=float, copy=True)
+            for name, value in self._thermal.get_densities().items()
+        }
+        self._apply_state(temperatures, densities)
+        return CoupledTransientStep(
+            neutronics=record,
+            power=float(self._node_power.sum()),
+            peak_node_power=float(self._node_power.max()),
+        )
+
+    def __repr__(self) -> str:
+        return f"<CoupledTransient t={self.time:.6g}s>"
 
 
 class Model:
@@ -928,6 +1054,70 @@ class Model:
         resolved = self._settings(settings, overrides)
         self._solver.start_transient(resolved._s)
         return Transient(self, resolved)
+
+    def start_coupled_transient(
+        self,
+        thermal,
+        apply_state: Callable[[dict, dict], None],
+        *,
+        total_power: float,
+        percent: float = 100.0,
+        settings: Settings | None = None,
+        **overrides,
+    ) -> CoupledTransient:
+        """Begin a transient with thermal-hydraulic feedback (FR-MODE-7).
+
+        Start from a converged coupled steady state, normally the one
+        :meth:`solve_coupled` leaves: the library already reflects the
+        thermal state ``thermal`` holds, and the current flux is the power
+        distribution that state was computed for. The power scale is fixed
+        here, so ``total_power`` is the power at the start.
+
+        Parameters
+        ----------
+        thermal : TransientThermalSolver
+            Thermal solver holding the initial state, such as a
+            :class:`~openndm.ChannelModel` with transient conduction.
+        apply_state : callable
+            ``apply_state(temperatures, densities)``, as for
+            :meth:`solve_coupled`: it writes the state into ``self.library``
+            in place and re-finalizes.
+        total_power : float
+            Thermal power of the modelled geometry at full power, W.
+        percent : float, optional
+            Percent of full power at the start.
+        settings : Settings, optional
+            Overrides the model's settings for the transient.
+        **overrides
+            Individual settings overridden the same way.
+
+        Returns
+        -------
+        CoupledTransient
+            Driver with a :meth:`CoupledTransient.step` method.
+
+        Raises
+        ------
+        InputError
+            If ``thermal`` cannot be stepped in time, the power is not
+            positive, or the library is unfinalized.
+        """
+        if not isinstance(thermal, TransientThermalSolver):
+            raise InputError(
+                "the thermal solver must provide advance(dt) to be stepped "
+                "in time; see TransientThermalSolver"
+            )
+        if not total_power > 0.0 or not 0.0 < percent <= 100.0:
+            raise InputError(
+                f"a coupled transient starts from a positive power, got "
+                f"{total_power} W at {percent}%"
+            )
+        transient = self.start_transient(settings, **overrides)
+        initial = float(transient.fission_power.sum())
+        if not initial > 0.0:
+            raise InputError("the initial state produces no fission power")
+        watts_per_unit = total_power * percent / 100.0 / initial
+        return CoupledTransient(transient, thermal, apply_state, watts_per_unit)
 
     def refresh(self) -> None:
         """Re-read the geometry and library after mutating them in place.
