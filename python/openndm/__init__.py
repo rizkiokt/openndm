@@ -37,6 +37,8 @@ from .geometry import INACTIVE, Geometry
 from .model import (
     BoronSearchResult,
     CoupledResult,
+    CoupledTransient,
+    CoupledTransientStep,
     Model,
     Result,
     Transient,
@@ -84,6 +86,8 @@ __all__ = [
     "ControlRods",
     "ConvergenceError",
     "CoupledResult",
+    "CoupledTransient",
+    "CoupledTransientStep",
     "CouplingResult",
     "CouplingStep",
     "DopplerFeedback",

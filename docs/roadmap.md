@@ -121,7 +121,7 @@ a shipped film or slip correlation, and a time-dependent conduction model.
 
 | Item | Why it is worth doing |
 |---|---|
-| FR-MODE-7, transient with feedback | Both halves exist; it needs heat capacity in `PinConduction` and a driver coupling it to `Transient`. Unblocks the NEACRP rod ejections |
+| NEACRP rod ejections | FR-MODE-7 is done; the ejection cases need the ejected assembly from the specification's figures and a deck |
 | Exponential flux transformation (FR-KIN-2) | The single change that would most improve transient accuracy; see Phase 2 |
 | Adaptive time stepping (FR-KIN-3) | Named by NFR-PERF-4 |
 | Parallel ILU0 triangular solves | NFR-PERF-7 fails at 32% parallel efficiency against 60% |
