@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .exceptions import ConvergenceError, InputError
 
@@ -256,7 +257,7 @@ class WaterProperties(Protocol):
     interface rather than something a caller is left to invert.
     """
 
-    def density(self, pressure, temperature) -> np.ndarray:
+    def density(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         """Density in kg/m^3 at a pressure in Pa and temperature in K.
 
         Parameters
@@ -273,7 +274,7 @@ class WaterProperties(Protocol):
             ``temperature`` together. A new array.
         """
 
-    def enthalpy(self, pressure, temperature) -> np.ndarray:
+    def enthalpy(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         """Specific enthalpy in J/kg at a pressure in Pa, temperature in K.
 
         Parameters
@@ -290,7 +291,7 @@ class WaterProperties(Protocol):
             ``temperature`` together. A new array.
         """
 
-    def temperature(self, pressure, enthalpy) -> np.ndarray:
+    def temperature(self, pressure: ArrayLike, enthalpy: ArrayLike) -> np.ndarray:
         """Temperature in K at a pressure in Pa and enthalpy in J/kg.
 
         Parameters
@@ -307,7 +308,7 @@ class WaterProperties(Protocol):
             ``enthalpy`` together. A new array.
         """
 
-    def saturation_temperature(self, pressure) -> np.ndarray:
+    def saturation_temperature(self, pressure: ArrayLike) -> np.ndarray:
         """Saturation temperature in K at a pressure in Pa.
 
         Parameters
@@ -334,7 +335,7 @@ class SaturationProperties(Protocol):
     model makes before it starts.
     """
 
-    def saturated_liquid_enthalpy(self, pressure) -> np.ndarray:
+    def saturated_liquid_enthalpy(self, pressure: ArrayLike) -> np.ndarray:
         """Enthalpy of saturated liquid in J/kg at a pressure in Pa.
 
         Parameters
@@ -349,7 +350,7 @@ class SaturationProperties(Protocol):
             new array.
         """
 
-    def saturated_vapour_enthalpy(self, pressure) -> np.ndarray:
+    def saturated_vapour_enthalpy(self, pressure: ArrayLike) -> np.ndarray:
         """Enthalpy of saturated vapour in J/kg at a pressure in Pa.
 
         Parameters
@@ -364,7 +365,7 @@ class SaturationProperties(Protocol):
             new array.
         """
 
-    def saturated_liquid_density(self, pressure) -> np.ndarray:
+    def saturated_liquid_density(self, pressure: ArrayLike) -> np.ndarray:
         """Density of saturated liquid in kg/m^3 at a pressure in Pa.
 
         Parameters
@@ -379,7 +380,7 @@ class SaturationProperties(Protocol):
             new array.
         """
 
-    def saturated_vapour_density(self, pressure) -> np.ndarray:
+    def saturated_vapour_density(self, pressure: ArrayLike) -> np.ndarray:
         """Density of saturated vapour in kg/m^3 at a pressure in Pa.
 
         Parameters
@@ -449,7 +450,7 @@ class ConstantWater:
         self.reference_enthalpy = float(reference_enthalpy)
         self._saturation = float(saturation_temperature)
 
-    def density(self, pressure, temperature) -> np.ndarray:
+    def density(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         """Density in kg/m^3, the constant, broadcast to the inputs.
 
         Parameters
@@ -471,7 +472,7 @@ class ConstantWater:
             np.asarray(self._density),
         )[2].copy()
 
-    def enthalpy(self, pressure, temperature) -> np.ndarray:
+    def enthalpy(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         """Specific enthalpy in J/kg, linear in temperature.
 
         Parameters
@@ -493,7 +494,7 @@ class ConstantWater:
             t - self.reference_temperature
         )
 
-    def temperature(self, pressure, enthalpy) -> np.ndarray:
+    def temperature(self, pressure: ArrayLike, enthalpy: ArrayLike) -> np.ndarray:
         """Temperature in K, the exact inverse of :meth:`enthalpy`.
 
         Parameters
@@ -514,7 +515,7 @@ class ConstantWater:
             h - self.reference_enthalpy
         ) / self.specific_heat
 
-    def saturation_temperature(self, pressure) -> np.ndarray:
+    def saturation_temperature(self, pressure: ArrayLike) -> np.ndarray:
         """Saturation temperature in K, the constant, broadcast.
 
         Parameters
@@ -602,7 +603,9 @@ class IF97Water:
         self.tolerance = float(tolerance)
         self.max_iterations = int(max_iterations)
 
-    def specific_volume(self, pressure, temperature) -> np.ndarray:
+    def specific_volume(
+        self, pressure: ArrayLike, temperature: ArrayLike
+    ) -> np.ndarray:
         """Specific volume in m^3/kg, from IF97 Eq. (7) and Table 3.
 
         Parameters
@@ -629,7 +632,7 @@ class IF97Water:
         tau = _REGION1_TEMPERATURE_STAR / t
         return GAS_CONSTANT * t / p * pi * self._gamma_pi(pi, tau)
 
-    def density(self, pressure, temperature) -> np.ndarray:
+    def density(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         """Density in kg/m^3 at a pressure in Pa and temperature in K.
 
         Parameters
@@ -647,7 +650,7 @@ class IF97Water:
         """
         return 1.0 / self.specific_volume(pressure, temperature)
 
-    def enthalpy(self, pressure, temperature) -> np.ndarray:
+    def enthalpy(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         """Specific enthalpy in J/kg at a pressure in Pa, temperature in K.
 
         Parameters
@@ -668,7 +671,7 @@ class IF97Water:
         tau = _REGION1_TEMPERATURE_STAR / t
         return GAS_CONSTANT * t * tau * self._gamma_tau(pi, tau)
 
-    def specific_heat(self, pressure, temperature) -> np.ndarray:
+    def specific_heat(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         """Isobaric specific heat in J/(kg K), the derivative of enthalpy.
 
         Parameters
@@ -689,7 +692,7 @@ class IF97Water:
         tau = _REGION1_TEMPERATURE_STAR / t
         return -GAS_CONSTANT * tau * tau * self._gamma_tau_tau(pi, tau)
 
-    def temperature(self, pressure, enthalpy) -> np.ndarray:
+    def temperature(self, pressure: ArrayLike, enthalpy: ArrayLike) -> np.ndarray:
         """Temperature in K at a pressure in Pa and enthalpy in J/kg.
 
         Newton iteration on :meth:`enthalpy`, whose derivative is the
@@ -733,7 +736,7 @@ class IF97Water:
             float(np.max(np.abs(step))),
         )
 
-    def saturation_pressure(self, temperature) -> np.ndarray:
+    def saturation_pressure(self, temperature: ArrayLike) -> np.ndarray:
         """Saturation pressure in Pa, from IF97 Eq. (30).
 
         Valid from 273.15 K to the critical temperature, 647.096 K.
@@ -772,7 +775,7 @@ class IF97Water:
         root = 2.0 * c / (-b + np.sqrt(b * b - 4.0 * a * c))
         return 1.0e6 * root**4
 
-    def saturation_temperature(self, pressure) -> np.ndarray:
+    def saturation_temperature(self, pressure: ArrayLike) -> np.ndarray:
         """Saturation temperature in K, from IF97 Eq. (31).
 
         Valid from 611.213 Pa to the critical pressure, 22.064 MPa.
@@ -813,7 +816,7 @@ class IF97Water:
             n[9] + d - np.sqrt((n[9] + d) ** 2 - 4.0 * (n[8] + n[9] * d))
         )
 
-    def region23_pressure(self, temperature) -> np.ndarray:
+    def region23_pressure(self, temperature: ArrayLike) -> np.ndarray:
         """Pressure on the boundary between regions 2 and 3, Pa.
 
         IF97 Eq. (5), the B23 equation. Above this pressure the fluid is in
@@ -844,7 +847,9 @@ class IF97Water:
         n = _B23_N
         return 1.0e6 * (n[0] + n[1] * t + n[2] * t * t)
 
-    def vapour_specific_volume(self, pressure, temperature) -> np.ndarray:
+    def vapour_specific_volume(
+        self, pressure: ArrayLike, temperature: ArrayLike
+    ) -> np.ndarray:
         """Specific volume of steam in m^3/kg, from IF97 Eq. (15).
 
         Parameters
@@ -872,7 +877,7 @@ class IF97Water:
         gamma_pi = 1.0 / pi + self._region2_gamma_r_pi(pi, tau)
         return GAS_CONSTANT * t / p * pi * gamma_pi
 
-    def vapour_density(self, pressure, temperature) -> np.ndarray:
+    def vapour_density(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         """Density of steam in kg/m^3 at a pressure in Pa, temperature in K.
 
         Parameters
@@ -890,7 +895,9 @@ class IF97Water:
         """
         return 1.0 / self.vapour_specific_volume(pressure, temperature)
 
-    def vapour_enthalpy(self, pressure, temperature) -> np.ndarray:
+    def vapour_enthalpy(
+        self, pressure: ArrayLike, temperature: ArrayLike
+    ) -> np.ndarray:
         """Specific enthalpy of steam in J/kg, from IF97 Eq. (15).
 
         Parameters
@@ -914,7 +921,9 @@ class IF97Water:
         )
         return GAS_CONSTANT * t * tau * gamma_tau
 
-    def vapour_specific_heat(self, pressure, temperature) -> np.ndarray:
+    def vapour_specific_heat(
+        self, pressure: ArrayLike, temperature: ArrayLike
+    ) -> np.ndarray:
         """Isobaric specific heat of steam in J/(kg K), from IF97 Eq. (15).
 
         Parameters
@@ -938,7 +947,7 @@ class IF97Water:
         ) + self._region2_gamma_r_tau_tau(pi, tau)
         return -GAS_CONSTANT * tau * tau * gamma_tt
 
-    def saturated_liquid_enthalpy(self, pressure) -> np.ndarray:
+    def saturated_liquid_enthalpy(self, pressure: ArrayLike) -> np.ndarray:
         """Enthalpy of saturated liquid in J/kg, region 1 at the boiling point.
 
         Parameters
@@ -961,7 +970,7 @@ class IF97Water:
         p = self._checked_saturation(pressure)
         return self.enthalpy(p, self._saturation_line_temperature(p))
 
-    def saturated_vapour_enthalpy(self, pressure) -> np.ndarray:
+    def saturated_vapour_enthalpy(self, pressure: ArrayLike) -> np.ndarray:
         """Enthalpy of saturated steam in J/kg, region 2 at the boiling point.
 
         Parameters
@@ -984,7 +993,7 @@ class IF97Water:
         p = self._checked_saturation(pressure)
         return self.vapour_enthalpy(p, self._saturation_line_temperature(p))
 
-    def saturated_liquid_density(self, pressure) -> np.ndarray:
+    def saturated_liquid_density(self, pressure: ArrayLike) -> np.ndarray:
         """Density of saturated liquid in kg/m^3.
 
         Parameters
@@ -1007,7 +1016,7 @@ class IF97Water:
         p = self._checked_saturation(pressure)
         return self.density(p, self._saturation_line_temperature(p))
 
-    def saturated_vapour_density(self, pressure) -> np.ndarray:
+    def saturated_vapour_density(self, pressure: ArrayLike) -> np.ndarray:
         """Density of saturated steam in kg/m^3.
 
         Parameters
@@ -1055,7 +1064,7 @@ class IF97Water:
             )
         return p
 
-    def latent_heat(self, pressure) -> np.ndarray:
+    def latent_heat(self, pressure: ArrayLike) -> np.ndarray:
         """Enthalpy of vaporisation in J/kg, the gap between the two sides.
 
         Parameters
@@ -1264,16 +1273,16 @@ class _ExternalBackend:
     axial mesh at once.
     """
 
-    def density(self, pressure, temperature) -> np.ndarray:
+    def density(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         return self._map2(self._density, pressure, temperature)
 
-    def enthalpy(self, pressure, temperature) -> np.ndarray:
+    def enthalpy(self, pressure: ArrayLike, temperature: ArrayLike) -> np.ndarray:
         return self._map2(self._enthalpy, pressure, temperature)
 
-    def temperature(self, pressure, enthalpy) -> np.ndarray:
+    def temperature(self, pressure: ArrayLike, enthalpy: ArrayLike) -> np.ndarray:
         return self._map2(self._temperature, pressure, enthalpy)
 
-    def saturation_temperature(self, pressure) -> np.ndarray:
+    def saturation_temperature(self, pressure: ArrayLike) -> np.ndarray:
         p = np.asarray(pressure, dtype=float)
         flat = [self._saturation_temperature(float(v)) for v in p.ravel()]
         return np.asarray(flat, dtype=float).reshape(p.shape)
