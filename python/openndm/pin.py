@@ -29,6 +29,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .exceptions import ConvergenceError, InputError
 
@@ -62,17 +63,17 @@ class PinState:
 
     Parameters
     ----------
-    profile : ndarray, shape (n_nodes, n_rings + 1)
+    profile : array_like, shape (n_nodes, n_rings + 1)
         Pellet temperature at each ring boundary, centreline first, K.
-    clad_inner : ndarray, shape (n_nodes,)
+    clad_inner : array_like, shape (n_nodes,)
         Cladding inner surface temperature, K.
-    clad_outer : ndarray, shape (n_nodes,)
+    clad_outer : array_like, shape (n_nodes,)
         Cladding outer surface temperature, K.
-    average : ndarray, shape (n_nodes,)
+    average : array_like, shape (n_nodes,)
         Volume-average pellet temperature, K.
-    doppler : ndarray, shape (n_nodes,)
+    doppler : array_like, shape (n_nodes,)
         Effective Doppler temperature, K.
-    surface_heat_rate : ndarray, shape (n_nodes,)
+    surface_heat_rate : array_like, shape (n_nodes,)
         Heat leaving the cladding into the coolant per unit pin length, W/m.
         In steady state it is the linear heat rate.
 
@@ -85,7 +86,13 @@ class PinState:
     """
 
     def __init__(
-        self, profile, clad_inner, clad_outer, average, doppler, surface_heat_rate
+        self,
+        profile: ArrayLike,
+        clad_inner: ArrayLike,
+        clad_outer: ArrayLike,
+        average: ArrayLike,
+        doppler: ArrayLike,
+        surface_heat_rate: ArrayLike,
     ):
         self.profile = np.asarray(profile, dtype=float)
         self.clad_inner = np.asarray(clad_inner, dtype=float)
@@ -175,16 +182,16 @@ class PinConduction:
         self,
         pins: PinGeometry,
         *,
-        fuel_conductivity,
-        clad_conductivity,
+        fuel_conductivity: float | Callable[[np.ndarray], np.ndarray],
+        clad_conductivity: float | Callable[[np.ndarray], np.ndarray],
         gap_conductance: float,
         film_coefficient: float,
         n_rings: int = 10,
         doppler_weight: float = 0.7,
         fuel_density: float | None = None,
         clad_density: float | None = None,
-        fuel_heat_capacity=None,
-        clad_heat_capacity=None,
+        fuel_heat_capacity: float | Callable[[np.ndarray], np.ndarray] | None = None,
+        clad_heat_capacity: float | Callable[[np.ndarray], np.ndarray] | None = None,
     ):
         if n_rings < 1:
             raise InputError(f"the pellet needs at least one ring, got {n_rings}")
@@ -241,7 +248,9 @@ class PinConduction:
             self._clad_heat_capacity,
         )
 
-    def solve(self, linear_heat_rate, coolant_temperature) -> PinState:
+    def solve(
+        self, linear_heat_rate: ArrayLike, coolant_temperature: ArrayLike
+    ) -> PinState:
         """Compute the steady temperatures through the pin at every node.
 
         Parameters
@@ -273,7 +282,11 @@ class PinConduction:
         return self._state(profile, clad_inner, clad_outer, rate.copy())
 
     def step(
-        self, linear_heat_rate, coolant_temperature, previous: PinState, dt: float
+        self,
+        linear_heat_rate: ArrayLike,
+        coolant_temperature: ArrayLike,
+        previous: PinState,
+        dt: float,
     ) -> PinState:
         """Advance the pin temperatures by one backward Euler step.
 
@@ -567,7 +580,7 @@ def _checked_rates(linear_heat_rate, coolant_temperature):
     return rate, bulk
 
 
-def neacrp_fuel_conductivity(temperature) -> np.ndarray:
+def neacrp_fuel_conductivity(temperature: ArrayLike) -> np.ndarray:
     r"""UO2 heat conductivity in W/(m K), NEACRP-L-335 Section 2.7.
 
     .. math:: \lambda_{UO_2} = 1.05 + \frac{2150}{T - 73.15}
@@ -606,7 +619,7 @@ def neacrp_fuel_conductivity(temperature) -> np.ndarray:
     return 1.05 + 2150.0 / (t - NEACRP_FUEL_CONDUCTIVITY_POLE)
 
 
-def neacrp_clad_conductivity(temperature) -> np.ndarray:
+def neacrp_clad_conductivity(temperature: ArrayLike) -> np.ndarray:
     r"""Zircaloy-4 heat conductivity in W/(m K), NEACRP-L-335 Section 2.7.
 
     .. math:: \lambda_{Zr} = 7.51 + 2.09\times10^{-2} T
@@ -636,7 +649,7 @@ def neacrp_clad_conductivity(temperature) -> np.ndarray:
     return 7.51 + 2.09e-2 * t - 1.45e-5 * t**2 + 7.67e-9 * t**3
 
 
-def neacrp_fuel_heat_capacity(temperature) -> np.ndarray:
+def neacrp_fuel_heat_capacity(temperature: ArrayLike) -> np.ndarray:
     r"""UO2 specific heat capacity in J/(kg K), NEACRP-L-335 Section 2.7.
 
     .. math:: c_{p,UO_2} = 162.3 + 0.3038 T - 2.391\times10^{-4} T^2
@@ -664,7 +677,7 @@ def neacrp_fuel_heat_capacity(temperature) -> np.ndarray:
     return 162.3 + 0.3038 * t - 2.391e-4 * t**2 + 6.404e-8 * t**3
 
 
-def neacrp_clad_heat_capacity(temperature) -> np.ndarray:
+def neacrp_clad_heat_capacity(temperature: ArrayLike) -> np.ndarray:
     """Zircaloy-4 specific heat capacity in J/(kg K), NEACRP-L-335 Section 2.7.
 
     .. math:: c_{p,Zr} = 252.54 + 0.11474 T
