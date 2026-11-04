@@ -8,7 +8,15 @@ a clear message rather than an ImportError from deep inside a call.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
+from numpy.typing import ArrayLike
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+
+    from .model import Result
 
 __all__ = ["plot_axial", "plot_convergence", "plot_radial"]
 
@@ -24,7 +32,13 @@ def _pyplot():
     return plt
 
 
-def plot_radial(result, ax=None, *, annotate: bool = True, cmap: str = "viridis"):
+def plot_radial(
+    result: Result,
+    ax: Axes | None = None,
+    *,
+    annotate: bool = True,
+    cmap: str = "viridis",
+) -> Axes:
     """Plot the radial power map as a core-map image.
 
     Parameters
@@ -63,7 +77,9 @@ def plot_radial(result, ax=None, *, annotate: bool = True, cmap: str = "viridis"
     return ax
 
 
-def plot_axial(result, ax=None, *, heights=None):
+def plot_axial(
+    result: Result, ax: Axes | None = None, *, heights: ArrayLike | None = None
+) -> Axes:
     """Plot the axial power profile.
 
     Parameters
@@ -94,7 +110,7 @@ def plot_axial(result, ax=None, *, heights=None):
     return ax
 
 
-def plot_convergence(result, ax=None):
+def plot_convergence(result: Result, ax: Axes | None = None) -> Axes:
     """Plot the outer iteration history (FR-OUT-5).
 
     Parameters
