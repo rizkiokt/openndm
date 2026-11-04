@@ -9,11 +9,16 @@ a ``filetype`` attribute identifying the file, an integer
 from __future__ import annotations
 
 import datetime as _dt
+import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from .exceptions import InputError
+
+if TYPE_CHECKING:
+    from .model import Model, Result
 
 __all__ = ["STATEPOINT_FORMAT_VERSION", "StatePoint", "write_statepoint"]
 
@@ -23,7 +28,13 @@ STATEPOINT_FORMAT_VERSION = 1
 _FILETYPE = "openndm_statepoint"
 
 
-def write_statepoint(path, result, model, *, extra: dict | None = None) -> Path:
+def write_statepoint(
+    path: os.PathLike | str,
+    result: Result,
+    model: Model,
+    *,
+    extra: dict | None = None,
+) -> Path:
     """Write a solve result to ``statepoint.h5``.
 
     Parameters
@@ -127,7 +138,7 @@ class StatePoint:
     ...     print(sp.k_eff, sp.power.shape)
     """
 
-    def __init__(self, path):
+    def __init__(self, path: os.PathLike | str):
         import h5py
 
         self._path = Path(path)
@@ -258,7 +269,7 @@ class StatePoint:
     def __enter__(self) -> StatePoint:
         return self
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, *exc: object) -> None:
         self.close()
 
     def __repr__(self) -> str:
