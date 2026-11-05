@@ -26,8 +26,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .exceptions import InputError
+from .geometry import Geometry
+from .model import Model, Result
+from .xslib import XSLibrary
 
 __all__ = ["ControlRodBank", "ControlRods", "RodWorth"]
 
@@ -206,7 +210,12 @@ class ControlRods:
         a branch-parameterised library cannot be solved either way.
     """
 
-    def __init__(self, geometry, banks: Sequence[ControlRodBank], library=None):
+    def __init__(
+        self,
+        geometry: Geometry,
+        banks: Sequence[ControlRodBank],
+        library: XSLibrary | None = None,
+    ) -> None:
         self._geometry = geometry
         self._library = library
         self._banks: dict[str, ControlRodBank] = {}
@@ -309,7 +318,11 @@ class ControlRods:
             return float(np.sum(self._geometry.dz))
         return bank.tip_height(steps)
 
-    def insert(self, positions: Mapping[str, float | None] | None = None, **kwargs):
+    def insert(
+        self,
+        positions: Mapping[str, float | None] | None = None,
+        **kwargs: float | None,
+    ) -> ControlRods:
         """Set bank positions in steps and rewrite the node compositions.
 
         Call :meth:`~openndm.Model.refresh` afterwards if a solver already
@@ -356,7 +369,7 @@ class ControlRods:
         self._apply()
         return self
 
-    def withdraw(self, *names: str):
+    def withdraw(self, *names: str) -> ControlRods:
         """Fully withdraw the named banks, or all of them if none are named.
 
         Parameters
@@ -378,8 +391,12 @@ class ControlRods:
         return self.insert(dict.fromkeys(targets, None))
 
     def converge_cusping(
-        self, model, max_sweeps: int = 8, tolerance: float = 1.0e-6, **overrides
-    ):
+        self,
+        model: Model,
+        max_sweeps: int = 8,
+        tolerance: float = 1.0e-6,
+        **overrides: object,
+    ) -> Result:
         """Solve, re-weighting the tip node's mixture with the flux each time.
 
         :meth:`insert` weights the partial node by volume alone, which is the
@@ -414,7 +431,7 @@ class ControlRods:
             result = model.solve(**overrides)
         return result
 
-    def reweight(self, flux) -> float | None:
+    def reweight(self, flux: ArrayLike) -> float | None:
         """Re-weight every partially rodded node against a flux already in hand.
 
         :meth:`insert` weights the tip node by volume, which is the flat-flux
@@ -440,11 +457,11 @@ class ControlRods:
 
     def worth_curve(
         self,
-        model,
+        model: Model,
         bank: str | None = None,
-        positions=None,
+        positions: Sequence[float] | Sequence[Mapping[str, float | None]] | None = None,
         *,
-        reference=None,
+        reference: float | Mapping[str, float | None] | None = None,
         cusping: bool = True,
         warm_start: bool = True,
     ) -> RodWorth:
