@@ -353,7 +353,7 @@ class BranchDriver:
 
     def write_job_array(
         self,
-        path,
+        path: os.PathLike | str,
         *,
         command: str = "python -m openndm.gc.driver",
         scheduler: str = "slurm",

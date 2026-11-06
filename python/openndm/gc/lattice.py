@@ -7,12 +7,16 @@ composition map of the nodal geometry, so the two cannot drift apart.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from ..exceptions import InputError
 from ..geometry import INACTIVE
 from .mgxs import require_openmc
+
+if TYPE_CHECKING:
+    import openmc
 
 __all__ = ["composition_map", "lattice_universes"]
 
@@ -44,7 +48,7 @@ def _outer_id(lattice) -> int | None:
     return None if lattice.outer is None else lattice.outer.id
 
 
-def lattice_universes(lattice) -> list:
+def lattice_universes(lattice: openmc.RectLattice) -> list[openmc.Universe]:
     """Return the universes a lattice places in the core, in composition order.
 
     Order is first appearance scanning from the lowest ``(x, y, z)`` corner, x
@@ -70,7 +74,10 @@ def lattice_universes(lattice) -> list:
     return list(by_id.values())
 
 
-def composition_map(lattice, domains: Sequence | None = None) -> np.ndarray:
+def composition_map(
+    lattice: openmc.RectLattice,
+    domains: Sequence[openmc.Universe | int] | None = None,
+) -> np.ndarray:
     """Return the composition index at each position of a lattice.
 
     Parameters

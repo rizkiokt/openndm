@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from ..exceptions import InputError
+from ..xslib import XSLibrary
+
+if TYPE_CHECKING:
+    import openmc
 
 __all__ = ["KineticsParameters", "compute_kinetics"]
 
@@ -39,7 +45,7 @@ class KineticsParameters:
     method: str
     std_dev: dict
 
-    def apply_to(self, library) -> None:
+    def apply_to(self, library: XSLibrary) -> None:
         """Store the delayed data on a library (FR-XS-3).
 
         Parameters
@@ -59,10 +65,10 @@ class KineticsParameters:
 
 
 def compute_kinetics(
-    statepoint,
+    statepoint: openmc.StatePoint,
     *,
-    prompt_statepoint=None,
-    decay_constant=None,
+    prompt_statepoint: openmc.StatePoint | None = None,
+    decay_constant: ArrayLike | None = None,
     method: str = "auto",
 ) -> KineticsParameters:
     r"""Extract :math:`\beta_{\rm eff}` and :math:`\Lambda` from OpenMC.
