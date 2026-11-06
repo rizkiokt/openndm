@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from ..exceptions import InputError
+
+if TYPE_CHECKING:
+    import openmc
 
 __all__ = ["compute_form_functions"]
 
 
 def compute_form_functions(
-    statepoint,
+    statepoint: openmc.StatePoint,
     tally_name: str = "openndm_pin_fission",
     *,
     shape: tuple[int, int] | None = None,

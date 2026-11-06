@@ -13,13 +13,19 @@ same convention, so no reordering happens by default. Pass
 
 from __future__ import annotations
 
+import os
 import warnings
 from collections.abc import Sequence
+from types import ModuleType
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from ..exceptions import InputError
 from ..xslib import XSLibrary
+
+if TYPE_CHECKING:
+    import openmc.mgxs
 
 __all__ = [
     "DEFAULT_D_TOLERANCE",
@@ -63,7 +69,7 @@ _DIFFUSION_TYPES = ("diffusion-coefficient",)
 _TRANSPORT_TYPES = ("transport", "nu-transport")
 
 
-def require_openmc():
+def require_openmc() -> ModuleType:
     """Import and return :mod:`openmc`, with an actionable error if missing.
 
     OpenNDM's solver runs without OpenMC; only this subpackage needs it
@@ -161,7 +167,7 @@ def _p0_scatter(scatter: np.ndarray) -> np.ndarray:
 
 
 def from_mgxs_library(
-    library,
+    library: openmc.mgxs.Library,
     *,
     domains: Sequence | None = None,
     reverse_groups: bool = False,
@@ -420,7 +426,9 @@ def _diffusion_coefficient(library, domain, order, tolerance, prefer, index):
     return chosen
 
 
-def from_mgxs_file(path, *, reverse_groups: bool = False) -> XSLibrary:
+def from_mgxs_file(
+    path: os.PathLike | str, *, reverse_groups: bool = False
+) -> XSLibrary:
     """Read an ``mgxs.h5`` written by ``Library.create_mg_mode`` (FR-OMC-3).
 
     This is the format OpenMC itself consumes in multi-group mode, so a
@@ -498,11 +506,11 @@ def from_mgxs_file(path, *, reverse_groups: bool = False) -> XSLibrary:
 
 
 def from_statepoint(
-    statepoint,
-    mgxs_library,
+    statepoint: openmc.StatePoint,
+    mgxs_library: openmc.mgxs.Library,
     *,
     domains: Sequence | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> XSLibrary:
     """Build a library straight from an ``openmc.StatePoint`` (FR-OMC-4).
 
