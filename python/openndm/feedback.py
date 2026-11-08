@@ -17,8 +17,10 @@ import math
 from collections.abc import Sequence
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .exceptions import InputError
+from .xslib import XSLibrary
 
 __all__ = ["DopplerFeedback"]
 
@@ -81,7 +83,7 @@ class DopplerFeedback:
 
     def __init__(
         self,
-        library,
+        library: XSLibrary,
         compositions: Sequence[int],
         *,
         gamma: float,
@@ -165,7 +167,7 @@ class DopplerFeedback:
             math.sqrt(temperature) - math.sqrt(self.reference_temperature)
         )
 
-    def apply(self, temperatures) -> None:
+    def apply(self, temperatures: ArrayLike) -> None:
         """Set the temperature of each composition and rewrite the library.
 
         The library is re-finalized here, so a model holding it only needs
