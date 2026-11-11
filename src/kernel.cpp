@@ -4,6 +4,11 @@
 
 namespace openndm {
 
+void Kernel::solve_boundary(const OneNodeProblem&, const XSLibrary&,
+    const std::vector<int>&, int, int, double*) const
+{
+}
+
 std::unique_ptr<Kernel> make_fdm_kernel();
 std::unique_ptr<Kernel> make_nem_kernel();
 std::unique_ptr<Kernel> make_sanm_kernel();
