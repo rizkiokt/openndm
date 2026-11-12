@@ -168,6 +168,7 @@ public:
   int n_compositions() const;
 
 private:
+  //! Empty graph; from_cartesian() is the only way to build one.
   Geometry() = default;
 
   std::vector<Node> nodes_;

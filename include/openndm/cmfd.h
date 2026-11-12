@@ -158,6 +158,7 @@ public:
   const XSLibrary& library() const { return xs_; }
 
 private:
+  //! Build the shared pattern from the interior surfaces, one row per node.
   void build_pattern();
   //! Boundary coupling coefficient for one exterior surface and group.
   double boundary_coupling(
