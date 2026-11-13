@@ -558,16 +558,12 @@ outward.
 
 ## 8. Derived quantities
 
-Node power is $P_i = V_i \sum_g \kappa\Sigma_{f,g}\,\phi_{i,g}$, normalised to
-a mean of one over the nodes that carry power. Radial and axial profiles are
-volume-weighted collapses of that onto the lattice. $F_q$ is the peak node
-power and $F_{\Delta H}$ the peak radial power.
-
-Because $P_i$ is integrated over the node, its mean over nodes equals the
-volume-weighted core average only when every node has the same volume. On a
-non-uniform mesh $F_q$ is therefore not a peak-to-average power density: on
-the NEACRP A1 core, whose axial layers run from 7.7 to 30 cm, it is 4.03
-where the volume-weighted figure is 3.18.
+Node power is the density $p_i = \sum_g \kappa\Sigma_{f,g}\,\phi_{i,g}$,
+normalised so that $\sum_i p_i V_i / \sum_i V_i = 1$ over the nodes that
+carry power. Radial and axial profiles are volume-weighted collapses of that
+onto the lattice, each normalised to a volume-weighted mean of one. $F_q$ is
+the peak node power density over the core average and $F_{\Delta H}$ the peak
+radial power, on any mesh.
 
 Flux is normalised so the volume-averaged total flux over all groups is one,
 which makes results comparable between meshes and between runs.
