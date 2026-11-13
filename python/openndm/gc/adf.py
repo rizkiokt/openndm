@@ -19,10 +19,15 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from ..exceptions import InputError
+from ..xslib import XSLibrary
+
+if TYPE_CHECKING:
+    import openmc.mgxs
 
 __all__ = ["DEFAULT_SLAB_FRACTION", "AdfResult", "add_adf_tallies", "compute_adf"]
 
@@ -56,7 +61,7 @@ class AdfResult:
     std_dev: np.ndarray
     slab_fraction: float
 
-    def apply_to(self, library, composition: int) -> None:
+    def apply_to(self, library: XSLibrary, composition: int) -> None:
         """Store these factors on a library composition.
 
         Parameters
@@ -76,15 +81,15 @@ class AdfResult:
 
 
 def add_adf_tallies(
-    model,
-    lattice,
-    energy_groups,
+    model: openmc.Model,
+    lattice: openmc.RectLattice,
+    energy_groups: openmc.mgxs.EnergyGroups,
     *,
     slab_fraction: float = DEFAULT_SLAB_FRACTION,
     axes: str = "xy",
     prefix: str = "openndm_adf",
     z_bounds: tuple[float, float] = (-0.5, 0.5),
-):
+) -> list[openmc.Tally]:
     """Instrument an ``openmc.Model`` with the tallies an ADF needs.
 
     Adds, per requested face, a thin mesh cell covering the slab adjacent to
@@ -184,7 +189,7 @@ def add_adf_tallies(
 
 
 def compute_adf(
-    statepoint,
+    statepoint: openmc.StatePoint,
     *,
     prefix: str = "openndm_adf",
     slab_fraction: float = DEFAULT_SLAB_FRACTION,

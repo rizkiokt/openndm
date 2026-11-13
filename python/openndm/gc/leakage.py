@@ -39,8 +39,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from ..exceptions import ConvergenceError, InputError
+from ..xslib import XSLibrary
 
 __all__ = ["CriticalSpectrum", "b1_gamma", "critical_spectrum"]
 
@@ -128,7 +130,7 @@ class CriticalSpectrum:
     iterations: int = 0
     metadata: dict = field(default_factory=dict)
 
-    def apply_to(self, library, composition: int) -> None:
+    def apply_to(self, library: XSLibrary, composition: int) -> None:
         """Replace one composition's D with the leakage-corrected value.
 
         The group constants themselves are not re-collapsed: doing that
@@ -239,12 +241,12 @@ def _bracket(residual, f_zero, width, tolerance):
 
 
 def critical_spectrum(
-    total,
-    scatter,
-    nu_fission,
-    chi,
+    total: ArrayLike,
+    scatter: ArrayLike,
+    nu_fission: ArrayLike,
+    chi: ArrayLike,
     *,
-    transport=None,
+    transport: ArrayLike | None = None,
     method: str = "b1",
     target_k: float = 1.0,
     bracket: tuple[float, float] = (-0.05, 0.05),
