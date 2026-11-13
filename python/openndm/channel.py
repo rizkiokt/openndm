@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from .exceptions import InputError
+from .exceptions import ConvergenceError, InputError
 from .water import IF97Water, SaturationProperties
 
 if TYPE_CHECKING:
@@ -30,6 +30,12 @@ if TYPE_CHECKING:
 __all__ = ["ChannelModel", "PinGeometry", "absolute_power"]
 
 CM_PER_M = 100.0
+
+_COOLANT_TOLERANCE = 1.0e-9
+"""Largest coolant temperature change between pin and coolant passes, K."""
+
+_MAX_COOLANT_ITERATIONS = 50
+"""Pin and coolant passes allowed inside one step before it is refused."""
 
 
 @dataclass(frozen=True)
@@ -183,6 +189,11 @@ class ChannelModel:
     With ``two_phase`` the enthalpy integration is unchanged and only its
     inversion differs: above the saturated liquid enthalpy the temperature
     stops at the boiling point and the surplus becomes quality and void.
+
+    :meth:`advance` is one transient step (FR-MODE-7). The pins store heat,
+    so the coolant receives the heat leaving the cladding rather than the
+    fission power. The coolant itself stores none: it is integrated up the
+    channel as in steady state, at the step's end.
 
     Parameters
     ----------
@@ -414,7 +425,60 @@ class ChannelModel:
 
     def solve(self) -> None:
         """Integrate the enthalpy up every channel and invert for the state."""
-        per_channel = np.where(self._active, self._power[self._gather_index], 0.0)
+        self._integrate(self._power)
+        if self._conduction is not None:
+            self._pin_state = self._conduction.solve(
+                self.linear_heat_rate, self._temperature
+            )
+
+    def advance(self, dt: float) -> None:
+        """Advance the pins and the coolant by one step of ``dt`` seconds.
+
+        The heat source set last is the power at the end of the step. The
+        pins step from the state the previous :meth:`solve` or
+        :meth:`advance` left, and the pin and coolant temperatures are
+        iterated together, since the film couples them.
+
+        Parameters
+        ----------
+        dt : float
+            Step length, s.
+
+        Raises
+        ------
+        InputError
+            Without a conduction model carrying densities and heat
+            capacities, or on a non-positive step.
+        ConvergenceError
+            If the pin and coolant temperatures do not settle.
+        """
+        if self._conduction is None or not self._conduction.is_transient:
+            raise InputError(
+                "a transient channel needs a conduction model with densities "
+                "and heat capacities"
+            )
+        previous = self._pin_state
+        pin_length = self.pins.n_pins * self._node_heights()
+        direct = self.direct_heating * self._power
+        coolant = self._temperature
+        for _ in range(_MAX_COOLANT_ITERATIONS):
+            pin = self._conduction.step(self.linear_heat_rate, coolant, previous, dt)
+            self._integrate(direct + pin.surface_heat_rate * pin_length)
+            change = float(np.max(np.abs(self._temperature - coolant), initial=0.0))
+            coolant = self._temperature
+            if change < _COOLANT_TOLERANCE:
+                break
+        else:
+            raise ConvergenceError(
+                "pin and coolant temperatures did not settle within the step",
+                _MAX_COOLANT_ITERATIONS,
+                change,
+            )
+        self._pin_state = pin
+
+    def _integrate(self, heat: np.ndarray) -> None:
+        """Integrate a heat input per node, W, up every channel."""
+        per_channel = np.where(self._active, heat[self._gather_index], 0.0)
         rise = np.cumsum(per_channel, axis=1) / self._mass_flow[:, np.newaxis]
         inlet = self._inlet_enthalpy()
 
@@ -427,10 +491,6 @@ class ChannelModel:
             self._quality,
             self._void_fraction,
         ) = self._invert(self._enthalpy)
-        if self._conduction is not None:
-            self._pin_state = self._conduction.solve(
-                self.linear_heat_rate, self._temperature
-            )
 
     def _invert(self, enthalpy: np.ndarray):
         """Temperature, density, quality and void fraction from enthalpy.

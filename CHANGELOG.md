@@ -15,6 +15,10 @@ All notable changes to OpenNDM are recorded here. The format follows
   conserves the stored energy to 1e-10, and a lumped pin converges on its
   analytic time constant at order 1.0. `PinState.surface_heat_rate` is the
   heat reaching the coolant, which in a transient is not the fission power.
+- **`ChannelModel.advance`, a transient channel**, and the
+  `TransientThermalSolver` protocol it satisfies. The coolant takes the heat
+  leaving the cladding and stores none of its own. A step conserves energy
+  between pins and coolant to 1e-12, and an unbounded step reproduces `solve`.
 
 ### Fixed
 
