@@ -91,7 +91,7 @@ def test_albedo_boundary_requires_values():
 
 
 def test_unknown_boundary_name_is_rejected():
-    with pytest.raises(ValueError, match="unknown boundary condition"):
+    with pytest.raises(openndm.InputError, match="unknown boundary condition"):
         openndm.Geometry.from_lattice(
             np.zeros((1, 2, 2), dtype=int),
             pitch=10.0,
@@ -100,7 +100,7 @@ def test_unknown_boundary_name_is_rejected():
 
 
 def test_unknown_face_name_is_rejected():
-    with pytest.raises(ValueError, match="unknown boundary face"):
+    with pytest.raises(openndm.InputError, match="unknown boundary face"):
         openndm.Geometry.from_lattice(
             np.zeros((1, 2, 2), dtype=int), pitch=10.0, boundaries={"radial": "vacuum"}
         )

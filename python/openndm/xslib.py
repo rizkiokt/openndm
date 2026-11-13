@@ -176,12 +176,17 @@ class XSLibrary:
         ----------
         value : {'clamp', 'linear', 'error'} or Extrapolation
             Policy applied to a state point outside the branch grid.
+
+        Raises
+        ------
+        InputError
+            On a name no policy answers to.
         """
         if isinstance(value, str):
             try:
                 value = _EXTRAPOLATION[value.lower()]
             except KeyError:
-                raise ValueError(
+                raise InputError(
                     f"unknown extrapolation policy {value!r}; "
                     f"choose from {sorted(_EXTRAPOLATION)}"
                 ) from None

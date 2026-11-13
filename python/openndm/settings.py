@@ -8,6 +8,7 @@ passes every other value straight through.
 from __future__ import annotations
 
 from . import _core
+from .exceptions import InputError
 
 __all__ = ["Settings"]
 
@@ -98,7 +99,7 @@ class Settings:
     ------
     AttributeError
         On an option the C++ settings struct does not carry.
-    ValueError
+    InputError
         On an unknown kernel or mode name.
 
     Examples
@@ -130,14 +131,14 @@ class Settings:
 
         Raises
         ------
-        ValueError
+        InputError
             On a name no kernel answers to.
         """
         if isinstance(value, str):
             try:
                 value = _KERNELS[value.lower()]
             except KeyError:
-                raise ValueError(
+                raise InputError(
                     f"unknown kernel {value!r}; choose from {sorted(_KERNELS)}"
                 ) from None
         self._s.kernel = value
@@ -158,14 +159,14 @@ class Settings:
 
         Raises
         ------
-        ValueError
+        InputError
             On a name no mode answers to.
         """
         if isinstance(value, str):
             try:
                 value = _MODES[value.lower()]
             except KeyError:
-                raise ValueError(
+                raise InputError(
                     f"unknown mode {value!r}; choose from {sorted(_MODES)}"
                 ) from None
         self._s.mode = value

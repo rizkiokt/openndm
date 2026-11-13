@@ -233,11 +233,11 @@ def test_an_unrotated_core_is_all_zeros():
 
 
 def test_the_rotation_map_is_validated():
-    with pytest.raises(ValueError, match="0, 1, 2 or 3"):
+    with pytest.raises(openndm.InputError, match="0, 1, 2 or 3"):
         openndm.Geometry.from_lattice(
             core_map(), pitch=20.0, rotation=np.full((1, 3, 4), 4)
         )
-    with pytest.raises(ValueError, match="must have shape"):
+    with pytest.raises(openndm.InputError, match="must have shape"):
         openndm.Geometry.from_lattice(
             core_map(), pitch=20.0, rotation=np.zeros((1, 2, 2), dtype=int)
         )
