@@ -317,6 +317,32 @@ geom.expand(values, fill=np.nan)               # scatter onto (nz, ny, nx)
 geom.set_composition(node, composition)        # in place
 ```
 
+### Position labels
+
+Every radial position carries a label, a letter-number grid by default with
+`A1` at the low-x, low-y corner. Labels name a whole axial column, which is
+what a loading pattern moves:
+
+```python
+geom.labels                                    # (ny, nx) of str
+geom.position("H8")                            # flat radial index
+geom = openndm.Geometry.from_lattice(core, pitch=20.0, labels=my_grid)
+openndm.default_labels(ny, nx)                 # the grid to start from
+```
+
+The four loading-pattern methods on `Model` take a label or a flat radial
+index, and move the whole column either way:
+
+```python
+model.swap_assemblies("H8", "G9")
+model.set_composition("H8", MOX)               # whole column
+model.set_rotation("H8", 2)                    # absolute, 0 to 3
+model.rotate_assembly("H8")                    # one more quarter turn
+```
+
+Call `model.refresh()` afterwards. A position that is inactive on any plane is
+refused, and nothing is changed when it is.
+
 ---
 
 ## Settings
@@ -444,7 +470,8 @@ results = model.sweep(mutate, [(0, 6), (2, 50)], warm_start=True)
 ```
 
 `sweep` mutates the model in place, so cases compound. Call `model.refresh()`
-after mutating the geometry or library outside a sweep.
+after mutating the geometry or library outside a sweep. Cases can be labels
+as well: see [Position labels](#position-labels).
 
 **Re-finalize the library after writing a composition.** `removal` is derived
 from absorption and the scattering matrix when you call `finalize()`, and the
