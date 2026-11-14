@@ -130,13 +130,14 @@ public:
 
   //! Solve one one-node boundary problem.
   //!
+  //! Does nothing unless the kernel overrides it, which is what
+  //! \c has_boundary_problem() reports.
+  //!
   //! \param[out] current net current at the boundary face, per group,
   //!             positive along the axis rather than outward.
-  virtual void solve_boundary(const OneNodeProblem& /*p*/,
-      const XSLibrary& /*xs*/, const std::vector<int>& /*composition*/,
-      int /*n_groups*/, int /*sweeps*/, double* /*current*/) const
-  {
-  }
+  virtual void solve_boundary(const OneNodeProblem& p, const XSLibrary& xs,
+      const std::vector<int>& composition, int n_groups, int sweeps,
+      double* current) const;
 
   //! Construct the kernel \c type names (FR-SOL-8).
   static std::unique_ptr<Kernel> create(KernelType type);
