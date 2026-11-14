@@ -1147,35 +1147,113 @@ class Model:
         self._require_finalized()
         self._solver.refresh()
 
-    def swap_assemblies(self, a: int, b: int) -> None:
+    def swap_assemblies(self, a: int | str, b: int | str) -> None:
         """Exchange the compositions of two radial positions (FR-OPT-7).
 
         Parameters
         ----------
-        a, b : int
-            Flat radial indices into the ``(ny, nx)`` lattice; the whole axial
-            column moves with the assembly.
+        a, b : int or str
+            Flat radial indices into the ``(ny, nx)`` lattice, or position
+            labels from :attr:`Geometry.labels`; the whole axial column moves
+            with the assembly.
 
         Raises
         ------
         InputError
-            If either position is inactive on any plane. The planes swapped
-            before it was reached keep their new compositions.
+            On an unknown label, or if either position is inactive on any
+            plane. Nothing is swapped unless both columns are whole.
         """
-        nz, ny, nx = self.geometry.shape
-        mapping = self.geometry.lattice_to_node.reshape(nz, ny, nx)
-        ja, ia = divmod(int(a), nx)
-        jb, ib = divmod(int(b), nx)
-        for k in range(nz):
-            na, nb = mapping[k, ja, ia], mapping[k, jb, ib]
-            if na < 0 or nb < 0:
-                raise InputError(
-                    "cannot swap a position that is inactive on some plane"
-                )
-            ca = self.geometry.compositions[na]
-            cb = self.geometry.compositions[nb]
-            self.geometry.set_composition(na, int(cb))
-            self.geometry.set_composition(nb, int(ca))
+        column_a = self._assembly_nodes(a)
+        column_b = self._assembly_nodes(b)
+        compositions = self.geometry.compositions
+        for node_a, node_b in zip(column_a, column_b, strict=True):
+            self.geometry.set_composition(node_a, int(compositions[node_b]))
+            self.geometry.set_composition(node_b, int(compositions[node_a]))
+
+    def set_composition(self, position: int | str, composition: int) -> None:
+        """Reassign one radial position's composition (FR-OPT-7).
+
+        Parameters
+        ----------
+        position : int or str
+            Flat radial index into the ``(ny, nx)`` lattice, or a position
+            label from :attr:`Geometry.labels`. The whole axial column takes
+            the new composition.
+        composition : int
+            Composition index into the library.
+
+        Raises
+        ------
+        InputError
+            On an unknown label, or if the position is inactive on any plane.
+        """
+        for node in self._assembly_nodes(position):
+            self.geometry.set_composition(node, int(composition))
+
+    def set_rotation(self, position: int | str, quarter_turns: int) -> None:
+        """Turn one radial position's assembly to an orientation (FR-OPT-7).
+
+        Parameters
+        ----------
+        position : int or str
+            Flat radial index into the ``(ny, nx)`` lattice, or a position
+            label from :attr:`Geometry.labels`. The whole axial column turns.
+        quarter_turns : int
+            0 to 3, counter-clockwise about +z, absolute and not cumulative.
+            Only the discontinuity factors turn with it.
+
+        Raises
+        ------
+        InputError
+            On an unknown label, a turn count outside 0 to 3, or if the
+            position is inactive on any plane.
+        """
+        for node in self._assembly_nodes(position):
+            self.geometry.set_rotation(node, int(quarter_turns))
+
+    def rotate_assembly(self, position: int | str, quarter_turns: int = 1) -> None:
+        """Turn one radial position's assembly further round (FR-OPT-7).
+
+        Parameters
+        ----------
+        position : int or str
+            Flat radial index into the ``(ny, nx)`` lattice, or a position
+            label from :attr:`Geometry.labels`. The whole axial column turns.
+        quarter_turns : int, optional
+            Quarter turns counter-clockwise about +z to add to the
+            orientation the position already has, taken modulo four, so a
+            negative count turns it clockwise.
+
+        Raises
+        ------
+        InputError
+            On an unknown label, or if the position is inactive on any plane.
+        """
+        rotations = self.geometry.rotations
+        for node in self._assembly_nodes(position):
+            turned = (int(rotations[node]) + int(quarter_turns)) % 4
+            self.geometry.set_rotation(node, turned)
+
+    def _assembly_nodes(self, position: int | str) -> list[int]:
+        """Node indices of one radial position, bottom plane first.
+
+        Raises
+        ------
+        InputError
+            If the position is inactive on any plane. A loading pattern moves
+            a whole assembly, so a partial column is an input error rather
+            than something to apply to the planes that do exist.
+        """
+        shape = self.geometry.shape
+        row, column = divmod(self.geometry.position(position), shape[2])
+        mapping = self.geometry.lattice_to_node.reshape(shape)
+        nodes = [int(mapping[plane, row, column]) for plane in range(shape[0])]
+        if any(node < 0 for node in nodes):
+            label = str(self.geometry.labels[row, column])
+            raise InputError(
+                f"radial position {label!r} is inactive on some plane"
+            )
+        return nodes
 
     def _require_finalized(self) -> None:
         """Refuse to solve a library that has been mutated since finalizing.

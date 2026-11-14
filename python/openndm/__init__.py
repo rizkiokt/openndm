@@ -33,7 +33,7 @@ from .exceptions import (
     OpenNDMError,
 )
 from .feedback import DopplerFeedback
-from .geometry import INACTIVE, Geometry
+from .geometry import INACTIVE, Geometry, default_labels
 from .model import (
     BoronSearchResult,
     CoupledResult,
@@ -114,6 +114,7 @@ __all__ = [
     "XSLibrary",
     "__version__",
     "absolute_power",
+    "default_labels",
     "neacrp_clad_conductivity",
     "neacrp_clad_heat_capacity",
     "neacrp_fuel_conductivity",

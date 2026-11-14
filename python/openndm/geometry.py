@@ -9,7 +9,7 @@ import numpy as np
 from . import _core
 from .exceptions import InputError
 
-__all__ = ["INACTIVE", "Geometry"]
+__all__ = ["INACTIVE", "Geometry", "default_labels"]
 
 INACTIVE = -1
 """Marker for a lattice position that lies outside the core (FR-GEO-2)."""
@@ -23,6 +23,57 @@ _BC = {
 _FACES = ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max")
 _AXIS_NAMES = ("x", "y", "axial")
 _AXIS_SLICES = ("column", "row", "plane")
+_ROW_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def default_labels(n_rows: int, n_columns: int) -> np.ndarray:
+    """Build the usual letter-number grid of position labels.
+
+    Parameters
+    ----------
+    n_rows, n_columns : int
+        Radial extent of the lattice, ``shape[1]`` and ``shape[2]`` of a
+        :class:`Geometry`.
+
+    Returns
+    -------
+    ndarray of str, shape (n_rows, n_columns)
+        A new array. ``'A1'`` sits at row 0, column 0: rows carry letters
+        from the low-y edge, columns numbers from one at the low-x edge.
+        Rows past ``'Z'`` take two letters, ``'AA'`` onwards.
+    """
+    return np.array(
+        [
+            [f"{_row_letters(row)}{column + 1}" for column in range(n_columns)]
+            for row in range(n_rows)
+        ],
+        dtype=str,
+    )
+
+
+def _row_letters(row: int) -> str:
+    letters = ""
+    ordinal = row + 1
+    while ordinal > 0:
+        ordinal, remainder = divmod(ordinal - 1, len(_ROW_LETTERS))
+        letters = _ROW_LETTERS[remainder] + letters
+    return letters
+
+
+def _validate_labels(labels, n_rows, n_columns) -> np.ndarray:
+    grid = np.char.strip(np.asarray(labels, dtype=str))
+    if grid.shape != (n_rows, n_columns):
+        raise InputError(
+            f"labels must have shape {(n_rows, n_columns)} to match the "
+            f"radial lattice, got {grid.shape}"
+        )
+    if np.any(grid == ""):
+        raise InputError("a position label cannot be blank")
+    distinct, counts = np.unique(grid, return_counts=True)
+    if distinct.size != grid.size:
+        repeated = sorted(str(v) for v in distinct[counts > 1])
+        raise InputError(f"position labels must be unique; {repeated} repeat")
+    return grid
 
 
 def _boundary(value):
@@ -53,6 +104,9 @@ class Geometry:
     dx, dy, dz : array_like of float, optional
         Node widths in cm along each axis, one per lattice slice after
         subdivision. Recovered from the graph on first access when omitted.
+    labels : array_like of str, shape (ny, nx), optional
+        Position label per radial lattice position. Built from
+        :func:`default_labels` on first access when omitted.
 
     See Also
     --------
@@ -60,13 +114,19 @@ class Geometry:
     """
 
     def __init__(self, core: _core.Geometry, *, shape=None, dx=None, dy=None,
-                 dz=None):
+                 dz=None, labels=None):
         self._g = core
         self._shape = shape or core.lattice_shape
         self._widths = [
             None if w is None else np.asarray(w, dtype=float)
             for w in (dx, dy, dz)
         ]
+        self._labels = None
+        self._positions = None
+        if labels is not None:
+            self._labels = _validate_labels(
+                labels, self._shape[1], self._shape[2]
+            )
 
     @classmethod
     def from_lattice(
@@ -83,6 +143,7 @@ class Geometry:
         outside_albedo: Sequence[float] | None = None,
         subdivide: int | Sequence[int] = 1,
         rotation: np.ndarray | None = None,
+        labels: Sequence[Sequence[str]] | np.ndarray | None = None,
     ) -> Geometry:
         r"""Build a Cartesian geometry from a ``(nz, ny, nx)`` composition map.
 
@@ -130,6 +191,12 @@ class Geometry:
             because one assembly type is loaded at many positions in
             different orientations. This follows KOMODO's ``%ADF`` ``ROT``
             convention, so a deck translates without re-deriving anything.
+        labels : array_like of str, shape (ny, nx), optional
+            Position label per radial position, defaulting to
+            :func:`default_labels`. One per radial position of the lattice
+            *after* subdivision, because that is what an index addresses.
+            Labels name a whole axial column, which is what a loading
+            pattern moves.
 
         Returns
         -------
@@ -141,8 +208,9 @@ class Geometry:
         InputError
             On a composition map that is neither 2D nor 3D, a ``subdivide``
             below 1, a width array that does not cover its axis, a rotation
-            map whose shape or turn count is wrong, or an unknown boundary
-            face or condition.
+            map whose shape or turn count is wrong, a label grid that does
+            not cover the radial lattice or repeats a label, or an unknown
+            boundary face or condition.
 
         Examples
         --------
@@ -231,6 +299,7 @@ class Geometry:
             dx=widths[0],
             dy=widths[1],
             dz=widths[2],
+            labels=labels,
         )
 
     @classmethod
@@ -260,7 +329,8 @@ class Geometry:
             three-dimensional one, whose z pitch already sets them.
         **options
             Passed to :meth:`from_lattice`: ``boundaries``, ``albedo``,
-            ``outside``, ``outside_albedo``, ``subdivide`` and ``rotation``.
+            ``outside``, ``outside_albedo``, ``subdivide``, ``rotation``
+            and ``labels``.
 
         Returns
         -------
@@ -382,6 +452,67 @@ class Geometry:
         ``subdivide`` is used: the widths here are the post-subdivision ones.
         """
         return self._width(2)
+
+    @property
+    def labels(self) -> np.ndarray:
+        """Position label per radial lattice position, shape ``(ny, nx)``.
+
+        A copy. Defaults to :func:`default_labels` over the radial lattice,
+        which is the one ``subdivide`` produced.
+        """
+        return self._label_grid().copy()
+
+    def position(self, where: int | str) -> int:
+        """Resolve a radial position to its flat index.
+
+        Parameters
+        ----------
+        where : int or str
+            Flat index into the ``(ny, nx)`` radial lattice, or a label from
+            :attr:`labels`. Labels are matched exactly, ignoring only
+            surrounding whitespace.
+
+        Returns
+        -------
+        int
+            Flat radial index, ``row * shape[2] + column``.
+
+        Raises
+        ------
+        InputError
+            On an unknown label, or an index outside the radial lattice.
+        """
+        if isinstance(where, str):
+            try:
+                return self._label_positions()[where.strip()]
+            except KeyError:
+                grid = self._label_grid()
+                raise InputError(
+                    f"unknown position label {where!r}; the "
+                    f"{grid.shape[0]}x{grid.shape[1]} grid runs "
+                    f"{str(grid[0, 0])!r} to {str(grid[-1, -1])!r}"
+                ) from None
+        index = int(where)
+        n_positions = self.shape[1] * self.shape[2]
+        if not 0 <= index < n_positions:
+            raise InputError(
+                f"radial position {index} is outside the "
+                f"{self.shape[1]}x{self.shape[2]} lattice"
+            )
+        return index
+
+    def _label_grid(self) -> np.ndarray:
+        if self._labels is None:
+            self._labels = default_labels(self.shape[1], self.shape[2])
+        return self._labels
+
+    def _label_positions(self) -> dict[str, int]:
+        if self._positions is None:
+            self._positions = {
+                str(label): index
+                for index, label in enumerate(self._label_grid().ravel())
+            }
+        return self._positions
 
     @property
     def lattice_to_node(self) -> np.ndarray:

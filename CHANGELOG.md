@@ -8,6 +8,14 @@ All notable changes to OpenNDM are recorded here. The format follows
 
 ### Added
 
+- **Loading pattern mutation by position label** (FR-OPT-7, #158).
+  `Geometry.labels` is a letter-number grid, `A1` at the low-x, low-y corner,
+  and `from_lattice(labels=...)` overrides it; `Geometry.position` resolves a
+  label or an index. `Model.swap_assemblies`, `set_composition`,
+  `set_rotation` and the new `rotate_assembly` take either, and move the whole
+  axial column. A position inactive on any plane is refused with nothing
+  changed, where `swap_assemblies` used to leave the planes it had already
+  swapped.
 - **`PinConduction.step`, transient pin conduction** (FR-MODE-7). Backward
   Euler with heat stored in each pellet ring and the cladding, given
   `fuel_density`, `clad_density`, `fuel_heat_capacity` and
