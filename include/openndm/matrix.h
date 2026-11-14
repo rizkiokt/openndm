@@ -90,6 +90,9 @@ public:
   double diagonal(int row) const;
 
 private:
+  //! Position in values() of entry (row, col).
+  //!
+  //! \throws InputError if the entry is not in the pattern.
   int find(int row, int col) const;
 
   const SparsePattern* pattern_ = nullptr;

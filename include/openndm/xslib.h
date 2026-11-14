@@ -30,9 +30,9 @@ struct Composition {
   //! Optional 1-sigma uncertainties, parallel to the arrays above and empty
   //! when the source data carried none (FR-XS-9, FR-OMC-6).
   std::vector<double> D_std;
-  std::vector<double> absorption_std;
-  std::vector<double> nu_fission_std;
-  std::vector<double> scatter_std;
+  std::vector<double> absorption_std;  //!< \f$\sigma_{\Sigma_a}\f$ [1/cm]
+  std::vector<double> nu_fission_std;  //!< \f$\sigma_{\nu\Sigma_f}\f$ [1/cm]
+  std::vector<double> scatter_std;     //!< \f$\sigma_{\Sigma_s}\f$, size G*G
 
   //! True when the arrays above carry 1-sigma uncertainties.
   bool has_uncertainty() const { return !absorption_std.empty(); }
