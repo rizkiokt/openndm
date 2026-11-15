@@ -173,7 +173,7 @@ like it.
 | NFR-QA-4 | done | clang-format and ruff, both enforced. |
 | NFR-QA-5 | done | Semantic versioning and a changelog. |
 | NFR-QA-6 | done | A user guide, a theory manual, architecture notes, this status map, and four worked notebooks in `examples/`, all executed with their outputs committed. Built as a Sphinx site with an autodoc API reference; CI builds it with warnings as errors against the installed extension, so an API page that renders empty fails the build. |
-| NFR-QA-7 | partial | [`theory.md`](theory.md) writes out the neutronics, kinetics and water property equations with their discretisation. The channel energy balance, two-phase closure, pin conduction, Picard coupling, rod cusping and ADF rotation are documented in the user guide and the docstrings but not yet in the theory manual. |
+| NFR-QA-7 | partial | [`theory.md`](theory.md) writes out the neutronics, kinetics, water property, channel energy balance, two-phase closure and pin conduction equations with their discretisation. The Picard coupling, rod cusping and ADF rotation are documented in the user guide and the docstrings but not yet in the theory manual. |
 | V-1 | done | Analytic bare cuboid, and a reflected slab against its transcendental criticality condition. |
 | V-2 | done | Method of manufactured solutions for the multi-group operator, with the observed order of accuracy of each kernel. |
 | V-3 | done | Coarse nodal against refined finite difference; SANM and NEM agree to the last digit printed from four nodes per assembly onward. |

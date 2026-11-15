@@ -810,10 +810,157 @@ being liquid and that depends on pressure.
 
 ---
 
+## 12a. Channel energy balance
+
+`ChannelModel` is one closed channel per radial lattice position carrying
+nodes (FR-TH-1). The mass flow $\dot m$ is fixed and the pressure $p$ is
+constant, there being no momentum equation, so the only conservation law left
+is energy. Channels run bottom to top. Enthalpies are J/kg, powers W, flows
+kg/s, pressures Pa and temperatures K; node heights come from the mesh in cm
+and enter as metres.
+
+With $q_k$ the power raised in the $k$-th node of a channel, steady energy
+conservation at constant flow puts the enthalpy leaving it at
+
+$$ h_\text{out} = h_\text{in} + \frac{1}{\dot m}\sum_k q_k, \qquad
+   h_\text{in} = h(p, T_\text{in}) $$
+
+and the node-average enthalpy at the mid-height value
+
+$$ h_k = h_\text{in} + \frac{1}{\dot m}
+   \left(\sum_{j<k} q_j + \tfrac{1}{2}q_k\right) $$
+
+The integral up the channel is a cumulative sum, and the enthalpy is linear in
+the power raised below, so the half-node term is a node's exact average rather
+than a midpoint approximation to it. A plane a column does not reach raises no
+power and contributes nothing.
+
+In steady state every watt reaches the coolant whatever route it takes, so the
+directly deposited fraction $f$ does not enter the enthalpy rise. It divides
+the power between coolant and pin, and so sets the linear heat rate the
+conduction model consumes,
+
+$$ q'_k = (1 - f)\,\frac{q_k}{N_p\,\Delta z_k} $$
+
+with $N_p$ the heated pins in the channel and $\Delta z_k$ the node height.
+The mass flux the model reports is $G = \dot m / A_f$, the free flow area $A_f$
+being the lattice cells the rods occupy less the rods themselves, pins and
+guide tubes counted separately. No heat transfer or friction correlation is
+evaluated: the film coefficient is injected, as §12c describes.
+
+### 12a.1 Enthalpy inversion
+
+Temperature and density are not advanced themselves. They follow from the
+enthalpy,
+
+$$ T_k = T(p, h_k), \qquad \rho_k = \rho(p, T_k) $$
+
+so the model is exact to the properties it is given. $T(p, h)$ is the Newton
+inversion of §12.
+
+---
+
+## 12b. Two-phase closure
+
+With `two_phase` the enthalpy integration above is unchanged and only its
+inversion differs (FR-TH-5). Writing $h_f$ and $h_g$ for the saturated liquid
+and vapour enthalpies at $p$, a node with $h_k \le h_f$ takes the single-phase
+path of §12a.1 untouched, so a channel that never reaches saturation gives
+bit-identical answers either way. Above $h_f$ the temperature stops at the
+boiling point and the surplus becomes quality,
+
+$$ T_k = T_\text{sat}(p), \qquad x_k = \frac{h_k - h_f}{h_g - h_f} $$
+
+which is the equilibrium quality: there is no subcooled boiling model, so $x$
+is zero at and below $h_f$. Void follows from quality at a slip ratio $S$,
+
+$$ \alpha_k = \left[1 + \frac{1 - x_k}{x_k}\,
+   \frac{\rho_g}{\rho_f}\,S\right]^{-1} $$
+
+and the mixture density is the void-weighted mean of the two saturated
+densities,
+
+$$ \rho_k = \alpha_k \rho_g + (1 - \alpha_k)\,\rho_f $$
+
+At $S = 1$ these two are the homogeneous equilibrium model, and together they
+are exactly the inverse of the mass-weighted specific volume,
+$\rho_k^{-1} = x_k v_g + (1 - x_k) v_f$. Any other $S$ is a correlation the
+caller is choosing rather than a model this code owns.
+
+A node reaching $h_k > h_g$ is refused rather than extrapolated. Superheated
+steam is not modelled, so a channel that boils dry is an input error.
+
+---
+
+## 12c. Steady pin conduction
+
+`PinConduction.solve` is one-dimensional radial conduction from the pellet
+centreline out to the bulk coolant, across four resistances in series
+(FR-TH-2): the pellet, the pellet-to-cladding gap, the cladding and the film.
+Only the pellet generates heat, so the outer three each carry the whole linear
+heat rate $q'$ and are single resistances with no internal mesh. With $R$ the
+pellet radius, $r_{ci}$ and $r_{co}$ the cladding radii, $h_\text{gap}$ the
+gap conductance, $h_\text{film}$ the film coefficient and $T_b$ the bulk
+coolant temperature, the march runs inwards from the coolant:
+
+$$ T_{co} = T_b + \frac{q'}{2\pi r_{co} h_\text{film}}, \qquad
+   T_{ci} = T_{co} + \frac{q' \ln(r_{co}/r_{ci})}{2\pi k_c(T_{co})}, \qquad
+   T_N = T_{ci} + \frac{q'}{2\pi R\,h_\text{gap}} $$
+
+$T_N$ is the pellet surface. The gap conductance is referred to the pellet
+outer surface and the film coefficient to the cladding outer surface, which is
+what the two areas say.
+
+The pellet is split into $N$ rings of equal thickness,
+$r_0 = 0 < r_1 < \dots < r_N = R$, and carries a uniform volumetric source
+$q''' = q' / (\pi R^2)$. Conduction across one ring integrates exactly,
+
+$$ T_i = T_{i+1} + \frac{q'''\,(r_{i+1}^2 - r_i^2)}{4\,k_f(T_{i+1})} $$
+
+which is the ring relation of §13 in its steady limit: nothing is stored, and
+with a ring source of $q'''$ the logarithmic term of that relation vanishes.
+At constant conductivity it reproduces the analytic parabola
+$T(r) = T_N + q'''(R^2 - r^2)/4k_f$ at every ring boundary for any ring count.
+
+Each resistance is evaluated at the temperature already known on its outer
+side, so the steady march is explicit and needs no iteration. The price is
+that a conductivity given as a function of temperature is evaluated at ring
+boundaries rather than ring averages, and converges with the ring count
+instead of being exact.
+
+The volume-average pellet temperature integrates on $r^2$, the pellet volume
+element being proportional to $\mathrm{d}(r^2)$:
+
+$$ \bar T = \frac{1}{R^2}\sum_{i=0}^{N-1}
+   \frac{T_i + T_{i+1}}{2}\left(r_{i+1}^2 - r_i^2\right) $$
+
+That choice of variable makes the sum exact for a profile linear in $r^2$,
+which is what constant conductivity gives.
+
+The steady pin and the steady coolant are not iterated against each other. The
+enthalpy rise of §12a does not depend on the pin temperatures, so one pass up
+the channel fixes $T_b$ and one conduction march follows it. The transient
+does iterate, because there the coolant receives the heat leaving the cladding
+rather than the fission power (§13).
+
+### 12c.1 The Doppler temperature
+
+Cross sections are interpolated on one effective fuel temperature (FR-TH-4), a
+weighted mean of the pellet surface and centreline:
+
+$$ T_D = w\,T_N + (1 - w)\,T_0 $$
+
+The default $w = 0.7$ is the usual 0.7 surface, 0.3 centre convention, which
+weights the surface above the volume average because resonance absorption is
+concentrated near the pellet rim. $w = 1/2$ is the volume average exactly for
+a parabolic profile: both are $T_N + q'''R^2 / 8k_f$.
+
+---
+
 ## 13. Transient pin conduction
 
 `PinConduction.step` advances the radial heat equation by one backward Euler
-step. The pellet keeps the ring mesh of the steady model, with radii
+step. The pellet keeps the ring mesh of the steady model of §12c, with radii
 $r_0 = 0 < r_1 < \dots < r_N = R$, and each ring stores heat at its mean
 boundary temperature $\bar T_i = (T_i + T_{i+1})/2$. Over a step $\Delta t$
 the effective source in ring $i$ is uniform:
@@ -847,7 +994,7 @@ exactly.
 
 `ChannelModel.advance` heats the coolant with $Q_c$ per unit pin length, plus
 the directly deposited fraction of the fission power, and integrates the
-enthalpy up the channel as in steady state. The coolant itself stores no
+enthalpy up the channel as in steady state (§12a). The coolant itself stores no
 heat, so its transit time is neglected. The film couples the pin and the
 coolant, and the two are iterated until the coolant temperature changes by
 less than $10^{-9}$ K.
