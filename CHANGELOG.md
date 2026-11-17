@@ -27,6 +27,14 @@ All notable changes to OpenNDM are recorded here. The format follows
   null transient from `solve_coupled` holds its power to 1e-10. Also
   `Transient.fission_power`, the node power of the current flux.
 
+- **NFR-PERF-3 measured for the first time** (#154). `benchmarks/performance`
+  now couples the NFR-PERF-1 problem to one channel per assembly: **0.42 s
+  against < 5 s** in four Picard iterations, single-threaded and warm started,
+  on an Intel Xeon at 2.10 GHz. The IAEA data carries no temperature
+  dependence, so the deck branches it on a 5% absorption swing of its own; the
+  time is the case the requirement names and the eigenvalue is not an IAEA
+  number. NFR-PERF-4 is still blocked on adaptive time stepping.
+
 ### Fixed
 
 - **`Result.power` is a power density, normalised to a volume-weighted mean of

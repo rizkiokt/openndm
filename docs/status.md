@@ -162,7 +162,7 @@ like it.
 |---|---|---|
 | NFR-PERF-1 | done | 181 ms against < 1 s, single-threaded. |
 | NFR-PERF-2 | done | 1.9 s against < 10 s, single-threaded, on a synthetic eight-group library. |
-| NFR-PERF-3 | not started | `Model.solve_coupled` now exists, so the case is runnable, but it has not been measured. |
+| NFR-PERF-3 | done | 0.42 s against < 5 s in four Picard iterations, single-threaded and warm started, so each iteration resumes from the flux of the one before. The IAEA data is a single state point and carries no temperature dependence, so `benchmarks/performance` branches it on a 5% absorption swing of its own over 940 K of fuel temperature, and couples it to one closed channel per assembly at 90 kg/s, a gigawatt over the quarter core. Those numbers size the problem; the eigenvalue the loop lands on is not an IAEA number. |
 | NFR-PERF-4 | not started | Names adaptive time stepping, which is not implemented. A fixed-step rod ejection can be timed but is not the stated case. |
 | NFR-PERF-5 | done | 70 MB peak resident against < 500 MB, interpreter included. |
 | NFR-PERF-6 | done | 104 ms against < 0.3 s. Passes on the clock; warm started since #82, see FR-OPT-3. |
