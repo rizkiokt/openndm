@@ -94,6 +94,23 @@ def test_performance_deck_library_matches_the_test_suite_copy():
             )
 
 
+def test_performance_deck_doppler_library_actually_depends_on_temperature():
+    """A flat branch grid would converge NFR-PERF-3 in one iteration.
+
+    The timing is only worth reading if the Picard loop has something to
+    converge, and a library whose two states are identical gives it nothing
+    while still passing the target with room to spare.
+    """
+    deck = _deck("performance")
+    library = deck.doppler_library(len(IAEA_ORDER))
+    assert [axis.name for axis in library.axes] == ["fuel_temperature"]
+    assert library.axes[0].points == list(deck.FUEL_TEMPERATURES)
+    for index in range(len(IAEA_ORDER)):
+        cold = np.asarray(library.composition(index, 0).absorption)
+        hot = np.asarray(library.composition(index, 1).absorption)
+        np.testing.assert_allclose(hot, cold * (1.0 + deck.DOPPLER_SWING))
+
+
 def test_performance_deck_reports_every_target():
     """Each NFR-PERF case must have a stated target, so none is quietly dropped."""
     targets = _deck("performance").TARGETS

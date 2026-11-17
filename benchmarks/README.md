@@ -306,10 +306,14 @@ the governor, the build type and the compiler in its output. On an AMD Ryzen
 | NFR-PERF-6 | < 0.3 s | 104 ms | pass |
 | FR-OPT-3 | >= 2x from warm start | 0.99x | **fail** |
 | NFR-PERF-7 | >= 60% on 8 threads | 31.8% | **fail** |
-| NFR-PERF-3 | < 5 s | no coupled steady state exists | blocked |
 | NFR-PERF-4 | < 5 min | no adaptive time stepping exists | blocked |
 
 The four that pass do so with margin, the smallest being a factor of five.
+
+NFR-PERF-3 was added after that run and has only been measured elsewhere, on an
+Intel Xeon at 2.10 GHz (4 cores, governor unreported, Release, OpenMP, g++),
+where it takes **0.42 s against < 5 s** in four Picard iterations. The same box
+gives 162 ms for NFR-PERF-1, so the two sets of numbers are not interchangeable.
 
 ### The two that fail
 
@@ -351,6 +355,26 @@ outer, so that the solve costs what an eight-group solve costs.
 It has earned its keep twice over as a correctness deck regardless: it was the
 first deck in this repository with more than two groups, and it found the two
 boundary-Dhat convergence defects fixed in #79 and #80.
+
+### The Doppler feedback of NFR-PERF-3 is synthetic too
+
+NFR-PERF-3 asks for a coupled steady state on the NFR-PERF-1 problem, and the
+IAEA data is a single state point with no temperature dependence to branch on.
+A library like that converges the Picard loop in one iteration, which times
+nothing. So the deck gives it a fuel temperature axis of its own, absorption
+rising 5% between 560 K and 1500 K, which is worth a few thousand pcm on this
+core — the order a PWR carries. Each assembly column becomes one closed channel
+at 90 kg/s, and a gigawatt over the map's 58 fuel positions is about 17 MW
+each: about 35 K of rise on an average channel. **The
+eigenvalue the loop lands on is not an IAEA number.** What the case is for is a
+Picard loop of full solves, channel-and-conduction solves and cross section
+interpolations, so that it costs what a coupled steady state costs.
+
+Cross sections live per composition, so the feedback is resolved onto the four
+the core map carries rather than onto all 1800 nodes. That is a property of the
+IAEA map, not of the coupling, and it means the deck times the iteration count
+of a nearly uniform feedback. A core with per-assembly branch data would do the
+same number of solves against more interpolation work.
 
 ## Adding a deck
 

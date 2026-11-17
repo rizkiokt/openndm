@@ -228,6 +228,159 @@ def run_perf2():
     return result
 
 
+INLET_TEMPERATURE = 560.0
+"""Coolant temperature entering every channel of the NFR-PERF-3 case, K."""
+
+FUEL_TEMPERATURES = (INLET_TEMPERATURE, 1500.0)
+"""Fuel temperature branch points of the Doppler library, K."""
+
+DOPPLER_SWING = 0.05
+"""Fractional absorption rise across :data:`FUEL_TEMPERATURES`.
+
+The IAEA data is a single state point, so a coupled solve has nothing to
+branch on and the Picard loop converges in one iteration, which times
+nothing. Absorption rising 5% over 940 K is worth a few thousand pcm on this
+core, the order a PWR carries. The eigenvalue it lands on is not an IAEA
+number.
+"""
+
+TOTAL_POWER = 1.0e9
+"""Thermal power of the modelled quarter core at full power, W.
+
+A gigawatt over the 58 fuel positions of the map is about 17 MW each, which
+against :data:`CHANNEL_MASS_FLOW` is about 35 K of rise on an average
+channel: where a PWR sits. The specification fixes neither number, so the
+pair sizes the thermal-hydraulic half of the problem rather than describing a
+reactor.
+"""
+
+CHANNEL_MASS_FLOW = 90.0
+"""Coolant mass flow per assembly channel, kg/s."""
+
+ASSEMBLY_PINS = openndm.PinGeometry(
+    fuel_radius=4.11950e-3,
+    gap_thickness=6.8e-5,
+    clad_thickness=5.71e-4,
+    pin_pitch=1.2655e-2,
+    n_pins=264,
+    n_guide_tubes=25,
+)
+"""One channel's worth of a 17x17 PWR fuel assembly, m."""
+
+FUEL_CONDUCTIVITY = 3.0
+"""Pellet thermal conductivity, W/(m K)."""
+
+CLAD_CONDUCTIVITY = 15.0
+"""Cladding thermal conductivity, W/(m K)."""
+
+GAP_CONDUCTANCE = 1.0e4
+"""Pellet-to-cladding conductance, W/(m^2 K)."""
+
+FILM_COEFFICIENT = 3.0e4
+"""Cladding-to-coolant coefficient, W/(m^2 K)."""
+
+
+def doppler_library(n_compositions: int) -> openndm.XSLibrary:
+    """The IAEA two-group data on one fuel temperature axis.
+
+    Every composition carries the same :data:`DOPPLER_SWING`, so the shape of
+    the feedback comes from the temperature distribution rather than from the
+    data.
+    """
+    library = openndm.XSLibrary(n_groups=2, n_compositions=n_compositions)
+    library.set_axes([("fuel_temperature", list(FUEL_TEMPERATURES))])
+    for state, factor in enumerate((1.0, 1.0 + DOPPLER_SWING)):
+        for index, name in enumerate(IAEA_ORDER[:n_compositions]):
+            d1, d2, a1, a2, f2, s12 = IAEA_MATERIALS[name]
+            library.set_composition(
+                index,
+                state=state,
+                D=[d1, d2],
+                absorption=[a1 * factor, a2 * factor],
+                nu_fission=[0.0, f2],
+                kappa_fission=[0.0, f2],
+                chi=[1.0, 0.0],
+                scatter=[[0.0, s12], [0.0, 0.0]],
+            )
+    library.finalize(warn=False)
+    return library
+
+
+def assembly_channel(geometry) -> openndm.ChannelModel:
+    """One closed channel per assembly column, with radial pin conduction."""
+    conduction = openndm.PinConduction(
+        ASSEMBLY_PINS,
+        fuel_conductivity=FUEL_CONDUCTIVITY,
+        clad_conductivity=CLAD_CONDUCTIVITY,
+        gap_conductance=GAP_CONDUCTANCE,
+        film_coefficient=FILM_COEFFICIENT,
+    )
+    return openndm.ChannelModel(
+        geometry,
+        ASSEMBLY_PINS,
+        mass_flow=CHANNEL_MASS_FLOW,
+        inlet_temperature=INLET_TEMPERATURE,
+        conduction=conduction,
+    )
+
+
+def coupled_case(geometry):
+    """A model, its channel and the ``apply_state`` that joins the two.
+
+    Cross sections live per composition, so the feedback is resolved onto the
+    four the core map carries rather than onto every node. That is as far as
+    single-state IAEA data reaches.
+    """
+    branch = doppler_library(geometry.n_compositions)
+    model = openndm.Model(
+        geometry,
+        branch.interpolate(fuel_temperature=INLET_TEMPERATURE),
+        openndm.Settings(verbosity=0, threads=1, warm_start=True),
+    )
+    mapping = openndm.CompositionMapping(geometry)
+
+    def apply_state(temperatures, densities):
+        fuel = mapping.average(temperatures["doppler_temperature"])
+        branch.interpolate_by_composition(
+            {"fuel_temperature": fuel}, out=model.library
+        )
+
+    return model, assembly_channel(geometry), apply_state
+
+
+def timed_coupled_solve(geometry, repeats=REPEATS):
+    """Median coupled solve time in seconds, and the last result.
+
+    Each repeat builds its own model, so every one starts from the cold
+    library rather than from the fixed point the one before it found.
+    """
+    times = []
+    coupled = None
+    for _ in range(repeats):
+        model, channel, apply_state = coupled_case(geometry)
+        start = time.perf_counter()
+        coupled = model.solve_coupled(channel, apply_state, total_power=TOTAL_POWER)
+        times.append(time.perf_counter() - start)
+    return float(np.median(times)), coupled
+
+
+def run_perf3():
+    geometry = core_geometry()
+    seconds, coupled = timed_coupled_solve(geometry)
+    line(
+        "NFR-PERF-3",
+        f"{seconds:.2f} s ({coupled.iterations} Picard)",
+        verdict(seconds < 5.0),
+    )
+    peak_fuel = float(np.max(coupled.temperatures["doppler_temperature"]))
+    peak_coolant = float(np.max(coupled.temperatures["moderator_temperature"]))
+    print(
+        f"    k_eff {coupled.k_eff:.6f}, peak Doppler temperature "
+        f"{peak_fuel:.0f} K, peak coolant {peak_coolant:.0f} K"
+    )
+    return coupled
+
+
 def shuffled_solve(warm_start: bool):
     """Time a re-solve after four assemblies have been swapped.
 
@@ -342,19 +495,24 @@ def main() -> int:
 
     run_perf1()
     run_perf2()
+    run_perf3()
     run_perf6()
 
-    line("NFR-PERF-3", "not runnable", "BLOCKED")
     line("NFR-PERF-4", "not runnable", "BLOCKED")
 
     if not args.quick:
         run_perf7(args.max_threads)
 
     print(
-        "\n  NFR-PERF-3 needs the coupled steady state (FR-TH, FR-MODE-7), which\n"
-        "  does not exist yet. NFR-PERF-4 names adaptive time stepping, which is\n"
-        "  not implemented; a fixed-step rod ejection can be timed but it is not\n"
-        "  the case the specification states.\n"
+        "\n  NFR-PERF-3 couples the NFR-PERF-1 problem to one channel per\n"
+        "  assembly, with Doppler feedback the IAEA data does not carry and this\n"
+        "  deck invents. The time is the case the requirement names; the\n"
+        "  eigenvalue is not an IAEA number. Warm started, so each Picard\n"
+        "  iteration resumes from the flux of the one before.\n"
+        "\n"
+        "  NFR-PERF-4 names adaptive time stepping, which is not implemented; a\n"
+        "  fixed-step rod ejection can be timed but it is not the case the\n"
+        "  specification states.\n"
         "\n"
         "  FR-OPT-3 falls short for a reason worth knowing. refresh() keeps the\n"
         "  flux, so the warm start begins an order of magnitude closer than a\n"
