@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import warnings
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from . import _core
 from .exceptions import InputError
@@ -53,7 +55,7 @@ def rotated_face(face: int, quarter_turns: int) -> int:
     return _core.rotated_face(int(face), int(quarter_turns))
 
 
-def rotate_adf(values, quarter_turns: int) -> np.ndarray:
+def rotate_adf(values: ArrayLike, quarter_turns: int) -> np.ndarray:
     """Permute a set of discontinuity factors onto a turned assembly.
 
     Parameters
@@ -124,7 +126,7 @@ class XSLibrary:
     2
     """
 
-    def __init__(self, n_groups: int, n_compositions: int):
+    def __init__(self, n_groups: int, n_compositions: int) -> None:
         self._lib = _core.XSLibrary(int(n_groups), int(n_compositions))
 
     @property
@@ -221,15 +223,15 @@ class XSLibrary:
         index: int,
         *,
         state: int = 0,
-        D=None,
-        transport=None,
-        absorption=None,
-        nu_fission=None,
-        kappa_fission=None,
-        chi=None,
-        scatter=None,
-        inv_velocity=None,
-        std=None,
+        D: ArrayLike | None = None,
+        transport: ArrayLike | None = None,
+        absorption: ArrayLike | None = None,
+        nu_fission: ArrayLike | None = None,
+        kappa_fission: ArrayLike | None = None,
+        chi: ArrayLike | None = None,
+        scatter: ArrayLike | None = None,
+        inv_velocity: ArrayLike | None = None,
+        std: Mapping[str, ArrayLike] | None = None,
     ) -> None:
         """Fill the group constants of one composition at one branch state.
 
@@ -304,7 +306,7 @@ class XSLibrary:
             arr = np.asarray(value, dtype=float).ravel()
             setattr(comp, field, list(arr))
 
-    def set_adf(self, index: int, values, n_axes: int = 3) -> None:
+    def set_adf(self, index: int, values: ArrayLike, n_axes: int = 3) -> None:
         """Set discontinuity factors for one composition (FR-XS-4).
 
         Parameters
@@ -328,7 +330,9 @@ class XSLibrary:
             )
         self._lib.set_adf(int(index), arr.ravel(order="C"), n_axes)
 
-    def rotated_adf(self, index: int, quarter_turns: int, n_axes: int = 3):
+    def rotated_adf(
+        self, index: int, quarter_turns: int, n_axes: int = 3
+    ) -> np.ndarray:
         """Discontinuity factors of one composition, turned counter-clockwise.
 
         Parameters
@@ -379,7 +383,12 @@ class XSLibrary:
             ]
         )
 
-    def set_delayed(self, beta, decay_constant, chi_delayed=None) -> None:
+    def set_delayed(
+        self,
+        beta: ArrayLike,
+        decay_constant: ArrayLike,
+        chi_delayed: ArrayLike | None = None,
+    ) -> None:
         """Set delayed neutron data (FR-XS-3).
 
         Parameters
@@ -433,7 +442,7 @@ class XSLibrary:
                 warnings.warn(message, stacklevel=2)
         return messages
 
-    def composition(self, index: int, state: int = 0):
+    def composition(self, index: int, state: int = 0) -> _core.Composition:
         """Snapshot of one composition's group constants, for inspection.
 
         Parameters
@@ -452,7 +461,7 @@ class XSLibrary:
         """
         return self._lib.composition(int(index), int(state))
 
-    def interpolate(self, **state) -> XSLibrary:
+    def interpolate(self, **state: float) -> XSLibrary:
         """Multilinear interpolation to a branch state point (FR-XS-6).
 
         Parameters
@@ -478,7 +487,12 @@ class XSLibrary:
         out._lib = self._lib.interpolate([float(state[n]) for n in names])
         return out
 
-    def interpolate_by_composition(self, state, *, out: XSLibrary | None = None):
+    def interpolate_by_composition(
+        self,
+        state: Mapping[str, ArrayLike],
+        *,
+        out: XSLibrary | None = None,
+    ) -> XSLibrary:
         """Collapse the branch grid with a different state per composition.
 
         :meth:`interpolate` puts every composition at one state point, which a
@@ -632,7 +646,7 @@ class XSLibrary:
             f"{self.n_compositions} compositions{branch}>"
         )
 
-    def to_hdf5(self, path) -> None:
+    def to_hdf5(self, path: os.PathLike | str) -> None:
         """Write the library to ``xslib.h5`` (FR-IN-3).
 
         Parameters
@@ -722,7 +736,7 @@ class XSLibrary:
                             sg.create_dataset(field, data=value)
 
     @classmethod
-    def from_hdf5(cls, path) -> XSLibrary:
+    def from_hdf5(cls, path: os.PathLike | str) -> XSLibrary:
         """Read a library written by :meth:`to_hdf5`.
 
         Parameters
