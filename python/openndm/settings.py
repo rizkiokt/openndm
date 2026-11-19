@@ -7,6 +7,8 @@ passes every other value straight through.
 
 from __future__ import annotations
 
+from typing import Any
+
 from . import _core
 from .exceptions import InputError
 
@@ -110,7 +112,7 @@ class Settings:
 
     __slots__ = ("_s",)
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         object.__setattr__(self, "_s", _core.Settings())
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -121,7 +123,7 @@ class Settings:
         return self._s.kernel.name
 
     @kernel.setter
-    def kernel(self, value) -> None:
+    def kernel(self, value: str | _core.KernelType) -> None:
         """Set the kernel from its name or a ``KernelType``.
 
         Parameters
@@ -149,7 +151,7 @@ class Settings:
         return self._s.mode.name
 
     @mode.setter
-    def mode(self, value) -> None:
+    def mode(self, value: str | _core.SolveMode) -> None:
         """Set the calculation mode from its name or a ``SolveMode``.
 
         Parameters
@@ -171,7 +173,7 @@ class Settings:
                 ) from None
         self._s.mode = value
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
             raise AttributeError(name)
         try:
@@ -179,7 +181,7 @@ class Settings:
         except AttributeError:
             raise AttributeError(f"Settings has no option {name!r}") from None
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: str, value: Any) -> None:
         if name in ("kernel", "mode"):
             object.__setattr__(self, name, value)
             return
