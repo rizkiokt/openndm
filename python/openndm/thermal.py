@@ -12,13 +12,15 @@ touches the filesystem.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .exceptions import ConvergenceError, InputError
+from .geometry import Geometry
 
 __all__ = [
     "AxialMapping",
@@ -364,7 +366,7 @@ class AxialMapping:
     [400.0, 400.0, 600.0, 600.0]
     """
 
-    def __init__(self, source_edges: Sequence[float], target_edges: Sequence[float]):
+    def __init__(self, source_edges: ArrayLike, target_edges: ArrayLike):
         source = np.asarray(source_edges, dtype=float)
         target = np.asarray(target_edges, dtype=float)
         for name, edges in (("source", source), ("target", target)):
@@ -399,7 +401,7 @@ class AxialMapping:
         """Number of target cells."""
         return self.target_edges.size - 1
 
-    def distribute(self, values) -> np.ndarray:
+    def distribute(self, values: ArrayLike) -> np.ndarray:
         """Map an extensive field onto the target mesh, keeping its total.
 
         Parameters
@@ -417,7 +419,7 @@ class AxialMapping:
         per_length = self._checked(values) / np.diff(self.source_edges)
         return per_length @ self.overlap.T
 
-    def average(self, values) -> np.ndarray:
+    def average(self, values: ArrayLike) -> np.ndarray:
         """Map an intensive field onto the target mesh, keeping its mean.
 
         Parameters
@@ -443,7 +445,7 @@ class AxialMapping:
         """
         return AxialMapping(self.target_edges, self.source_edges)
 
-    def _checked(self, values) -> np.ndarray:
+    def _checked(self, values: ArrayLike) -> np.ndarray:
         arr = np.asarray(values, dtype=float)
         if arr.ndim < 1 or arr.shape[-1] != self.n_source:
             raise InputError(
@@ -497,7 +499,7 @@ class CompositionMapping:
     [600.0, 900.0]
     """
 
-    def __init__(self, geometry, weights=None):
+    def __init__(self, geometry: Geometry, weights: ArrayLike | None = None):
         self._n_compositions = geometry.n_compositions
         self.compositions = np.asarray(geometry.compositions, dtype=int)
         if weights is None:
@@ -520,7 +522,7 @@ class CompositionMapping:
         """Weight per node, shape ``(n_nodes,)``. A copy."""
         return self._weights.copy()
 
-    def average(self, node_values) -> np.ndarray:
+    def average(self, node_values: ArrayLike) -> np.ndarray:
         """Weighted mean of a node field over each composition.
 
         Parameters
@@ -559,7 +561,7 @@ class CompositionMapping:
         out[usable] = weighted[usable] / self._totals[usable]
         return out
 
-    def expand(self, composition_values) -> np.ndarray:
+    def expand(self, composition_values: ArrayLike) -> np.ndarray:
         """Scatter a per-composition field back onto the nodes.
 
         Parameters
@@ -581,7 +583,7 @@ class CompositionMapping:
             )
         return values[self.compositions]
 
-    def _checked(self, weights) -> np.ndarray:
+    def _checked(self, weights: ArrayLike) -> np.ndarray:
         arr = np.asarray(weights, dtype=float)
         if arr.shape != self.compositions.shape:
             raise InputError(
