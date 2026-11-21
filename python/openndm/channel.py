@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .exceptions import ConvergenceError, InputError
 from .water import IF97Water, SaturationProperties
@@ -266,7 +267,7 @@ class ChannelModel:
         geometry: Geometry,
         pins: PinGeometry,
         *,
-        mass_flow,
+        mass_flow: ArrayLike,
         inlet_temperature: float,
         pressure: float = 15.5e6,
         direct_heating: float = 0.0,
@@ -492,7 +493,9 @@ class ChannelModel:
             self._void_fraction,
         ) = self._invert(self._enthalpy)
 
-    def _invert(self, enthalpy: np.ndarray):
+    def _invert(
+        self, enthalpy: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Temperature, density, quality and void fraction from enthalpy.
 
         Single phase is the whole story unless ``two_phase`` is set. When it
@@ -621,7 +624,7 @@ class ChannelModel:
         out[self._nodes[self._active]] = per_channel[self._active]
         return out
 
-    def _checked_mass_flow(self, mass_flow) -> np.ndarray:
+    def _checked_mass_flow(self, mass_flow: ArrayLike) -> np.ndarray:
         flow = np.asarray(mass_flow, dtype=float)
         if flow.ndim == 0:
             flow = np.full(self.n_channels, float(flow))
