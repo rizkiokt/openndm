@@ -29,7 +29,13 @@ from ..xslib import XSLibrary
 if TYPE_CHECKING:
     import openmc.mgxs
 
-__all__ = ["DEFAULT_SLAB_FRACTION", "AdfResult", "add_adf_tallies", "compute_adf"]
+__all__ = [
+    "ADF_SIGMA_WARNING",
+    "DEFAULT_SLAB_FRACTION",
+    "AdfResult",
+    "add_adf_tallies",
+    "compute_adf",
+]
 
 DEFAULT_SLAB_FRACTION = 0.05
 """Slab width as a fraction of the assembly pitch."""
