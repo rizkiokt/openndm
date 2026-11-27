@@ -11,9 +11,10 @@ from __future__ import annotations
 import itertools
 import json
 import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -36,7 +37,7 @@ class BranchPoint:
     """
 
     index: int
-    state: dict
+    state: dict[str, float]
 
     @property
     def key(self) -> str:
@@ -95,7 +96,7 @@ class BranchGrid:
     def __len__(self) -> int:
         return int(np.prod(self.shape))
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[BranchPoint]:
         for index in range(len(self)):
             yield self[index]
 
@@ -161,9 +162,9 @@ class BranchDriver:
     >>> library = driver.run(processes=4)            # doctest: +SKIP
     """
 
-    model_factory: Callable
+    model_factory: Callable[..., Any]
     grid: BranchGrid
-    library_factory: Callable
+    library_factory: Callable[..., XSLibrary]
     workdir: os.PathLike | str = "openndm_branches"
     checkpoint: bool = True
     _done: dict = field(default_factory=dict, init=False, repr=False)

@@ -43,7 +43,7 @@ class KineticsParameters:
     decay_constant: np.ndarray
     generation_time: float
     method: str
-    std_dev: dict
+    std_dev: dict[str, float]
 
     def apply_to(self, library: XSLibrary) -> None:
         """Store the delayed data on a library (FR-XS-3).

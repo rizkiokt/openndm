@@ -128,7 +128,7 @@ class CriticalSpectrum:
     diffusion: np.ndarray
     method: str
     iterations: int = 0
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, float] = field(default_factory=dict)
 
     def apply_to(self, library: XSLibrary, composition: int) -> None:
         """Replace one composition's D with the leakage-corrected value.
