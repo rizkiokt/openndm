@@ -169,7 +169,7 @@ def _p0_scatter(scatter: np.ndarray) -> np.ndarray:
 def from_mgxs_library(
     library: openmc.mgxs.Library,
     *,
-    domains: Sequence | None = None,
+    domains: Sequence[Any] | None = None,
     reverse_groups: bool = False,
     d_tolerance: float = DEFAULT_D_TOLERANCE,
     prefer: str = "diffusion-coefficient",
@@ -509,7 +509,7 @@ def from_statepoint(
     statepoint: openmc.StatePoint,
     mgxs_library: openmc.mgxs.Library,
     *,
-    domains: Sequence | None = None,
+    domains: Sequence[Any] | None = None,
     **kwargs: Any,
 ) -> XSLibrary:
     """Build a library straight from an ``openmc.StatePoint`` (FR-OMC-4).
