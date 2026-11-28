@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -33,7 +34,7 @@ def write_statepoint(
     result: Result,
     model: Model,
     *,
-    extra: dict | None = None,
+    extra: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write a solve result to ``statepoint.h5``.
 

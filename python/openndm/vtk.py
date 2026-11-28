@@ -12,10 +12,12 @@ importing without a VTK installation, the way FR-OMC-14 requires of OpenMC.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .exceptions import InputError
 
@@ -43,7 +45,7 @@ def write_vtk(
     result: Result,
     model: Model,
     *,
-    extra: dict | None = None,
+    extra: Mapping[str, ArrayLike] | None = None,
 ) -> Path:
     """Write a solve result as an unstructured grid for ParaView.
 
